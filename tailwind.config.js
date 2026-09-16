@@ -44,11 +44,25 @@ module.exports = {
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         brand: {
-          50: "#f0f5ff",
-          100: "#e0ebff",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
+          50: "#eaf6f8",
+          100: "#d0edef",
+          200: "#a2dbdf",
+          300: "#6bc1c7",
+          400: "#369989",
+          500: "#086075", // AMBIZCON Teal Primary
+          600: "#065163",
+          700: "#043f4e",
+          800: "#03323e",
+          900: "#022731",
+        },
+        sage: {
+          50: "#f6f8f2",
+          100: "#e9ede1",
+          200: "#d3dcc4",
+          300: "#b5c59d",
+          400: "#94a357",
+          500: "#7a985e", // AMBIZCON Sage Accent
+          600: "#627d49",
         },
       },
       borderRadius: {
@@ -82,9 +96,9 @@ module.exports = {
         shimmer: "shimmer 2s infinite",
       },
       boxShadow: {
-        glass: "0 8px 32px 0 rgba(0, 0, 0, 0.08)",
+        glass: "0 8px 32px 0 rgba(8, 96, 117, 0.08)",
         "glass-dark": "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
-        glow: "0 0 20px -5px rgba(59, 130, 246, 0.4)",
+        glow: "0 0 20px -5px rgba(8, 96, 117, 0.4)",
       },
     },
   },

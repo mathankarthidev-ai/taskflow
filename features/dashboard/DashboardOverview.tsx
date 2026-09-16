@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useTaskStore } from '@/store/useTaskStore';
 import { fetchTasksAction } from '@/actions/taskActions';
 import { Task } from '@/types';
+import { getTimeBasedGreeting, getRandomQuote } from '@/lib/quotes';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -32,6 +33,8 @@ export function DashboardOverview() {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [quote, setQuote] = useState('');
+  const [timeGreeting, setTimeGreeting] = useState({ greeting: 'Welcome back!', icon: '' });
 
   useEffect(() => {
     async function loadData() {
@@ -41,6 +44,8 @@ export function DashboardOverview() {
       setLoading(false);
     }
     loadData();
+    setQuote(getRandomQuote());
+    setTimeGreeting(getTimeBasedGreeting());
   }, []);
 
   if (!currentUser) return null;
@@ -76,218 +81,199 @@ export function DashboardOverview() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-gradient-to-r from-brand-500/10 via-purple-500/10 to-transparent p-6 glass-panel">
+      {/* Time-Based Greeting Banner with Random Motivational Quote */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-[#086075]/15 via-[#2a8c82]/10 to-transparent p-6 glass-panel">
         <div className="flex items-center gap-4">
           <Avatar src={currentUser.avatar} name={currentUser.name} size="xl" />
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                Welcome back, {currentUser.name}!
+                {timeGreeting.greeting} Welcome back, {currentUser.name}!
               </h1>
-              <Sparkles className="h-4 w-4 text-amber-500" />
+              <Badge variant="outline" className="text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 font-bold">
+                {currentUser.role} • {currentUser.team}
+              </Badge>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              You have <span className="font-semibold text-foreground">{myAssignedTasks.length} assigned tasks</span> pending on your workspace board today.
+            <p className="text-xs text-muted-foreground mt-1 font-medium">
+              You have <span className="font-bold text-foreground">{myAssignedTasks.length} assigned tasks</span> pending on your workspace board today.
             </p>
+            {/* Random Motivational Quote */}
+            <div className="mt-2.5 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3.5 py-1 text-xs text-amber-600 dark:text-amber-300 font-semibold backdrop-blur-md">
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+              <span>"{quote || 'Make today amazing.'}"</span>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 shadow-glow">
+          <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 ambizcon-gradient text-white shadow-glow">
             <Plus className="h-4 w-4" />
             Create Task
           </Button>
-          <Link href="/kanban">
-            <Button variant="outline" size="sm" className="gap-1.5">
-              Kanban Board
-              <ArrowUpRight className="h-4 w-4" />
-            </Button>
-          </Link>
         </div>
       </div>
 
-      {/* Super Admin Portfolio & Executive KPIs */}
-      {currentUser.role === 'Super Admin' && (
-        <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-brand-500/10 to-transparent p-5 glass-panel">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  Company Portfolio & Executive Performance Console
-                  <Badge variant="danger" className="text-[9px]">
-                    Super Admin View
-                  </Badge>
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Global Workspace Status: Creative, Marketing & Development Output Metrics
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-6 text-xs">
-              <div>
-                <span className="text-[10px] text-muted-foreground uppercase font-bold block">Total Workspaces</span>
-                <span className="font-extrabold text-foreground text-sm">3 Active Teams</span>
-              </div>
-              <div className="border-l border-zinc-200/60 dark:border-zinc-800/60 pl-6">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold block">Total Backlog</span>
-                <span className="font-extrabold text-brand-400 text-sm">{tasks.length} Sprint Tasks</span>
-              </div>
-              <div className="border-l border-zinc-200/60 dark:border-zinc-800/60 pl-6">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold block">Company Velocity</span>
-                <span className="font-extrabold text-emerald-400 text-sm">94.8% SLA Pass</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Top 4 KPI Metrics Widgets */}
+      {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Assigned Tasks */}
-        <Card className="p-5">
+        {/* Metric 1: My Pending Tasks */}
+        <Card className="p-5 border border-zinc-200/80 dark:border-zinc-800/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">My Active Tasks</span>
+            <span className="text-xs font-medium text-muted-foreground">My Pending Tasks</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
               <Layers className="h-4 w-4" />
             </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-foreground">{myAssignedTasks.length}</p>
-          <span className="text-[10px] text-muted-foreground mt-1 block">In your personal queue</span>
+          <span className="text-[10px] text-muted-foreground mt-1 block">Assigned to you</span>
         </Card>
 
-        {/* KPI 2: Completed Today */}
-        <Card className="p-5">
+        {/* Metric 2: Completed Today */}
+        <Card className="p-5 border border-zinc-200/80 dark:border-zinc-800/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Completed Today</span>
+            <span className="text-xs font-medium text-muted-foreground">Completed Today</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
               <CheckCircle2 className="h-4 w-4" />
             </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-foreground">{completedToday.length}</p>
           <span className="text-[10px] text-emerald-500 font-medium flex items-center gap-1 mt-1">
-            <TrendingUp className="h-3 w-3" /> Great velocity!
+            <TrendingUp className="h-3 w-3" /> Great velocity today
           </span>
         </Card>
 
-        {/* KPI 3: Overdue */}
-        <Card className="p-5">
+        {/* Metric 3: Overdue Tasks */}
+        <Card className="p-5 border border-zinc-200/80 dark:border-zinc-800/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Overdue Tasks</span>
+            <span className="text-xs font-medium text-muted-foreground">Overdue Tasks</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500">
               <AlertCircle className="h-4 w-4" />
             </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-rose-500">{overdueTasks.length}</p>
-          <span className="text-[10px] text-muted-foreground mt-1 block">Past due date cutoff</span>
+          <span className="text-[10px] text-muted-foreground mt-1 block">Passed target deadline</span>
         </Card>
 
-        {/* KPI 4: Pending Review */}
-        <Card className="p-5">
+        {/* Metric 4: Pending Review */}
+        <Card className="p-5 border border-zinc-200/80 dark:border-zinc-800/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Pending Review</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10 text-purple-500">
+            <span className="text-xs font-medium text-muted-foreground">Awaiting Review</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
               <Clock className="h-4 w-4" />
             </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-foreground">{pendingReviewTasks.length}</p>
-          <span className="text-[10px] text-muted-foreground mt-1 block">Awaiting QA & Lead signoff</span>
+          <span className="text-[10px] text-muted-foreground mt-1 block">Awaiting Lead Signoff</span>
         </Card>
       </div>
 
-      {/* Main Widgets Grid */}
+      {/* Main Grid: My Assigned Tasks + Deadlines & Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Widget: Recent Activity Feed (2 Cols) */}
-        <Card className="lg:col-span-2 p-5">
-          <CardHeader className="px-0 pt-0 pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60">
-            <div className="flex items-center justify-between">
+        {/* Left Column (2 Cols): My Active Assigned Tasks */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
               <div>
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-primary" />
-                  Recent Activity Stream
-                </CardTitle>
-                <CardDescription className="text-xs mt-0.5">
-                  Latest updates across task statuses and cross-team actions.
-                </CardDescription>
+                <h3 className="text-base font-bold text-foreground">My Assigned Workspace Tasks</h3>
+                <p className="text-xs text-muted-foreground">Tasks assigned directly to your account requiring action.</p>
               </div>
-              <Link href="/kanban" className="text-xs font-semibold text-primary hover:underline">
-                View Board →
+              <Link href="/kanban">
+                <Button variant="ghost" size="sm" className="gap-1 text-xs text-brand-500">
+                  Kanban Board
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Button>
               </Link>
             </div>
-          </CardHeader>
-          <CardContent className="px-0 pb-0 pt-4 space-y-3">
+
             {loading ? (
-              <Skeleton className="h-48 w-full rounded-xl" />
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : myAssignedTasks.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground">
+                🎉 All caught up! No pending tasks assigned to you right now.
+              </div>
             ) : (
-              recentActivity.map((task) => (
-                <div
-                  key={task._id}
-                  onClick={() => {
-                    setSelectedTask(task);
-                    setDetailModalOpen(true);
-                  }}
-                  className="flex items-center justify-between rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/50 p-3 hover:bg-accent transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar src={task.assignedUser?.avatar} name={task.assignedUser?.name || 'Task'} size="sm" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">{task.title}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {task.team} • {task.status} • Updated {formatTimeAgo(task.updatedAt)}
-                      </p>
+              <div className="space-y-3">
+                {myAssignedTasks.map((t) => (
+                  <div
+                    key={t._id}
+                    onClick={() => {
+                      setSelectedTask(t);
+                      setDetailModalOpen(true);
+                    }}
+                    className="group flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-[200px] flex-1">
+                      <div className={`h-2.5 w-2.5 rounded-full ${getStatusBadgeColor(t.status)}`} />
+                      <div>
+                        <h4 className="text-xs font-bold text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                          {t.title}
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{t.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={`text-[10px] ${getPriorityBadgeColor(t.priority)}`}>
+                        {t.priority}
+                      </Badge>
+                      <span className="text-[10px] font-mono text-muted-foreground">{formatDate(t.dueDate)}</span>
                     </div>
                   </div>
-                  <Badge className={`${getPriorityBadgeColor(task.priority)} text-[10px]`}>
-                    {task.priority}
-                  </Badge>
-                </div>
-              ))
+                ))}
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </Card>
+        </div>
 
-        {/* Widget: Upcoming Deadlines */}
-        <Card className="p-5">
-          <CardHeader className="px-0 pt-0 pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-amber-500" />
-              Upcoming Deadlines
-            </CardTitle>
-            <CardDescription className="text-xs mt-0.5">Tasks due soon requiring focus.</CardDescription>
-          </CardHeader>
-          <CardContent className="px-0 pb-0 pt-4 space-y-3">
-            {loading ? (
-              <Skeleton className="h-48 w-full rounded-xl" />
-            ) : upcomingDeadlines.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-6 text-center">No upcoming deadlines.</p>
-            ) : (
-              upcomingDeadlines.map((task) => (
-                <div
-                  key={task._id}
-                  onClick={() => {
-                    setSelectedTask(task);
-                    setDetailModalOpen(true);
-                  }}
-                  className="flex items-center justify-between rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-card p-3 hover:bg-accent transition-colors cursor-pointer"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground truncate">{task.title}</p>
-                    <span className="text-[10px] text-rose-500 font-medium">
-                      Due {formatDate(task.dueDate)}
-                    </span>
+        {/* Right Column (1 Col): Deadlines & Activity */}
+        <div className="space-y-6">
+          {/* Upcoming Deadlines */}
+          <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-3">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-amber-500" />
+                Upcoming Deadlines
+              </h3>
+            </div>
+
+            <div className="space-y-3">
+              {upcomingDeadlines.map((t) => (
+                <div key={t._id} className="flex items-center justify-between text-xs p-2.5 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60">
+                  <div className="min-w-0 pr-2">
+                    <p className="font-bold text-foreground truncate">{t.title}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono">{t.team} Team</p>
                   </div>
-                  <Badge variant="outline" className="text-[10px]">
-                    {task.status}
-                  </Badge>
+                  <span className="font-mono text-[10px] text-amber-500 font-bold shrink-0">{formatDate(t.dueDate)}</span>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+              ))}
+            </div>
+          </Card>
+
+          {/* Recent Activity */}
+          <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-3">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Activity className="h-4 w-4 text-emerald-500" />
+                Recent Workspace Activity
+              </h3>
+            </div>
+
+            <div className="space-y-3">
+              {recentActivity.map((t) => (
+                <div key={t._id} className="flex items-center gap-2.5 text-xs">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-foreground truncate">{t.title}</p>
+                    <span className="text-[10px] text-muted-foreground font-mono">{formatTimeAgo(t.updatedAt)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );

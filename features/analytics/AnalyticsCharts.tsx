@@ -17,11 +17,10 @@ import {
   Legend,
 } from 'recharts';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { fetchAnalyticsAction } from '@/actions/analyticsActions';
 import { TeamName } from '@/types';
-import { CheckCircle2, Clock, AlertTriangle, Inbox, BarChart3, TrendingUp } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, BarChart3, TrendingUp } from 'lucide-react';
 
 export function AnalyticsCharts() {
   const [selectedTeam, setSelectedTeam] = useState<TeamName | 'All'>('All');
@@ -60,7 +59,7 @@ export function AnalyticsCharts() {
       {/* Team Selector Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 glass-panel">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
             <BarChart3 className="h-5 w-5" />
           </div>
           <div>
@@ -85,7 +84,7 @@ export function AnalyticsCharts() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Total Tasks</span>
+            <span className="text-xs font-medium text-muted-foreground">Total Workspace Tasks</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
               <BarChart3 className="h-4 w-4" />
             </div>
@@ -118,7 +117,7 @@ export function AnalyticsCharts() {
           </div>
           <p className="mt-3 text-2xl font-extrabold text-foreground">{summary.avgCompletionHours}h</p>
           <span className="text-[10px] text-emerald-500 font-medium flex items-center gap-1 mt-1">
-            -2.4h faster resolution
+            -2.4h resolution velocity
           </span>
         </Card>
 
@@ -252,8 +251,8 @@ export function AnalyticsCharts() {
                   }}
                 />
                 <Legend formatter={(value) => <span className="text-xs font-medium">{value}</span>} />
-                <Line type="monotone" dataKey="completed" name="Tasks Completed" stroke="#10b981" strokeWidth={2.5} />
-                <Line type="monotone" dataKey="created" name="Tasks Created" stroke="#3b82f6" strokeWidth={2} strokeDasharray="4 4" />
+                <Line type="monotone" dataKey="completed" name="Completed Tasks" stroke="#10b981" strokeWidth={3} />
+                <Line type="monotone" dataKey="created" name="Created Tasks" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
