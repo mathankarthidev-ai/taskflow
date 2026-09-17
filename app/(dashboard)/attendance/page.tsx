@@ -77,28 +77,29 @@ export default function AttendancePage() {
   const [wfhDate, setWfhDate] = useState('');
   const [wfhReason, setWfhReason] = useState('');
 
-  // Dynamic Shift Clock State (Default to active shift at 03:24 PM IST with live elapsed time)
-  const [isClockedIn, setIsClockedIn] = useState(true);
-  const [clockInTime, setClockInTime] = useState<string>('03:24 PM');
+  // Dynamic Shift Clock State (Default to Not Clocked In, automatically resets to 00:00:00 every night/new day)
+  const [isClockedIn, setIsClockedIn] = useState(false);
+  const [clockInTime, setClockInTime] = useState<string>('—');
   const [clockOutTime, setClockOutTime] = useState<string>('—');
-  const [clockInTimestamp, setClockInTimestamp] = useState<number | null>(() => Date.now() - 26 * 60 * 1000);
-  const [workedSeconds, setWorkedSeconds] = useState<number>(26 * 60);
+  const [clockInTimestamp, setClockInTimestamp] = useState<number | null>(null);
+  const [workedSeconds, setWorkedSeconds] = useState<number>(0);
   const [isClockModalOpen, setIsClockModalOpen] = useState(false);
+  const [shiftDate, setShiftDate] = useState<string>(() => new Date().toLocaleDateString('en-CA'));
 
   // Login History State (Personal Punch Logs & Audit Register)
   const [loginHistory, setLoginHistory] = useState<any[]>([
     {
       id: 'SESH-809',
-      date: '08 Sep 2026 (Today)',
-      clockIn: '03:24 PM IST',
-      clockInAest: '07:54 PM AEST',
-      clockOut: '—',
-      clockOutAest: '—',
+      date: '08 Sep 2026',
+      clockIn: '08:30 AM IST',
+      clockInAest: '01:00 PM AEST',
+      clockOut: '05:00 PM IST',
+      clockOutAest: '09:30 PM AEST',
       workMode: 'Work From Office',
       ipAddress: '192.168.1.104',
       location: 'Anna Nagar, Chennai',
-      hoursWorked: 'In Progress (Live)',
-      status: 'Active Shift',
+      hoursWorked: '8h 30m',
+      status: 'Completed',
       geofenceVerified: true,
     },
     {
@@ -258,26 +259,47 @@ export default function AttendancePage() {
       }
     }
 
-    // Restore shift state from localStorage if present
+    // Restore shift state from localStorage if present (With Nightly Midnight Reset check)
     const savedShift = localStorage.getItem(`ambizcon_shift_${currentUser._id}`);
+    const todayDateKey = new Date().toLocaleDateString('en-CA');
+
     if (savedShift) {
       try {
         const parsed = JSON.parse(savedShift);
-        setIsClockedIn(parsed.isClockedIn);
-        setClockInTime(parsed.clockInTime || '03:24 PM');
-        setClockOutTime(parsed.clockOutTime || '—');
-        if (parsed.clockInTimestamp) {
-          setClockInTimestamp(parsed.clockInTimestamp);
-          if (parsed.isClockedIn) {
-            const elapsed = Math.max(0, Math.floor((Date.now() - parsed.clockInTimestamp) / 1000));
-            setWorkedSeconds(elapsed);
-          } else if (parsed.workedSeconds !== undefined) {
-            setWorkedSeconds(parsed.workedSeconds);
+        // Nightly Midnight Reset Check: If shift was recorded on a previous day, reset to zero!
+        if (parsed.shiftDate && parsed.shiftDate !== todayDateKey) {
+          setIsClockedIn(false);
+          setClockInTime('—');
+          setClockOutTime('—');
+          setClockInTimestamp(null);
+          setWorkedSeconds(0);
+          setShiftDate(todayDateKey);
+          localStorage.removeItem(`ambizcon_shift_${currentUser._id}`);
+        } else {
+          setIsClockedIn(parsed.isClockedIn);
+          setClockInTime(parsed.clockInTime || '—');
+          setClockOutTime(parsed.clockOutTime || '—');
+          setShiftDate(parsed.shiftDate || todayDateKey);
+          if (parsed.clockInTimestamp) {
+            setClockInTimestamp(parsed.clockInTimestamp);
+            if (parsed.isClockedIn) {
+              const elapsed = Math.max(0, Math.floor((Date.now() - parsed.clockInTimestamp) / 1000));
+              setWorkedSeconds(elapsed);
+            } else if (parsed.workedSeconds !== undefined) {
+              setWorkedSeconds(parsed.workedSeconds);
+            }
           }
         }
       } catch (e) {
         // Fallback default
       }
+    } else {
+      // Clean start today: Not clocked in, zero seconds
+      setIsClockedIn(false);
+      setClockInTime('—');
+      setClockOutTime('—');
+      setClockInTimestamp(null);
+      setWorkedSeconds(0);
     }
 
     const savedHistory = localStorage.getItem(`ambizcon_login_history_${currentUser._id}`);
@@ -287,7 +309,7 @@ export default function AttendancePage() {
       } catch (e) {}
     }
 
-    // Dual Time Zone Interval (Chennai IST & Brisbane AEST)
+    // Dual Time Zone Interval (Chennai IST & Brisbane AEST) + Live Midnight Rollover Watcher
     const timer = setInterval(() => {
       const now = new Date();
       // Chennai IST
@@ -301,6 +323,22 @@ export default function AttendancePage() {
         aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) +
           ' AEST'
       );
+
+      // Nightly Midnight Reset Watcher: Check if midnight has passed
+      const currentDayKey = now.toLocaleDateString('en-CA');
+      setShiftDate((prevDate) => {
+        if (prevDate && prevDate !== currentDayKey) {
+          // Midnight has passed! Reset daily login and shift timer to zero
+          setIsClockedIn(false);
+          setClockInTime('—');
+          setClockOutTime('—');
+          setClockInTimestamp(null);
+          setWorkedSeconds(0);
+          localStorage.removeItem(`ambizcon_shift_${currentUser._id}`);
+          return currentDayKey;
+        }
+        return prevDate;
+      });
     }, 1000);
 
     if (currentUser?.workMode) {
@@ -452,9 +490,13 @@ export default function AttendancePage() {
         setIsOnBreak(false);
         setBreakSeconds(0);
 
+        const todayKey = d.toLocaleDateString('en-CA');
+        setShiftDate(todayKey);
+
         localStorage.setItem(
           `ambizcon_shift_${currentUser._id}`,
           JSON.stringify({
+            shiftDate: todayKey,
             isClockedIn: true,
             clockInTime: formatted,
             clockOutTime: '—',
@@ -500,10 +542,12 @@ export default function AttendancePage() {
         // Clocking out / Closing shift
         setIsClockedIn(false);
         setClockOutTime(formatted);
+        const todayKey = d.toLocaleDateString('en-CA');
 
         localStorage.setItem(
           `ambizcon_shift_${currentUser._id}`,
           JSON.stringify({
+            shiftDate: todayKey,
             isClockedIn: false,
             clockInTime,
             clockOutTime: formatted,
@@ -834,7 +878,13 @@ export default function AttendancePage() {
               <span>BRISBANE <strong className="text-emerald-500">{brisbaneTimeStr || '07:22:28 PM AEST'}</strong></span>
             </div>
             <p className="text-xs text-muted-foreground pt-1">
-              In <strong className="text-foreground">{clockInTime}</strong> • out <strong className="text-foreground">{clockOutTime}</strong> • full day recorded
+              {isClockedIn ? (
+                <>In <strong className="text-foreground">{clockInTime}</strong> • out <strong className="text-foreground">{clockOutTime}</strong> • live shift active</>
+              ) : clockOutTime !== '—' && clockInTime !== '—' ? (
+                <>In <strong className="text-foreground">{clockInTime}</strong> • out <strong className="text-foreground">{clockOutTime}</strong> • shift closed for today</>
+              ) : (
+                <>Shift Status: <strong className="text-foreground">Not clocked in today</strong> • In <strong className="text-foreground">—</strong> • out <strong className="text-foreground">—</strong></>
+              )}
             </p>
           </div>
 
