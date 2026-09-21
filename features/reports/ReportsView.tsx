@@ -116,7 +116,7 @@ export function ReportsView() {
         </div>
 
         {/* Download Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={handleExportCSV} variant="outline" size="sm" className="gap-1.5">
             <Download className="h-4 w-4" />
             Export CSV
@@ -131,7 +131,7 @@ export function ReportsView() {
       {/* Super Admin Special Executive KPI Card */}
       {isSuperAdmin && (
         <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-transparent p-5 glass-panel">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
                 <ShieldCheck className="h-5 w-5" />
@@ -170,7 +170,7 @@ export function ReportsView() {
       {/* Tabs & Controls Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 glass-card">
         {/* Report Type Tabs */}
-        <div className="flex items-center gap-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1 text-xs">
+        <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1 text-xs max-w-full">
           <button
             onClick={() => setReportType('my')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold transition-all ${

@@ -7,21 +7,28 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import {
-  UserCheck,
   Mail,
   Shield,
   Building2,
   Calendar,
   Phone,
   Home,
-  CreditCard,
-  FileText,
   User as UserIcon,
   Heart,
   Save,
-  CheckCircle2,
+  GraduationCap,
+  Briefcase,
+  Plus,
+  Trash2,
+  MapPin,
+  Building,
+  Award,
+  BookOpen,
+  Sparkles,
 } from 'lucide-react';
+import { EducationRecord, ExperienceRecord } from '@/types';
 import { toast } from 'sonner';
+import { formatDayMonthOnly } from '@/features/users/UserManagementTable';
 
 export default function ProfilePage() {
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -30,23 +37,135 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
   const [address, setAddress] = useState('');
-  const [bankAccount, setBankAccount] = useState('');
-  const [taxId, setTaxId] = useState('');
   const [bloodGroup, setBloodGroup] = useState('O+');
+  const [education, setEducation] = useState<EducationRecord[]>([]);
+  const [experience, setExperience] = useState<ExperienceRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
-      setPhone(currentUser.phone || '+91 98765 43210');
-      setEmergencyContact(currentUser.emergencyContact || 'Spouse: +91 98765 00000');
-      setAddress(currentUser.address || 'No. 42, Ambizcon Health Tech Park, Chennai, India');
-      setBankAccount(currentUser.bankAccount || 'HDFC Bank • XXXX-XXXX-4821');
-      setTaxId(currentUser.taxId || 'ABCDE1234F');
-      setBloodGroup(currentUser.bloodGroup || 'O+');
+      let savedUser: any = null;
+      try {
+        const cached = localStorage.getItem('ambizcon_user_details_' + currentUser._id);
+        if (cached) {
+          savedUser = JSON.parse(cached);
+        }
+      } catch (e) {
+        console.error('Failed to parse cached user profile', e);
+      }
+
+      const user = savedUser || currentUser;
+
+      setPhone(user.phone || '+91 98765 43210');
+      setEmergencyContact(user.emergencyContact || 'Spouse: +91 98765 00000');
+      setAddress(user.address || 'No. 42, Ambizcon Health Tech Park, Chennai, India');
+      setBloodGroup(user.bloodGroup || 'O+');
+
+      if (user.education && Array.isArray(user.education) && user.education.length > 0) {
+        setEducation(user.education);
+      } else {
+        setEducation([
+          {
+            id: 'edu_1',
+            degree: 'Bachelor of Technology (B.Tech) - Computer Science',
+            institution: 'Anna University, College of Engineering Guindy',
+            year: '2018 - 2022',
+            area: 'Guindy, Chennai',
+            state: 'Tamil Nadu',
+            grade: '8.6 CGPA (First Class with Distinction)',
+          },
+          {
+            id: 'edu_2',
+            degree: 'Higher Secondary Certificate (HSC / 12th Standard)',
+            institution: 'St. Xavier Higher Secondary School',
+            year: '2016 - 2018',
+            area: 'T. Nagar, Chennai',
+            state: 'Tamil Nadu',
+            grade: '92.4%',
+          },
+        ]);
+      }
+
+      if (user.experience && Array.isArray(user.experience) && user.experience.length > 0) {
+        setExperience(user.experience);
+      } else {
+        setExperience([
+          {
+            id: 'exp_1',
+            role: currentUser.role === 'Reception Staff' ? 'Front Desk & Operations Executive' : `${currentUser.role || 'Senior Software Engineer'}`,
+            company: 'Ambizcon Healthcare Technologies',
+            year: '2023 - Present',
+            area: 'OMR, Chennai',
+            state: 'Tamil Nadu',
+            description: 'Leading operational workflows, team task execution, and healthcare client stakeholder coordination.',
+          },
+          {
+            id: 'exp_2',
+            role: currentUser.role === 'Reception Staff' ? 'Front Office Guest Coordinator' : 'Associate Systems Engineer',
+            company: 'Apollo Global Health Tech',
+            year: '2021 - 2023',
+            area: 'Greams Road, Chennai',
+            state: 'Tamil Nadu',
+            description: 'Handled client schedules, reception kiosk operations, and digital documentation records.',
+          },
+        ]);
+      }
     }
   }, [currentUser]);
 
   if (!currentUser) return null;
+
+  // Education Handlers
+  const handleAddEducation = () => {
+    const newEdu: EducationRecord = {
+      id: 'edu_' + Date.now(),
+      degree: '',
+      institution: '',
+      year: '',
+      area: '',
+      state: '',
+      grade: '',
+    };
+    setEducation((prev) => [...prev, newEdu]);
+  };
+
+  const handleUpdateEducation = (index: number, field: keyof EducationRecord, value: string) => {
+    setEducation((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleRemoveEducation = (index: number) => {
+    setEducation((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Experience Handlers
+  const handleAddExperience = () => {
+    const newExp: ExperienceRecord = {
+      id: 'exp_' + Date.now(),
+      role: '',
+      company: '',
+      year: '',
+      area: '',
+      state: '',
+      description: '',
+    };
+    setExperience((prev) => [...prev, newExp]);
+  };
+
+  const handleUpdateExperience = (index: number, field: keyof ExperienceRecord, value: string) => {
+    setExperience((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleRemoveExperience = (index: number) => {
+    setExperience((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,19 +176,22 @@ export default function ProfilePage() {
       phone,
       emergencyContact,
       address,
-      bankAccount,
-      taxId,
       bloodGroup,
+      education,
+      experience,
     };
 
     setCurrentUser(updatedUser);
-    localStorage.setItem('ambizcon_user_details_' + currentUser._id, JSON.stringify(updatedUser));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ambizcon_user_details_' + currentUser._id, JSON.stringify(updatedUser));
+      document.cookie = `taskflow_user=${encodeURIComponent(JSON.stringify(updatedUser))}; path=/; max-age=864000`;
+    }
     setIsSaving(false);
-    toast.success('Your personal & payroll bank details updated successfully!');
+    toast.success('Your profile details, education & professional experience saved successfully!');
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl pb-16">
       {/* Header Banner */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-[#086075]/15 via-[#2a8c82]/10 to-transparent p-6 glass-panel">
         <div className="flex items-center gap-4">
@@ -85,7 +207,7 @@ export default function ProfilePage() {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Personal Employee Profile & Direct Deposit Bank Details
+              Personal Employee Profile, Educational Qualifications & Professional Experience
             </p>
           </div>
         </div>
@@ -129,123 +251,429 @@ export default function ProfilePage() {
           <div className="flex items-center gap-3 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 p-3">
             <Calendar className="h-4 w-4 text-amber-500" />
             <div>
-              <span className="text-[10px] text-muted-foreground block font-semibold uppercase">Birthday Date</span>
-              <span className="text-foreground font-semibold">{currentUser.birthday || '14 Mar'}</span>
+              <span className="text-[10px] text-muted-foreground block font-semibold uppercase">Birthday / DOB</span>
+              <span className="text-foreground font-semibold">{formatDayMonthOnly(currentUser.dob || currentUser.birthday || '14 Oct')}</span>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Personal & Financial Details Form */}
-      <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-        <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">My Personal Details & Salary Bank Information</h3>
-            <p className="text-xs text-muted-foreground">Keep your emergency contacts and salary bank details updated for HR & Payroll processing.</p>
-          </div>
-          <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-[10px]">
-            Visible to HR & CEO
-          </Badge>
-        </div>
-
-        <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <form onSubmit={handleSaveProfile} className="space-y-6">
+        {/* Personal Details Form */}
+        <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+          <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
             <div>
-              <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
-                <Phone className="h-3.5 w-3.5 text-emerald-500" /> Contact Phone Number
-              </label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring"
-                required
-              />
+              <h3 className="text-sm font-bold text-foreground">Personal Contact & Emergency Information</h3>
+              <p className="text-xs text-muted-foreground">Keep your primary contact numbers and emergency details up to date.</p>
             </div>
-
-            <div>
-              <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
-                <Heart className="h-3.5 w-3.5 text-rose-500" /> Emergency Contact & Relation
-              </label>
-              <input
-                type="text"
-                value={emergencyContact}
-                onChange={(e) => setEmergencyContact(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring"
-                required
-              />
-            </div>
+            <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-[10px]">
+              Internal Ambizcon HR
+            </Badge>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
-                <CreditCard className="h-3.5 w-3.5 text-purple-500" /> Salary Bank Account / BSB / IFSC
-              </label>
-              <input
-                type="text"
-                value={bankAccount}
-                onChange={(e) => setBankAccount(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 font-mono focus-ring"
-                placeholder="Bank name and account number..."
-                required
-              />
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
+                  <Phone className="h-3.5 w-3.5 text-emerald-500" /> Contact Phone Number
+                </label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
+                  <Heart className="h-3.5 w-3.5 text-rose-500" /> Emergency Contact & Relation
+                </label>
+                <input
+                  type="text"
+                  value={emergencyContact}
+                  onChange={(e) => setEmergencyContact(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring"
+                  required
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
-                <FileText className="h-3.5 w-3.5 text-blue-500" /> Tax Identification (PAN / TFN)
-              </label>
-              <input
-                type="text"
-                value={taxId}
-                onChange={(e) => setTaxId(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 font-mono focus-ring"
-                required
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="sm:col-span-2">
+                <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
+                  <Home className="h-3.5 w-3.5 text-amber-500" /> Home Residential Address
+                </label>
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
+                  <UserIcon className="h-3.5 w-3.5 text-emerald-500" /> Blood Group
+                </label>
+                <select
+                  value={bloodGroup}
+                  onChange={(e) => setBloodGroup(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring font-bold"
+                >
+                  <option value="O+">O Positive (O+)</option>
+                  <option value="A+">A Positive (A+)</option>
+                  <option value="B+">B Positive (B+)</option>
+                  <option value="AB+">AB Positive (AB+)</option>
+                  <option value="O-">O Negative (O-)</option>
+                  <option value="A-">A Negative (A-)</option>
+                  <option value="B-">B Negative (B-)</option>
+                  <option value="AB-">AB Negative (AB-)</option>
+                </select>
+              </div>
             </div>
           </div>
+        </Card>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
-                <Home className="h-3.5 w-3.5 text-amber-500" /> Home Residential Address
-              </label>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring"
-                required
-              />
+        {/* Educational Qualifications Section */}
+        <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <GraduationCap className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Educational Qualifications</h3>
+                <p className="text-xs text-muted-foreground">
+                  Degrees, diplomas, school/college names, passing year, city, and state details.
+                </p>
+              </div>
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground flex items-center gap-1.5 mb-1">
-                <UserIcon className="h-3.5 w-3.5 text-emerald-500" /> Blood Group
-              </label>
-              <select
-                value={bloodGroup}
-                onChange={(e) => setBloodGroup(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring font-bold"
-              >
-                <option value="O+">O Positive (O+)</option>
-                <option value="A+">A Positive (A+)</option>
-                <option value="B+">B Positive (B+)</option>
-                <option value="AB+">AB Positive (AB+)</option>
-                <option value="O-">O Negative (O-)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <Button type="submit" disabled={isSaving} className="gap-1.5 ambizcon-gradient text-white shadow-glow">
-              <Save className="h-4 w-4" />
-              {isSaving ? 'Saving...' : 'Save Personal Details'}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddEducation}
+              className="gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Education
             </Button>
           </div>
-        </form>
-      </Card>
+
+          {education.length === 0 ? (
+            <div className="text-center py-8 px-4 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-500/5">
+              <GraduationCap className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+              <p className="text-xs font-semibold text-foreground">No Educational Records Added</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 mb-3">
+                Add your degrees, colleges, schools, passing years, and locations.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddEducation}
+                className="gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add First Qualification
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {education.map((edu, idx) => (
+                <div
+                  key={edu.id || idx}
+                  className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-500/5 p-4 relative group"
+                >
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-200/50 dark:border-zinc-800/50">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <span className="text-xs font-bold text-foreground">
+                        {edu.degree ? edu.degree : `Qualification #${idx + 1}`}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveEducation(idx)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                      title="Remove qualification"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <BookOpen className="h-3 w-3 text-emerald-500" /> Degree / Course / Standard *
+                      </label>
+                      <input
+                        type="text"
+                        value={edu.degree}
+                        onChange={(e) => handleUpdateEducation(idx, 'degree', e.target.value)}
+                        placeholder="e.g. B.Tech Computer Science / HSC (12th)"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <Building className="h-3 w-3 text-blue-500" /> College or School Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={edu.institution}
+                        onChange={(e) => handleUpdateEducation(idx, 'institution', e.target.value)}
+                        placeholder="e.g. Anna University / St. Xavier's"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <Calendar className="h-3 w-3 text-amber-500" /> Passing Year / Duration *
+                      </label>
+                      <input
+                        type="text"
+                        value={edu.year}
+                        onChange={(e) => handleUpdateEducation(idx, 'year', e.target.value)}
+                        placeholder="e.g. 2018 - 2022 / 2022"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <MapPin className="h-3 w-3 text-rose-500" /> Area / City / Locality *
+                      </label>
+                      <input
+                        type="text"
+                        value={edu.area}
+                        onChange={(e) => handleUpdateEducation(idx, 'area', e.target.value)}
+                        placeholder="e.g. Guindy, Chennai"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <MapPin className="h-3 w-3 text-purple-500" /> State / Region *
+                      </label>
+                      <input
+                        type="text"
+                        value={edu.state}
+                        onChange={(e) => handleUpdateEducation(idx, 'state', e.target.value)}
+                        placeholder="e.g. Tamil Nadu"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <Award className="h-3 w-3 text-emerald-500" /> Grade / Percentage / CGPA
+                      </label>
+                      <input
+                        type="text"
+                        value={edu.grade || ''}
+                        onChange={(e) => handleUpdateEducation(idx, 'grade', e.target.value)}
+                        placeholder="e.g. 8.6 CGPA / 85%"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Professional Experience Section */}
+        <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Professional Experience</h3>
+                <p className="text-xs text-muted-foreground">
+                  Employment history, company names, job roles, duration, city, and state details.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddExperience}
+              className="gap-1.5 text-xs text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/10"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Experience
+            </Button>
+          </div>
+
+          {experience.length === 0 ? (
+            <div className="text-center py-8 px-4 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-500/5">
+              <Briefcase className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+              <p className="text-xs font-semibold text-foreground">No Professional Experience Added</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 mb-3">
+                Add your previous employment records, designations, and companies.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddExperience}
+                className="gap-1.5 text-xs text-blue-600 dark:text-blue-400"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add First Experience
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {experience.map((exp, idx) => (
+                <div
+                  key={exp.id || idx}
+                  className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-500/5 p-4 relative group"
+                >
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-200/50 dark:border-zinc-800/50">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <span className="text-xs font-bold text-foreground">
+                        {exp.role && exp.company ? `${exp.role} at ${exp.company}` : `Work Experience #${idx + 1}`}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveExperience(idx)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                      title="Remove experience"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs mb-3">
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <Briefcase className="h-3 w-3 text-blue-500" /> Designation / Job Role *
+                      </label>
+                      <input
+                        type="text"
+                        value={exp.role}
+                        onChange={(e) => handleUpdateExperience(idx, 'role', e.target.value)}
+                        placeholder="e.g. Senior Software Engineer"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <Building className="h-3 w-3 text-emerald-500" /> Company Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={exp.company}
+                        onChange={(e) => handleUpdateExperience(idx, 'company', e.target.value)}
+                        placeholder="e.g. Ambizcon Technologies"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <Calendar className="h-3 w-3 text-amber-500" /> Duration / Years *
+                      </label>
+                      <input
+                        type="text"
+                        value={exp.year}
+                        onChange={(e) => handleUpdateExperience(idx, 'year', e.target.value)}
+                        placeholder="e.g. 2022 - Present / 2020 - 2022"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <MapPin className="h-3 w-3 text-rose-500" /> Area / City / Locality *
+                      </label>
+                      <input
+                        type="text"
+                        value={exp.area}
+                        onChange={(e) => handleUpdateExperience(idx, 'area', e.target.value)}
+                        placeholder="e.g. OMR, Chennai"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 md:col-span-2">
+                      <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                        <MapPin className="h-3 w-3 text-purple-500" /> State / Region *
+                      </label>
+                      <input
+                        type="text"
+                        value={exp.state}
+                        onChange={(e) => handleUpdateExperience(idx, 'state', e.target.value)}
+                        placeholder="e.g. Tamil Nadu"
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 focus-ring text-xs"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-foreground flex items-center gap-1 mb-1 text-[11px]">
+                      <Sparkles className="h-3 w-3 text-amber-500" /> Key Responsibilities / Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={exp.description || ''}
+                      onChange={(e) => handleUpdateExperience(idx, 'description', e.target.value)}
+                      placeholder="Briefly describe your key role highlights, deliverables, or projects..."
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 focus-ring text-xs resize-none"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Action Save Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-500/5">
+          <p className="text-xs text-muted-foreground">
+            All updates to personal details, educational qualifications, and professional experience will be saved to your employee profile.
+          </p>
+          <Button
+            type="submit"
+            disabled={isSaving}
+            className="gap-2 ambizcon-gradient text-white shadow-glow px-6 py-2 text-xs font-semibold"
+          >
+            <Save className="h-4 w-4" />
+            {isSaving ? 'Saving Profile...' : 'Save Profile & Career Details'}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

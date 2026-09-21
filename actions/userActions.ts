@@ -1,7 +1,7 @@
 'use server';
 
 import { getUserByEmail, getAllUsers, updateUserRole, createUser, deleteUser } from '@/services/authService';
-import { UserRole, TeamName } from '@/types';
+import { UserRole, TeamName, CompanyBranch } from '@/types';
 import { revalidatePath } from 'next/cache';
 
 export async function getUserByEmailAction(email: string) {
@@ -17,6 +17,7 @@ export async function createUserAction(data: {
   email: string;
   role: UserRole;
   team: TeamName;
+  company?: CompanyBranch;
   avatar?: string;
 }) {
   const newUser = await createUser(data);

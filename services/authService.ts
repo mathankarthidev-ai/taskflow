@@ -1,4 +1,4 @@
-import { User, UserRole, TeamName } from '@/types';
+import { User, UserRole, TeamName, CompanyBranch } from '@/types';
 import { connectDB } from '@/lib/db';
 import { User as UserModel } from '@/models/User';
 import { mockStore } from '@/lib/mock-store';
@@ -16,7 +16,10 @@ export async function getUserByEmail(email: string): Promise<User | null> {
           email: doc.email,
           role: doc.role,
           team: doc.team,
+          company: (doc as any).company || 'Ambizcon Health - India',
           avatar: doc.avatar,
+          birthday: (doc as any).birthday,
+          dob: (doc as any).dob,
           createdAt: doc.createdAt?.toISOString(),
         };
       }
@@ -43,7 +46,10 @@ export async function getAllUsers(): Promise<User[]> {
           email: doc.email,
           role: doc.role,
           team: doc.team,
+          company: (doc as any).company || 'Ambizcon Health - India',
           avatar: doc.avatar,
+          birthday: (doc as any).birthday,
+          dob: (doc as any).dob,
           createdAt: doc.createdAt?.toISOString(),
         }));
       }
@@ -60,10 +66,12 @@ export async function createUser(input: {
   email: string;
   role: UserRole;
   team: TeamName;
+  company?: CompanyBranch;
   avatar?: string;
 }): Promise<User> {
   const db = await connectDB();
   const avatar = input.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(input.name)}`;
+  const company = input.company || 'Ambizcon Health - India';
 
   if (db) {
     try {
@@ -72,6 +80,7 @@ export async function createUser(input: {
         email: input.email.toLowerCase(),
         role: input.role,
         team: input.team,
+        company,
         avatar,
       });
 
@@ -81,6 +90,7 @@ export async function createUser(input: {
         email: doc.email,
         role: doc.role,
         team: doc.team,
+        company: (doc as any).company || company,
         avatar: doc.avatar,
         createdAt: doc.createdAt.toISOString(),
       };
@@ -95,6 +105,7 @@ export async function createUser(input: {
     email: input.email.toLowerCase(),
     role: input.role,
     team: input.team,
+    company,
     avatar,
     createdAt: new Date().toISOString(),
   };

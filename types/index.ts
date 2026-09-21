@@ -1,8 +1,29 @@
-export type UserRole = 'Team Member' | 'Team Lead' | 'Super Admin';
+export type UserRole = 'Team Member' | 'Team Lead' | 'Super Admin' | 'Admin' | 'Reception Staff';
+export type CompanyBranch = 'Ambizcon Health - India' | 'Ambizcon - Australia' | 'India & Australia';
 export type TeamName = 'Creative' | 'Marketing' | 'Development';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 export type TaskStatus = 'Todo' | 'In Progress' | 'Review' | 'Support' | 'Done';
 export type WorkMode = 'Work From Office' | 'Work From Home';
+
+export interface EducationRecord {
+  id: string;
+  degree: string; // Degree / Course / Standard (e.g. B.Tech, HSC, MCA)
+  institution: string; // College or School Name
+  year: string; // Passing Year or Duration (e.g. 2018 - 2022)
+  area: string; // Area / City / Locality (e.g. Guindy, Chennai)
+  state: string; // State / Region (e.g. Tamil Nadu)
+  grade?: string; // Percentage / CGPA / Grade
+}
+
+export interface ExperienceRecord {
+  id: string;
+  role: string; // Designation / Role (e.g. Senior Software Engineer)
+  company: string; // Company Name (e.g. Ambizcon Technologies)
+  year: string; // Working Duration / Years (e.g. 2022 - Present)
+  area: string; // Area / City / Locality (e.g. OMR, Chennai)
+  state: string; // State / Region (e.g. Tamil Nadu)
+  description?: string; // Key Responsibilities / Description
+}
 
 export interface User {
   _id: string;
@@ -10,8 +31,10 @@ export interface User {
   email: string;
   role: UserRole;
   team: TeamName;
+  company?: CompanyBranch;
   avatar: string;
   birthday?: string; // e.g. "27 Sep"
+  dob?: string; // e.g. "14/10/2000"
   workMode?: WorkMode;
   permissionCount?: number;
   hasResetPassword?: boolean;
@@ -21,6 +44,8 @@ export interface User {
   bankAccount?: string;
   taxId?: string;
   bloodGroup?: string;
+  education?: EducationRecord[];
+  experience?: ExperienceRecord[];
   createdAt?: string;
 }
 

@@ -7,6 +7,8 @@ export interface IUserDocument extends Document {
   role: UserRole;
   team: TeamName;
   avatar: string;
+  birthday?: string;
+  dob?: string;
   createdAt: Date;
 }
 
@@ -25,6 +27,8 @@ const UserSchema = new Schema<IUserDocument>(
       required: true,
     },
     avatar: { type: String, default: '' },
+    birthday: { type: String },
+    dob: { type: String },
   },
   { timestamps: true }
 );

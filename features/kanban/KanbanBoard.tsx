@@ -125,7 +125,7 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-6">
-      {/* Kanban Board Header Card */}
+      {/* Bizzy Board Header Card */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-gradient-to-r from-brand-500/10 via-indigo-500/10 to-transparent p-6 glass-panel">
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-glow">
@@ -134,7 +134,7 @@ export function KanbanBoard() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                {isSuperAdmin ? 'Global Workspace Kanban' : `${currentUser?.team} Team Kanban Board`}
+                {isSuperAdmin ? 'Global Workspace Bizzy Board' : `${currentUser?.team} Team Bizzy Board`}
               </h1>
               <Badge variant="default" className="text-[10px] font-mono">
                 {filteredTasks.length} Active Cards
@@ -251,11 +251,11 @@ export function KanbanBoard() {
         ))}
       </div>
 
-      {/* Kanban Grid */}
+      {/* Kanban Grid: Swipeable on mobile & tablet, 5-col grid on large desktop */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="flex lg:grid lg:grid-cols-5 overflow-x-auto pb-4 gap-4">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="space-y-3">
+            <div key={i} className="w-[285px] sm:w-[320px] lg:w-full shrink-0 lg:shrink space-y-3">
               <Skeleton className="h-10 w-full rounded-xl" />
               <Skeleton className="h-36 w-full rounded-2xl" />
               <Skeleton className="h-36 w-full rounded-2xl" />
@@ -263,7 +263,7 @@ export function KanbanBoard() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-start">
+        <div className="flex lg:grid lg:grid-cols-5 overflow-x-auto pb-4 gap-4 items-start snap-x snap-mandatory">
           {KANBAN_COLUMNS.map((column) => {
             const columnTasks = filteredTasks.filter((t) => t.status === column.status);
 
@@ -272,7 +272,7 @@ export function KanbanBoard() {
                 key={column.status}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, column.status)}
-                className={`flex flex-col rounded-3xl border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 p-3.5 min-h-[600px] transition-all ${column.bg}`}
+                className={`flex flex-col rounded-3xl border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 p-3.5 min-h-[500px] lg:min-h-[600px] w-[285px] sm:w-[320px] lg:w-full shrink-0 lg:shrink snap-center transition-all ${column.bg}`}
               >
                 {/* Column Header */}
                 <div className="flex items-center justify-between pb-3 px-1 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-3">

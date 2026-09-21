@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -16,9 +16,12 @@ import {
   Clock,
   Receipt,
   DollarSign,
+  User,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useCompanyStore } from '@/store/useCompanyStore';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
 
@@ -29,43 +32,88 @@ interface SidebarProps {
 
 export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const currentUser = useAuthStore((s) => s.currentUser);
+  const logout = useAuthStore((s) => s.logout);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
+
+  const handleLogout = () => {
+    logout();
+    if (onMobileClose) {
+      onMobileClose();
+    }
+    router.push('/login');
+  };
+
+  // Auto-close mobile drawer on route navigation
+  useEffect(() => {
+    if (isMobileOpen && onMobileClose) {
+      onMobileClose();
+    }
+  }, [pathname]);
+
+  // Lock body scroll while mobile drawer is open
+  useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileOpen]);
 
   if (!currentUser) return null;
 
+  const isAustralia = currentUser.company === 'Ambizcon - Australia' || selectedCompany === 'Ambizcon - Australia';
   const isSuperAdmin = currentUser.role === 'Super Admin';
   const isTeamLead = currentUser.role === 'Team Lead' || isSuperAdmin;
+  const isReception = currentUser.role === 'Reception Staff';
 
-  const navItems = [
-    { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-    { label: 'Kanban Board', href: '/kanban', icon: KanbanSquare },
-    {
-      label: 'Incoming Queue',
-      href: '/incoming',
-      icon: Inbox,
-      badge: isTeamLead ? 'Lead' : undefined,
-      restricted: !isTeamLead,
-    },
-    { label: 'Attendance & Leave', href: '/attendance', icon: Clock, badge: 'New' },
-    { label: 'Reimbursements', href: '/reimbursements', icon: Receipt, badge: 'Claims' },
-    { label: 'Reports', href: '/reports', icon: FileSpreadsheet },
-    { label: 'Analytics', href: '/analytics', icon: BarChart3, badge: 'Insights' },
-    {
-      label: 'User Management',
-      href: '/users',
-      icon: Users,
-      badge: 'Admin',
-      restricted: !isSuperAdmin,
-    },
-    {
-      label: 'Finance & Ledger',
-      href: '/finance',
-      icon: DollarSign,
-      badge: 'Finance',
-      restricted: !isSuperAdmin,
-    },
-    { label: 'Settings', href: '/settings', icon: Settings },
-  ];
+  const navItems = isReception
+    ? [
+        { label: 'Attendance & Kiosk', href: '/attendance', icon: Clock, badge: 'Kiosk' },
+        { label: 'My Profile', href: '/profile', icon: User },
+      ]
+    : [
+        { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Bizzy Board', href: '/kanban', icon: KanbanSquare },
+        {
+          label: 'Incoming Queue',
+          href: '/incoming',
+          icon: Inbox,
+          badge: isTeamLead ? 'Lead' : undefined,
+          restricted: !isTeamLead,
+        },
+        { label: 'Attendance & Leave', href: '/attendance', icon: Clock, badge: 'New' },
+        { label: 'Reimbursements', href: '/reimbursements', icon: Receipt, badge: 'Claims' },
+        { label: 'Reports', href: '/reports', icon: FileSpreadsheet },
+        { label: 'Analytics', href: '/analytics', icon: BarChart3, badge: 'Insights' },
+        {
+          label: 'User Directory',
+          href: '/users',
+          icon: Users,
+          badge: isSuperAdmin ? 'Admin' : undefined,
+          restricted: !isSuperAdmin,
+        },
+        {
+          label: 'Role Approvals',
+          href: '/users#approvals',
+          icon: UserCheck,
+          badge: isSuperAdmin ? 'Admin' : undefined,
+          restricted: !isSuperAdmin,
+        },
+        {
+          label: 'Company Finance',
+          href: '/finance',
+          icon: DollarSign,
+          badge: isSuperAdmin ? 'Admin' : undefined,
+          restricted: !isSuperAdmin,
+        },
+        { label: 'My Profile', href: '/profile', icon: User },
+        { label: 'Settings', href: '/settings', icon: Settings },
+      ];
 
   const sidebarContent = (
     <aside
@@ -76,22 +124,40 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           : 'hidden md:flex'
       )}
     >
-      {/* AMBIZCON Health Image Logo Brand Header */}
+      {/* AMBIZCON Brand Header (Branch aware: Australia vs Health India) */}
       <div className="flex h-20 items-center justify-between px-5 border-b border-zinc-200/60 dark:border-zinc-800/60">
-        <Link href="/dashboard" onClick={onMobileClose} className="flex items-center gap-3 group">
-          {/* AMBIZCON Health Image Logo */}
-          <img
-            src="/ambizcon-logo.png"
-            alt="AMBIZCON Health Logo"
-            className="h-10 w-10 rounded-xl object-cover shadow-sm border border-emerald-500/30 group-hover:scale-105 transition-transform"
-          />
+        <Link href={isReception ? '/attendance' : '/dashboard'} onClick={onMobileClose} className="flex items-center gap-3 group">
+          {/* Logo Image */}
+          <div className={cn(
+            "h-10 w-10 rounded-xl flex items-center justify-center shadow-sm border transition-transform group-hover:scale-105 overflow-hidden",
+            isAustralia ? "bg-white p-1 border-amber-500/30" : "border-emerald-500/30"
+          )}>
+            <img
+              src={isAustralia ? "/ambizcon-australia-icon.png" : "/ambizcon-logo.png"}
+              alt={isAustralia ? "AMBIZCON Australia Logo" : "AMBIZCON Health Logo"}
+              className={cn("h-full w-full", isAustralia ? "object-contain" : "object-cover")}
+            />
+          </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
-              AMBIZCON<span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1">Health</span>
-            </span>
-            <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-              Beyond Marketing • Healthcare
-            </span>
+            {isAustralia ? (
+              <>
+                <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
+                  AMBIZCON<span className="text-amber-500 dark:text-amber-400 font-bold ml-1">Australia</span>
+                </span>
+                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+                  Brisbane HQ • Global
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
+                  AMBIZCON<span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1">Health</span>
+                </span>
+                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+                  Beyond Marketing • Healthcare
+                </span>
+              </>
+            )}
           </div>
         </Link>
         <div className="flex items-center gap-1">
@@ -109,11 +175,16 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
       {/* Team Context Badge */}
       <div className="px-4 py-3">
         <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/20 p-2.5">
-          <img
-            src="/ambizcon-logo.png"
-            alt="Logo"
-            className="h-7 w-7 rounded-lg object-cover shadow-xs border border-emerald-500/30"
-          />
+          <div className={cn(
+            "h-7 w-7 rounded-lg shadow-xs border flex items-center justify-center overflow-hidden",
+            isAustralia ? "bg-white p-0.5 border-amber-500/30" : "border-emerald-500/30"
+          )}>
+            <img
+              src={isAustralia ? "/ambizcon-australia-icon.png" : "/ambizcon-logo.png"}
+              alt="Logo"
+              className={cn("h-full w-full", isAustralia ? "object-contain" : "object-cover")}
+            />
+          </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-xs font-semibold truncate leading-none text-foreground">
               {currentUser.team} Team
@@ -167,9 +238,9 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* Active User Card */}
-      <div className="p-4 border-t border-zinc-200/60 dark:border-zinc-800/60">
-        <div className="flex items-center gap-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-2.5">
+      {/* Active User Card & Logout Area */}
+      <div className="p-3.5 border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-2">
+        <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-2.5">
           <Avatar src={currentUser.avatar} name={currentUser.name} size="md" />
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-xs font-semibold truncate leading-tight text-foreground">{currentUser.name}</span>
@@ -178,12 +249,29 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           <Link
             href="/profile"
             onClick={onMobileClose}
-            className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground transition-colors"
-            title="Profile"
+            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground transition-colors"
+            title="My Profile"
           >
             <UserCheck className="h-4 w-4" />
           </Link>
+          <button
+            onClick={handleLogout}
+            className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
+            title="Log Out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
+
+        {/* Quick Log Out Button */}
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 py-1.5 text-xs font-bold transition-all active:scale-98"
+          title="Sign Out of TaskFlow"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          <span>Log Out</span>
+        </button>
       </div>
     </aside>
   );

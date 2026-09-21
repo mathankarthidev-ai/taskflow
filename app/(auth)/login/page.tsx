@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { CompanyBranch } from '@/types';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -15,15 +17,19 @@ import {
   Sun,
   Moon,
   Laptop,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
+  const [selectedBranch, setSelectedBranch] = useState<CompanyBranch>('Ambizcon - Australia');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const login = useAuthStore((s) => s.login);
+  const logout = useAuthStore((s) => s.logout);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const setSelectedCompany = useCompanyStore((s) => s.setSelectedCompany);
   const router = useRouter();
   const { theme, setTheme } = useTheme();
 
@@ -45,8 +51,24 @@ export default function LoginPage() {
 
     const success = await login(emailInput.trim());
     if (success) {
+      const currentUser = useAuthStore.getState().currentUser;
+      const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+
+      // Ambizcon Health - India is strictly restricted to Admin accounts
+      if (selectedBranch === 'Ambizcon Health - India' && !isAdmin) {
+        logout();
+        setErrorMsg('Access Denied: Ambizcon Health - India is restricted to Administrator accounts only. Regular staff must select Ambizcon - Australia.');
+        toast.error('Restricted: Ambizcon Health - India is for Admins only.');
+        return;
+      }
+
+      setSelectedCompany(selectedBranch);
       toast.success('Signed in successfully!');
-      router.push('/dashboard');
+      if (currentUser?.role === 'Reception Staff') {
+        router.push('/attendance');
+      } else {
+        router.push('/dashboard');
+      }
     } else {
       setErrorMsg('Account not found in Ambizcon directory.');
     }
@@ -93,23 +115,43 @@ export default function LoginPage() {
 
       {/* Main Container */}
       <div className="relative z-10 w-full max-w-lg space-y-8 my-8">
-        {/* AMBIZCON Health Brand Header */}
+        {/* AMBIZCON Brand Header (Dynamic: Ambizcon Australia vs Ambizcon Health) */}
         <div className="text-center space-y-3">
-          <div className="flex items-center justify-center gap-4">
-            <img
-              src="/ambizcon-logo.png"
-              alt="AMBIZCON Health Logo"
-              className="h-16 w-16 md:h-20 md:w-20 rounded-2xl object-cover shadow-glow border border-emerald-500/40"
-            />
-            <div className="text-left">
-              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
-                AMBIZCON<span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1.5">Health</span>
-              </h1>
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mt-1">
-                Beyond Marketing • Beyond Healthcare
-              </p>
+          {selectedBranch === 'Ambizcon - Australia' ? (
+            <div className="flex items-center justify-center gap-3.5">
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-2xl bg-white p-2 shadow-glow border border-amber-500/40 flex items-center justify-center">
+                <img
+                  src="/ambizcon-australia-icon.png"
+                  alt="AMBIZCON Australia Logo"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div className="text-left">
+                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+                  AMBIZCON<span className="text-amber-500 dark:text-amber-400 font-bold ml-1.5">Australia</span>
+                </h1>
+                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mt-1">
+                  Brisbane HQ • Global Operations
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center justify-center gap-4">
+              <img
+                src="/ambizcon-logo.png"
+                alt="AMBIZCON Health Logo"
+                className="h-16 w-16 md:h-20 md:w-20 rounded-2xl object-cover shadow-glow border border-emerald-500/40"
+              />
+              <div className="text-left">
+                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+                  AMBIZCON<span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1.5">Health</span>
+                </h1>
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mt-1">
+                  Beyond Marketing • Beyond Healthcare
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Main Glassmorphic Login Card */}
@@ -134,6 +176,43 @@ export default function LoginPage() {
 
           {/* Email & Password Login Form */}
           <form onSubmit={handleCustomLogin} className="space-y-4 pt-6">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Select Company / Branch
+                </label>
+                {selectedBranch === 'Ambizcon Health - India' ? (
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                    <ShieldCheck className="h-3 w-3" />
+                    Admin Only
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    All Staff & Demos
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value as CompanyBranch)}
+                  className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all font-semibold"
+                >
+                  <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ • Staff & Demos)</option>
+                  <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Admin Only)</option>
+                </select>
+              </div>
+              {selectedBranch === 'Ambizcon Health - India' && (
+                <div className="mt-2 p-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2 animate-fade">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span>
+                    <strong>Admin Notice:</strong> Ambizcon Health - India is strictly restricted to <strong>Super Admin & Admin</strong> accounts.
+                  </span>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                 <Mail className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -185,10 +264,14 @@ export default function LoginPage() {
         {/* Footer */}
         <div className="text-center space-y-1">
           <div className="font-extrabold text-sm tracking-tight text-foreground">
-            AMBIZCON<span className="text-emerald-600 dark:text-emerald-400">Health</span>
+            {selectedBranch === 'Ambizcon - Australia' ? (
+              <>AMBIZCON<span className="text-amber-500 dark:text-amber-400 ml-1">Australia</span></>
+            ) : (
+              <>AMBIZCON<span className="text-emerald-600 dark:text-emerald-400 ml-1">Health</span></>
+            )}
           </div>
           <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-            Beyond Marketing • Beyond Healthcare
+            {selectedBranch === 'Ambizcon - Australia' ? 'Brisbane HQ • Global Operations' : 'Beyond Marketing • Beyond Healthcare'}
           </div>
         </div>
       </div>

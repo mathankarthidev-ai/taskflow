@@ -31,9 +31,12 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCompanyStore } from '@/store/useCompanyStore';
 
 export default function ReimbursementsPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
+  const isAustralia = currentUser?.company === 'Ambizcon - Australia' || selectedCompany === 'Ambizcon - Australia';
   const [claims, setClaims] = useState<ReimbursementClaim[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -176,11 +179,15 @@ export default function ReimbursementsPage() {
       {/* Top Banner Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-[#086075]/15 via-[#2a8c82]/10 to-transparent p-6 glass-panel">
         <div className="flex items-center gap-4">
-          <img
-            src="/ambizcon-logo.png"
-            alt="AMBIZCON Health Logo"
-            className="h-14 w-14 rounded-2xl object-cover shadow-glow border border-emerald-500/30"
-          />
+          <div className={`h-14 w-14 rounded-2xl flex items-center justify-center shadow-glow border overflow-hidden ${
+            isAustralia ? 'bg-white p-2 border-amber-500/40' : 'border-emerald-500/30'
+          }`}>
+            <img
+              src={isAustralia ? '/ambizcon-australia-icon.png' : '/ambizcon-logo.png'}
+              alt={isAustralia ? 'AMBIZCON Australia Logo' : 'AMBIZCON Health Logo'}
+              className={`h-full w-full ${isAustralia ? 'object-contain' : 'object-cover'}`}
+            />
+          </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
@@ -196,7 +203,7 @@ export default function ReimbursementsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={() => setIsSubmitModalOpen(true)} className="gap-2 ambizcon-gradient text-white shadow-glow">
             <Plus className="h-4 w-4" />
             Submit Expense Claim

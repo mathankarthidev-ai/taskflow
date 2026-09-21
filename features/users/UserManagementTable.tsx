@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, TeamName, WorkMode } from '@/types';
+import { User, UserRole, TeamName, WorkMode, CompanyBranch } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
   fetchAllUsersAction,
@@ -16,14 +16,30 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Link from 'next/link';
-import { Users, UserPlus, Trash2, RefreshCw, Search, Edit3, DollarSign } from 'lucide-react';
+import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Format date of birth to strictly Date and Month only (No year)
+export function formatDayMonthOnly(val?: string): string {
+  if (!val) return '—';
+  let s = val.replace(/\s*\(\d{4}\)/g, '').trim();
+  const parts = s.split(/[\/\-\.]/);
+  if (parts.length === 3 && parts[2].length === 4) {
+    const day = parts[0].padStart(2, '0');
+    const monthNum = parseInt(parts[1], 10);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${day} ${months[monthNum - 1]}`;
+    }
+    return `${parts[0]}/${parts[1]}`;
+  }
+  return s.replace(/\s+\d{4}$/, '').trim();
+}
 
 export function UserManagementTable() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Edit Member Modal State
@@ -32,17 +48,22 @@ export function UserManagementTable() {
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('Team Member');
   const [editTeam, setEditTeam] = useState<TeamName>('Development');
+  const [editCompany, setEditCompany] = useState<CompanyBranch>('Ambizcon Health - India');
   const [editBirthday, setEditBirthday] = useState('');
+  const [editDob, setEditDob] = useState('');
   const [editWorkMode, setEditWorkMode] = useState<WorkMode>('Work From Office');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<TeamName | 'All'>('All');
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<CompanyBranch | 'All'>('All');
 
   // Add Form State
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newDob, setNewDob] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('Team Member');
   const [newTeam, setNewTeam] = useState<TeamName>('Development');
+  const [newCompany, setNewCompany] = useState<CompanyBranch>('Ambizcon Health - India');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchUsers = async () => {
@@ -85,10 +106,11 @@ export function UserManagementTable() {
         email: newEmail.trim(),
         role: newRole,
         team: newTeam,
+        company: newCompany,
       });
 
       setUsers([created, ...users]);
-      toast.success(`User ${created.name} added successfully!`);
+      toast.success(`User ${created.name} added successfully to ${newCompany}!`);
       setIsAddModalOpen(false);
       setNewName('');
       setNewEmail('');
@@ -105,7 +127,9 @@ export function UserManagementTable() {
     setEditEmail(u.email);
     setEditRole(u.role);
     setEditTeam(u.team);
-    setEditBirthday(u.birthday || '14 Mar');
+    setEditCompany(u.company || 'Ambizcon Health - India');
+    setEditBirthday(formatDayMonthOnly(u.birthday || u.dob || '14 Oct'));
+    setEditDob(formatDayMonthOnly(u.dob || u.birthday || '14 Oct'));
     setEditWorkMode(u.workMode || 'Work From Office');
   };
 
@@ -121,7 +145,9 @@ export function UserManagementTable() {
           email: editEmail,
           role: editRole,
           team: editTeam,
+          company: editCompany,
           birthday: editBirthday,
+          dob: editDob,
           workMode: editWorkMode,
         };
       }
@@ -156,30 +182,22 @@ export function UserManagementTable() {
     }
   };
 
-  const handleSeedReset = async () => {
-    setSeeding(true);
-    try {
-      const res = await fetch('/api/seed', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Database and Seed store re-initialized!');
-        fetchUsers();
-      }
-    } catch (e) {
-      toast.error('Failed to trigger database seed');
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   const filteredUsers = users.filter((u) => {
     if (selectedTeamFilter !== 'All' && u.team !== selectedTeamFilter) return false;
+    if (
+      selectedCompanyFilter !== 'All' &&
+      u.company !== 'India & Australia' &&
+      u.name !== 'Anirudh' &&
+      (u.company || 'Ambizcon Health - India') !== selectedCompanyFilter
+    )
+      return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
-        u.role.toLowerCase().includes(q)
+        u.role.toLowerCase().includes(q) ||
+        (u.company && u.company.toLowerCase().includes(q))
       );
     }
     return true;
@@ -201,22 +219,17 @@ export function UserManagementTable() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link href="/finance">
             <Button size="sm" variant="outline" className="gap-1.5 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold">
               <DollarSign className="h-4 w-4" />
-              Finance & Payroll ($68,500/mo)
+              Finance & Payroll Ledger
             </Button>
           </Link>
 
           <Button onClick={() => setIsAddModalOpen(true)} size="sm" className="gap-1.5 ambizcon-gradient text-white shadow-glow">
             <UserPlus className="h-4 w-4" />
             Add New Member
-          </Button>
-
-          <Button onClick={handleSeedReset} disabled={seeding} variant="outline" size="sm" className="gap-1.5">
-            <RefreshCw className={`h-4 w-4 ${seeding ? 'animate-spin' : ''}`} />
-            {seeding ? 'Seeding...' : 'Reset Data'}
           </Button>
         </div>
       </div>
@@ -234,16 +247,28 @@ export function UserManagementTable() {
           />
         </div>
 
-        <select
-          value={selectedTeamFilter}
-          onChange={(e) => setSelectedTeamFilter(e.target.value as TeamName | 'All')}
-          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
-        >
-          <option value="All">All Workspace Teams</option>
-          <option value="Creative">Creative Team</option>
-          <option value="Marketing">Marketing Team</option>
-          <option value="Development">Development Team</option>
-        </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={selectedCompanyFilter}
+            onChange={(e) => setSelectedCompanyFilter(e.target.value as CompanyBranch | 'All')}
+            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
+          >
+            <option value="All">All Companies / Branches</option>
+            <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India</option>
+            <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia</option>
+          </select>
+
+          <select
+            value={selectedTeamFilter}
+            onChange={(e) => setSelectedTeamFilter(e.target.value as TeamName | 'All')}
+            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+          >
+            <option value="All">All Workspace Teams</option>
+            <option value="Creative">Creative Team</option>
+            <option value="Marketing">Marketing Team</option>
+            <option value="Development">Development Team</option>
+          </select>
+        </div>
       </div>
 
       {/* Users Table */}
@@ -256,10 +281,11 @@ export function UserManagementTable() {
               <thead className="border-b border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/50 text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
                   <th className="px-4 py-3">Member</th>
+                  <th className="px-4 py-3">Company Branch</th>
                   <th className="px-4 py-3">Authorized Email</th>
                   <th className="px-4 py-3">Team</th>
                   <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Birthday</th>
+                  <th className="px-4 py-3">Birthday / DOB</th>
                   <th className="px-4 py-3">Work Mode</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
@@ -273,6 +299,15 @@ export function UserManagementTable() {
                         <span className="font-semibold text-foreground">{u.name}</span>
                       </div>
                     </td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline" className="text-[10px] font-semibold whitespace-nowrap">
+                        {u.company === 'India & Australia' || u.name === 'Anirudh'
+                          ? '🌐 India & Australia'
+                          : (u.company || 'Ambizcon Health - India') === 'Ambizcon - Australia'
+                          ? '🇦🇺 Australia'
+                          : '🇮🇳 India'}
+                      </Badge>
+                    </td>
                     <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{u.email}</td>
                     <td className="px-4 py-3 font-medium">{u.team}</td>
                     <td className="px-4 py-3">
@@ -283,7 +318,7 @@ export function UserManagementTable() {
                         {u.role}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 font-mono">{u.birthday || '14 Mar'}</td>
+                    <td className="px-4 py-3 font-mono font-semibold">{formatDayMonthOnly(u.dob || u.birthday || '14 Oct')}</td>
                     <td className="px-4 py-3 font-semibold text-emerald-600 dark:text-emerald-400">
                       {u.workMode || 'Work From Office'}
                     </td>
@@ -349,6 +384,18 @@ export function UserManagementTable() {
               />
             </div>
 
+            <div>
+              <label className="text-xs font-semibold text-foreground">Company / Branch *</label>
+              <select
+                value={editCompany}
+                onChange={(e) => setEditCompany(e.target.value as CompanyBranch)}
+                className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+              >
+                <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Chennai HQ)</option>
+                <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ)</option>
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-foreground">Assigned Team</label>
@@ -373,18 +420,30 @@ export function UserManagementTable() {
                   <option value="Team Member">Team Member</option>
                   <option value="Team Lead">Team Lead</option>
                   <option value="Super Admin">Super Admin</option>
+                  <option value="Reception Staff">Reception Staff</option>
                 </select>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-semibold text-foreground">Birthday Date</label>
+                <label className="text-xs font-semibold text-foreground">Date of Birth (Day & Month only) *</label>
+                <input
+                  type="text"
+                  value={editDob}
+                  onChange={(e) => setEditDob(e.target.value)}
+                  placeholder="e.g. 29 Jun or 14 Oct"
+                  className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground">Birthday (Calendar Day)</label>
                 <input
                   type="text"
                   value={editBirthday}
                   onChange={(e) => setEditBirthday(e.target.value)}
-                  placeholder="e.g. 27 Sep"
+                  placeholder="e.g. 14 Oct"
                   className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
                 />
               </div>
@@ -436,6 +495,18 @@ export function UserManagementTable() {
           </div>
 
           <div>
+            <label className="text-xs font-semibold text-foreground">Company / Branch *</label>
+            <select
+              value={newCompany}
+              onChange={(e) => setNewCompany(e.target.value as CompanyBranch)}
+              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+            >
+              <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Chennai HQ)</option>
+              <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ)</option>
+            </select>
+          </div>
+
+          <div>
             <label className="text-xs font-semibold text-foreground">Company Email (@ambizcon.com) *</label>
             <input
               type="email"
@@ -471,6 +542,7 @@ export function UserManagementTable() {
                 <option value="Team Member">Team Member</option>
                 <option value="Team Lead">Team Lead</option>
                 <option value="Super Admin">Super Admin</option>
+                <option value="Reception Staff">Reception Staff</option>
               </select>
             </div>
           </div>

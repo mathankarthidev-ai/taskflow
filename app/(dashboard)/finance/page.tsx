@@ -30,10 +30,10 @@ export default function FinancePage() {
   const isSuperAdmin = currentUser?.role === 'Super Admin';
 
   // Dynamic Editable Financial Figures
-  const [grossRevenue, setGrossRevenue] = useState(185000);
-  const [totalSalaries, setTotalSalaries] = useState(68500);
-  const [totalExpenses, setTotalExpenses] = useState(24200);
-  const [totalClaims, setTotalClaims] = useState(12450);
+  const [grossRevenue, setGrossRevenue] = useState(0);
+  const [totalSalaries, setTotalSalaries] = useState(0);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [totalClaims, setTotalClaims] = useState(0);
 
   // Edit Metric Modal
   const [isEditMetricModalOpen, setIsEditMetricModalOpen] = useState(false);
@@ -88,40 +88,40 @@ export default function FinancePage() {
 
   // Categorized Reimbursements Data
   const claimCategories = [
-    { category: 'Travel & Commute', amount: 3850, count: 14, color: '#3b82f6' },
-    { category: 'Client Lunch & Meetings', amount: 2400, count: 9, color: '#10b981' },
-    { category: 'Software & Cloud SaaS', amount: 3100, count: 6, color: '#8b5cf6' },
-    { category: 'Hardware & Equipment', amount: 1900, count: 4, color: '#f59e0b' },
-    { category: 'Office Supplies & Utilities', amount: 700, count: 5, color: '#ec4899' },
-    { category: 'Medical & Healthcare', amount: 500, count: 2, color: '#06b6d4' },
+    { category: 'Travel & Commute', amount: 0, count: 0, color: '#3b82f6' },
+    { category: 'Client Lunch & Meetings', amount: 0, count: 0, color: '#10b981' },
+    { category: 'Software & Cloud SaaS', amount: 0, count: 0, color: '#8b5cf6' },
+    { category: 'Hardware & Equipment', amount: 0, count: 0, color: '#f59e0b' },
+    { category: 'Office Supplies & Utilities', amount: 0, count: 0, color: '#ec4899' },
+    { category: 'Medical & Healthcare', amount: 0, count: 0, color: '#06b6d4' },
   ];
 
   // Employee Salary Payroll Roster Data with Personal & Bank Details
   const salaryRoster = [
-    { name: 'Anirudh', email: 'anirudh@ambizcon.com', role: 'Super Admin (CEO)', team: 'Development', salary: 14000, phone: '+91 98765 43210', bank: 'HDFC Bank • XXXX-XXXX-4821', emergency: 'Spouse: +91 98765 00000', taxId: 'ANIR1234F', blood: 'O+', address: 'No. 1, Ambizcon Towers, Chennai' },
-    { name: 'Mathan', email: 'mathan@ambizcon.com', role: 'Super Admin (AI PM)', team: 'Development', salary: 13500, phone: '+91 98765 43211', bank: 'ICICI Bank • XXXX-XXXX-9102', emergency: 'Brother: +91 98765 11111', taxId: 'MATH5678G', blood: 'B+', address: 'No. 14, Tech Corridor, Chennai' },
-    { name: 'Aravind', email: 'aravind@ambizcon.com', role: 'Team Lead', team: 'Development', salary: 9500, phone: '+91 98765 43212', bank: 'Axis Bank • XXXX-XXXX-3341', emergency: 'Father: +91 98765 22222', taxId: 'ARAV9012H', blood: 'A+', address: 'No. 88, IT Expressway, Chennai' },
-    { name: 'Kenneth', email: 'kenneth@ambizcon.com', role: 'Team Lead', team: 'Marketing', salary: 8800, phone: '+91 98765 43213', bank: 'NAB Australia • XXXX-XXXX-5520', emergency: 'Wife: +61 412 345 678', taxId: 'KENN3456I', blood: 'O+', address: '124 Queen St, Brisbane QLD' },
-    { name: 'Deva', email: 'deva@ambizcon.com', role: 'Team Lead', team: 'Creative', salary: 8500, phone: '+91 98765 43214', bank: 'SBI Bank • XXXX-XXXX-8812', emergency: 'Mother: +91 98765 44444', taxId: 'DEVA7890J', blood: 'AB+', address: 'No. 5, Design Street, Chennai' },
-    { name: 'Thanikaivel', email: 'thanikaivel@ambizcon.com', role: 'Team Member', team: 'Development', salary: 6200, phone: '+91 98765 43215', bank: 'HDFC Bank • XXXX-XXXX-1122', emergency: 'Father: +91 98765 55555', taxId: 'THAN1234K', blood: 'O+', address: 'No. 23, Dev Colony, Chennai' },
-    { name: 'Naraine', email: 'naraine@ambizcon.com', role: 'Team Member', team: 'Development', salary: 6000, phone: '+91 98765 43216', bank: 'Kotak Bank • XXXX-XXXX-6677', emergency: 'Spouse: +91 98765 66666', taxId: 'NARA5678L', blood: 'A+', address: 'No. 99, Cloud Avenue, Chennai' },
-    { name: 'Mathanmk', email: 'mathanmk@ambizcon.com', role: 'Team Member', team: 'Development', salary: 5800, phone: '+91 98765 43217', bank: 'ICICI Bank • XXXX-XXXX-4433', emergency: 'Brother: +91 98765 77777', taxId: 'MMK19012M', blood: 'B+', address: 'No. 12, AI Hub, Chennai' },
-    { name: 'Mathi', email: 'mathi@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 5500, phone: '+91 98765 43218', bank: 'Axis Bank • XXXX-XXXX-9900', emergency: 'Father: +91 98765 88888', taxId: 'MATH3456N', blood: 'O+', address: 'No. 7, Growth Lane, Chennai' },
-    { name: 'Krithika Shri', email: 'krithikashri@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 5400, phone: '+91 98765 43219', bank: 'SBI Bank • XXXX-XXXX-2233', emergency: 'Mother: +91 98765 99999', taxId: 'KRIT7890O', blood: 'A+', address: 'No. 45, Media Park, Chennai' },
-    { name: 'Siddesh', email: 'siddesh@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 5200, phone: '+91 98765 43220', bank: 'HDFC Bank • XXXX-XXXX-7788', emergency: 'Brother: +91 98765 10101', taxId: 'SIDD1234P', blood: 'AB+', address: 'No. 31, Ops Drive, Chennai' },
-    { name: 'Sathish', email: 'sathish@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 5100, phone: '+91 98765 43221', bank: 'Kotak Bank • XXXX-XXXX-5544', emergency: 'Father: +91 98765 20202', taxId: 'SATH5678Q', blood: 'O+', address: 'No. 67, Figma Square, Chennai' },
-    { name: 'Kavish', email: 'kavish@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 5000, phone: '+91 98765 43222', bank: 'ICICI Bank • XXXX-XXXX-1199', emergency: 'Spouse: +91 98765 30303', taxId: 'KAVI9012R', blood: 'B+', address: 'No. 19, Art Block, Chennai' },
-    { name: 'Kasthuri', email: 'kasthuri@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 4900, phone: '+91 98765 43223', bank: 'Axis Bank • XXXX-XXXX-8877', emergency: 'Mother: +91 98765 40404', taxId: 'KAST3456S', blood: 'A+', address: 'No. 52, Vector Way, Chennai' },
-    { name: 'Ahamed', email: 'ahamed@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 4800, phone: '+91 98765 43224', bank: 'SBI Bank • XXXX-XXXX-3366', emergency: 'Brother: +91 98765 50505', taxId: 'AHAM7890T', blood: 'O+', address: 'No. 84, Brand Boulevard, Chennai' },
+    { name: 'Anirudh', email: 'anirudh@ambizcon.com', role: 'Super Admin (CEO)', team: 'Development', salary: 0, phone: '+91 98765 43210', bank: 'HDFC Bank • XXXX-XXXX-4821', emergency: 'Spouse: +91 98765 00000', taxId: 'ANIR1234F', blood: 'O+', address: 'No. 1, Ambizcon Towers, Chennai' },
+    { name: 'Mathan', email: 'mathan@ambizcon.com', role: 'Super Admin (AI PM)', team: 'Development', salary: 0, phone: '+91 98765 43211', bank: 'ICICI Bank • XXXX-XXXX-9102', emergency: 'Brother: +91 98765 11111', taxId: 'MATH5678G', blood: 'B+', address: 'No. 14, Tech Corridor, Chennai' },
+    { name: 'Aravind', email: 'aravind@ambizcon.com', role: 'Team Lead', team: 'Development', salary: 0, phone: '+91 98765 43212', bank: 'Axis Bank • XXXX-XXXX-3341', emergency: 'Father: +91 98765 22222', taxId: 'ARAV9012H', blood: 'A+', address: 'No. 88, IT Expressway, Chennai' },
+    { name: 'Kenneth', email: 'kenneth@ambizcon.com', role: 'Team Lead', team: 'Marketing', salary: 0, phone: '+91 98765 43213', bank: 'NAB Australia • XXXX-XXXX-5520', emergency: 'Wife: +61 412 345 678', taxId: 'KENN3456I', blood: 'O+', address: '124 Queen St, Brisbane QLD' },
+    { name: 'Deva', email: 'deva@ambizcon.com', role: 'Team Lead', team: 'Creative', salary: 0, phone: '+91 98765 43214', bank: 'SBI Bank • XXXX-XXXX-8812', emergency: 'Mother: +91 98765 44444', taxId: 'DEVA7890J', blood: 'AB+', address: 'No. 5, Design Street, Chennai' },
+    { name: 'Thanikaivel', email: 'thanikaivel@ambizcon.com', role: 'Team Member', team: 'Development', salary: 0, phone: '+91 98765 43215', bank: 'HDFC Bank • XXXX-XXXX-1122', emergency: 'Father: +91 98765 55555', taxId: 'THAN1234K', blood: 'O+', address: 'No. 23, Dev Colony, Chennai' },
+    { name: 'Naraine', email: 'naraine@ambizcon.com', role: 'Team Member', team: 'Development', salary: 0, phone: '+91 98765 43216', bank: 'Kotak Bank • XXXX-XXXX-6677', emergency: 'Spouse: +91 98765 66666', taxId: 'NARA5678L', blood: 'A+', address: 'No. 99, Cloud Avenue, Chennai' },
+    { name: 'Mathanmk', email: 'mathanmk@ambizcon.com', role: 'Team Member', team: 'Development', salary: 0, phone: '+91 98765 43217', bank: 'ICICI Bank • XXXX-XXXX-4433', emergency: 'Brother: +91 98765 77777', taxId: 'MMK19012M', blood: 'B+', address: 'No. 12, AI Hub, Chennai' },
+    { name: 'Mathi', email: 'mathi@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 0, phone: '+91 98765 43218', bank: 'Axis Bank • XXXX-XXXX-9900', emergency: 'Father: +91 98765 88888', taxId: 'MATH3456N', blood: 'O+', address: 'No. 7, Growth Lane, Chennai' },
+    { name: 'Krithika Shri', email: 'krithikashri@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 0, phone: '+91 98765 43219', bank: 'SBI Bank • XXXX-XXXX-2233', emergency: 'Mother: +91 98765 99999', taxId: 'KRIT7890O', blood: 'A+', address: 'No. 45, Media Park, Chennai' },
+    { name: 'Siddesh', email: 'siddesh@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 0, phone: '+91 98765 43220', bank: 'HDFC Bank • XXXX-XXXX-7788', emergency: 'Brother: +91 98765 10101', taxId: 'SIDD1234P', blood: 'AB+', address: 'No. 31, Ops Drive, Chennai' },
+    { name: 'Sathish', email: 'sathish@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43221', bank: 'Kotak Bank • XXXX-XXXX-5544', emergency: 'Father: +91 98765 20202', taxId: 'SATH5678Q', blood: 'O+', address: 'No. 67, Figma Square, Chennai' },
+    { name: 'Kavish TG', email: 'kavish@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43222', bank: 'ICICI Bank • XXXX-XXXX-1199', emergency: 'Spouse: +91 98765 30303', taxId: 'KAVI9012R', blood: 'B+', address: 'No. 19, Art Block, Chennai' },
+    { name: 'Kasthuri', email: 'kasthuri@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43223', bank: 'Axis Bank • XXXX-XXXX-8877', emergency: 'Mother: +91 98765 40404', taxId: 'KAST3456S', blood: 'A+', address: 'No. 52, Vector Way, Chennai' },
+    { name: 'Ahamed', email: 'ahamed@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43224', bank: 'SBI Bank • XXXX-XXXX-3366', emergency: 'Brother: +91 98765 50505', taxId: 'AHAM7890T', blood: 'O+', address: 'No. 84, Brand Boulevard, Chennai' },
   ];
 
   // Operational Expenses Roster
   const operationalExpenses = [
-    { title: 'AWS & Vercel Cloud Server Infrastructure', category: 'Infrastructure', amount: 8400, period: 'Monthly' },
-    { title: 'Figma & Adobe Creative Cloud Licenses', category: 'Software Tools', amount: 4200, period: 'Monthly' },
-    { title: 'Chennai & Brisbane Physical Office Leases', category: 'Facilities', amount: 7600, period: 'Monthly' },
-    { title: 'Google Ads & Healthcare Campaign Outbound', category: 'Marketing', amount: 2800, period: 'Monthly' },
-    { title: 'HIPAA & Medical Compliance Audit', category: 'Legal & Audit', amount: 1200, period: 'Monthly' },
+    { title: 'AWS & Vercel Cloud Server Infrastructure', category: 'Infrastructure', amount: 0, period: 'Monthly' },
+    { title: 'Figma & Adobe Creative Cloud Licenses', category: 'Software Tools', amount: 0, period: 'Monthly' },
+    { title: 'Chennai & Brisbane Physical Office Leases', category: 'Facilities', amount: 0, period: 'Monthly' },
+    { title: 'Google Ads & Healthcare Campaign Outbound', category: 'Marketing', amount: 0, period: 'Monthly' },
+    { title: 'HIPAA & Medical Compliance Audit', category: 'Legal & Audit', amount: 0, period: 'Monthly' },
   ];
 
   const handleExportCSV = () => {
@@ -144,25 +144,16 @@ export default function FinancePage() {
         `Reimbursement Claims Paid,$${totalClaims}`,
         `Net Profit,$${netProfit}`,
         `Profit Margin,${profitMargin}%`,
-        '',
-        'Complete Employee Payroll & Personal Details Register',
-        'Employee Name,Email,Role,Team,Monthly Salary,Disbursement Status,Phone Number,Emergency Contact,Bank Account,Tax ID,Blood Group,Home Address',
-      ]
-        .concat(
-          salaryRoster.map(
-            (s) => `"${s.name}",${s.email},${s.role},${s.team},$${s.salary},Disbursed (${selectedMonth}),"${s.phone}","${s.emergency}","${s.bank}",${s.taxId},${s.blood},"${s.address}"`
-          )
-        )
-        .join('\n');
+      ].join('\n');
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Ambizcon_Full_Payroll_PersonalDetails_${reportType}_2026.csv`);
+    link.setAttribute('download', `Ambizcon_Financial_Statement_${reportType}_2026.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success(`Exported complete employee personal details & payroll report (${periodLabel}) to CSV!`);
+    toast.success(`Exported Financial Profit & Loss statement (${periodLabel}) to CSV!`);
     setIsReportModalOpen(false);
   };
 
@@ -189,7 +180,7 @@ export default function FinancePage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Button
             onClick={() => setIsEditMetricModalOpen(true)}
             variant="outline"
@@ -383,158 +374,6 @@ export default function FinancePage() {
           </div>
         </Card>
       </div>
-
-      {/* Employee Salary Payroll Roster Table with Personal & Bank Details View */}
-      <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-          <div>
-            <h3 className="text-base font-bold text-foreground">Employee Payroll & Personal Bank Details Register</h3>
-            <p className="text-xs text-muted-foreground">
-              Super Admin monthly salary disbursements & employee direct deposit bank info across 15 roster team members
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Month Selector for Roster */}
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-emerald-500" />
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
-              >
-                <option value="August 2026">August 2026 (Current)</option>
-                <option value="July 2026">July 2026</option>
-                <option value="June 2026">June 2026</option>
-                <option value="May 2026">May 2026</option>
-              </select>
-            </div>
-
-            <Badge className="bg-purple-500/20 text-purple-600 border-purple-500/30 font-mono text-xs">
-              Total Payroll: ${totalSalaries.toLocaleString()}/mo
-            </Badge>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-muted-foreground font-semibold uppercase text-[10px]">
-              <tr>
-                <th className="px-4 py-3">Employee</th>
-                <th className="px-4 py-3">Team</th>
-                <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Monthly Salary</th>
-                <th className="px-4 py-3">Salary Bank Account</th>
-                <th className="px-4 py-3">Disbursement Status</th>
-                <th className="px-4 py-3 text-right">Personal Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {salaryRoster.map((item) => (
-                <tr key={item.email} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
-                  <td className="px-4 py-3 font-bold text-foreground">
-                    <div>
-                      <span>{item.name}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono block">{item.email}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-semibold">{item.team}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={item.role.includes('Super Admin') ? 'danger' : item.role.includes('Lead') ? 'warning' : 'outline'} className="text-[10px]">
-                      {item.role}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 font-extrabold font-mono text-foreground">
-                    ${item.salary.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 font-mono font-semibold text-purple-600 dark:text-purple-400">
-                    {item.bank}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px]">
-                      ✓ Disbursed ({selectedMonth})
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      onClick={() => setSelectedMember(item)}
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1 text-xs text-brand-500 font-bold"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      View Details
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* View Member Full Personal & Bank Details Modal */}
-      {selectedMember && (
-        <Modal
-          isOpen={!!selectedMember}
-          onClose={() => setSelectedMember(null)}
-          title={`Employee Personal Details — ${selectedMember.name}`}
-          description={`Full HR, Emergency Contact, and Direct Deposit Info for ${selectedMember.email}`}
-          maxWidth="md"
-        >
-          <div className="space-y-4 pt-2 text-xs">
-            <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
-              <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="font-bold text-foreground text-sm">{selectedMember.name}</span>
-                <Badge variant="outline">{selectedMember.role} • {selectedMember.team}</Badge>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Contact Phone:</span>
-                  <span className="font-mono text-foreground font-bold">{selectedMember.phone}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Blood Group:</span>
-                  <span className="font-bold text-emerald-500">{selectedMember.blood}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold block">Emergency Contact:</span>
-                <span className="font-semibold text-foreground">{selectedMember.emergency}</span>
-              </div>
-
-              <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold block">Salary Bank Account:</span>
-                <span className="font-mono font-bold text-purple-600 dark:text-purple-400">{selectedMember.bank}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                <div>
-                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Tax ID / PAN:</span>
-                  <span className="font-mono font-bold text-foreground">{selectedMember.taxId}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Monthly Salary:</span>
-                  <span className="font-mono font-extrabold text-foreground">${selectedMember.salary.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold block">Home Residential Address:</span>
-                <span className="text-foreground">{selectedMember.address}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button onClick={() => setSelectedMember(null)} className="ambizcon-gradient text-white">
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {/* Edit Executive Financial Metrics Modal */}
       <Modal

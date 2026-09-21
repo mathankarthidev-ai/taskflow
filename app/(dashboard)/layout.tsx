@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar isMobileOpen={isMobileOpen} onMobileClose={() => setIsMobileOpen(false)} />
       <div className="flex flex-1 flex-col min-w-0">
         <Header onMobileMenuToggle={() => setIsMobileOpen(true)} />
-        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto overflow-x-hidden">{children}</main>
+        <main className="flex-1 p-3 sm:p-4 md:p-8 max-w-7xl w-full mx-auto">{children}</main>
       </div>
 
       {/* Global Overlays & Modals */}

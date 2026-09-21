@@ -178,7 +178,7 @@ export function DashboardOverview() {
               </div>
               <Link href="/kanban">
                 <Button variant="ghost" size="sm" className="gap-1 text-xs text-brand-500">
-                  Kanban Board
+                  Bizzy Board
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 </Button>
               </Link>
