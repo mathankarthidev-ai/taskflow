@@ -189,7 +189,7 @@ export default function LoginPage() {
                   </span>
                 ) : (
                   <span className="text-[10px] font-medium text-muted-foreground">
-                    All Staff & Demos
+                    All Staff Members
                   </span>
                 )}
               </div>
@@ -199,7 +199,7 @@ export default function LoginPage() {
                   onChange={(e) => setSelectedBranch(e.target.value as CompanyBranch)}
                   className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all font-semibold"
                 >
-                  <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ • Staff & Demos)</option>
+                  <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ • Global Staff)</option>
                   <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Admin Only)</option>
                 </select>
               </div>

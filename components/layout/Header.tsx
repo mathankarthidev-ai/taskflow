@@ -20,18 +20,9 @@ interface HeaderProps {
 
 const MONTH_WISE_BIRTHDAYS = [
   {
-    month: 'January',
-    users: [{ name: 'Demo 1', date: '15 Jan', team: 'Creative', role: 'Team Lead (Australia)' }],
-  },
-  {
-    month: 'February',
-    users: [{ name: 'Demo 2', date: '20 Feb', team: 'Development', role: 'Team Lead (Australia)' }],
-  },
-  {
     month: 'March',
     users: [
       { name: 'Thanikaivel Arumugam', date: '17 Mar', team: 'Development', role: 'Team Member' },
-      { name: 'Demo 3', date: '10 Mar', team: 'Marketing', role: 'Team Lead (Australia)' },
       { name: 'Mathanmk', date: '14 Mar', team: 'Development', role: 'Team Member' },
     ],
   },
@@ -39,7 +30,6 @@ const MONTH_WISE_BIRTHDAYS = [
     month: 'April',
     users: [
       { name: 'Deva Priya D A', date: '16 Apr', team: 'Creative', role: 'Team Lead' },
-      { name: 'Demo 4', date: '25 Apr', team: 'Development', role: 'Team Member (Australia)' },
     ],
   },
   {

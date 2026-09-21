@@ -381,13 +381,9 @@ export default function AttendancePage() {
     { name: 'Ahamed', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
   ];
 
-  // Australian Roster for Brisbane Branch View (Demo Accounts & Global Leadership)
+  // Australian Roster for Brisbane Branch View (Global Leadership)
   const initialAusRoster = [
     { name: 'Anirudh', role: 'Super Admin', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
-    { name: 'Demo 1', role: 'Creative Lead', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
-    { name: 'Demo 2', role: 'Dev Lead', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
-    { name: 'Demo 3', role: 'Marketing Lead', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
-    { name: 'Demo 4', role: 'Software Engineer', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
   ];
 
   const baseMuster = isAustralia ? initialAusRoster : initialIndiaRoster;

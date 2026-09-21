@@ -57,12 +57,8 @@ const ROSTER_MEMBERS = [
   { id: 'user_kasthuri_14', name: 'Kasthuri M', team: 'Creative', email: 'kasthuri@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_ahamed_15', name: 'Ahamed', team: 'Creative', email: 'ahamed@ambizcon.com', company: 'Ambizcon Health - India' },
 
-  // Ambizcon - Australia Roster (Brisbane HQ - Leadership & Demo Accounts)
+  // Ambizcon - Australia Roster (Brisbane HQ - Leadership)
   { id: 'user_anirudh_aus', name: 'Anirudh', team: 'Development', email: 'anirudh@ambizcon.com', company: 'Ambizcon - Australia' },
-  { id: 'user_demo_01', name: 'Demo 1', team: 'Creative', email: 'demo1@ambizcon.com', company: 'Ambizcon - Australia' },
-  { id: 'user_demo_02', name: 'Demo 2', team: 'Development', email: 'demo2@ambizcon.com', company: 'Ambizcon - Australia' },
-  { id: 'user_demo_03', name: 'Demo 3', team: 'Marketing', email: 'demo3@ambizcon.com', company: 'Ambizcon - Australia' },
-  { id: 'user_demo_04', name: 'Demo 4', team: 'Development', email: 'demo4@ambizcon.com', company: 'Ambizcon - Australia' },
 ];
 
 const LAST_10_DAYS = [
