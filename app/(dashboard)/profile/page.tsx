@@ -190,6 +190,14 @@ export default function ProfilePage() {
     toast.success('Your profile details, education & professional experience saved successfully!');
   };
 
+  if (!currentUser) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-4xl pb-16">
       {/* Header Banner */}

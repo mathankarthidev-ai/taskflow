@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useCompanyStore } from '@/store/useCompanyStore';
 import { getUserByEmailAction } from '@/actions/userActions';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -9,12 +10,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function initAuth() {
-      // Check stored email
-      const storedEmail = localStorage.getItem('taskflow_user_email') || 'alex@taskflow.company';
+      const storedCompany = localStorage.getItem('ambizcon_selected_company') as any;
+      if (storedCompany === 'Ambizcon Health - India' || storedCompany === 'Ambizcon - Australia') {
+        useCompanyStore.getState().setSelectedCompany(storedCompany);
+      }
+
+      const storedEmail = localStorage.getItem('taskflow_user_email');
+      if (!storedEmail) {
+        return;
+      }
       try {
         const user = await getUserByEmailAction(storedEmail);
         if (user) {
           setCurrentUser(user);
+        } else {
+          localStorage.removeItem('taskflow_user_email');
+          setCurrentUser(null);
         }
       } catch (e) {
         console.error('Failed to restore session:', e);

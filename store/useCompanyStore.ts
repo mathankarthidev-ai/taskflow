@@ -7,13 +7,12 @@ interface CompanyState {
 }
 
 export const useCompanyStore = create<CompanyState>((set) => ({
-  selectedCompany:
-    typeof window !== 'undefined' && localStorage.getItem('ambizcon_selected_company') === 'Ambizcon - Australia'
-      ? 'Ambizcon - Australia'
-      : 'Ambizcon Health - India',
+  selectedCompany: 'Ambizcon - Australia',
   setSelectedCompany: (company: CompanyBranch) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ambizcon_selected_company', company);
+      try {
+        localStorage.setItem('ambizcon_selected_company', company);
+      } catch (e) {}
     }
     set({ selectedCompany: company });
   },

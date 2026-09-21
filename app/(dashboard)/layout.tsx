@@ -16,12 +16,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   React.useEffect(() => {
-    // If not authenticated, redirect to login page
-    const storedEmail = localStorage.getItem('taskflow_user_email');
+    const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('taskflow_user_email') : null;
     if (!currentUser && !storedEmail) {
       router.push('/login');
     }
   }, [currentUser, router]);
+
+  if (!currentUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-9 w-9 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <p className="text-xs text-muted-foreground font-medium animate-pulse">
+            Authenticating Ambizcon Workspace...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-background">

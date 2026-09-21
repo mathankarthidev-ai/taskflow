@@ -669,17 +669,25 @@ export default function AttendancePage() {
     toast.success('Attendance & Working Hours report exported to CSV!');
   };
 
+  if (!currentUser) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      </div>
+    );
+  }
+
   // Team Hierarchy Filtering
   const scopedRequests = requests.filter((req) => {
     if (isSuperAdmin) return true;
-    if (currentUser.role === 'Team Lead') return req.empTeam === currentUser.team;
-    return req.empId === currentUser._id;
+    if (currentUser?.role === 'Team Lead') return req.empTeam === currentUser.team;
+    return req.empId === currentUser?._id;
   });
 
   const scopedRegister = SEED_USERS.filter((u) => {
     if (isSuperAdmin) return true;
-    if (currentUser.role === 'Team Lead') return u.team === currentUser.team;
-    return u.email === currentUser.email;
+    if (currentUser?.role === 'Team Lead') return u.team === currentUser.team;
+    return u.email === currentUser?.email;
   });
 
   return (
