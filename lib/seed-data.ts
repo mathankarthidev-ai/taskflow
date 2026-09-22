@@ -138,7 +138,7 @@ export const SEED_USERS: Omit<
   // Marketing / Operations Team Members (India)
   {
     name: 'Mathi Pandian',
-    email: 'mathi.p@ambizcon.com',
+    email: 'mathi@ambizcon.com',
     role: 'Team Member',
     team: 'Marketing',
     company: 'Ambizcon Health - India',

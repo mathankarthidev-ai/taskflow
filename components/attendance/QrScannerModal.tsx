@@ -27,7 +27,10 @@ interface QrScannerModalProps {
 export function QrScannerModal({ isOpen, onClose, onPunchSuccess }: QrScannerModalProps) {
   const currentUser = useAuthStore((s) => s.currentUser);
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
-  const isAustralia = currentUser?.company === 'Ambizcon - Australia' || selectedCompany === 'Ambizcon - Australia';
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const isAustralia = isSuperAdmin
+    ? selectedCompany === 'Ambizcon - Australia'
+    : currentUser?.company === 'Ambizcon - Australia';
 
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);

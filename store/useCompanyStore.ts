@@ -7,7 +7,7 @@ interface CompanyState {
 }
 
 export const useCompanyStore = create<CompanyState>((set) => ({
-  selectedCompany: 'Ambizcon - Australia',
+  selectedCompany: 'Ambizcon Health - India',
   setSelectedCompany: (company: CompanyBranch) => {
     if (typeof window !== 'undefined') {
       try {

@@ -23,6 +23,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const user = await getUserByEmailAction(storedEmail);
         if (user) {
           setCurrentUser(user);
+          // If user is not Super Admin, strictly bind company to their assigned branch
+          if (user.role !== 'Super Admin' && user.role !== 'Admin') {
+            const userBranch = user.company === 'Ambizcon - Australia' ? 'Ambizcon - Australia' : 'Ambizcon Health - India';
+            useCompanyStore.getState().setSelectedCompany(userBranch);
+          }
         } else {
           localStorage.removeItem('taskflow_user_email');
           setCurrentUser(null);

@@ -67,7 +67,11 @@ import { QrScannerModal } from '@/components/attendance/QrScannerModal';
 export default function AttendancePage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
-  const isAustralia = currentUser?.company === 'Ambizcon - Australia' || selectedCompany === 'Ambizcon - Australia';
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const isAustralia = isSuperAdmin
+    ? selectedCompany === 'Ambizcon - Australia'
+    : currentUser?.company === 'Ambizcon - Australia';
+  const isTeamLead = currentUser?.role === 'Team Lead' || isSuperAdmin;
   const isReception = currentUser?.role === 'Reception Staff';
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,9 +130,6 @@ export default function AttendancePage() {
   const [toDate, setToDate] = useState('');
   const [reason, setReason] = useState('');
   const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
-
-  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
-  const isTeamLead = currentUser?.role === 'Team Lead' || isSuperAdmin;
 
   // Load Shift State, Automatic Birthday Check & Dual Clock
   useEffect(() => {

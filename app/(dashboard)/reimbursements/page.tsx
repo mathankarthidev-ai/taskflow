@@ -36,7 +36,11 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 export default function ReimbursementsPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
-  const isAustralia = currentUser?.company === 'Ambizcon - Australia' || selectedCompany === 'Ambizcon - Australia';
+  const isSuperAdmin = currentUser?.role === 'Super Admin';
+  const isAustralia = isSuperAdmin
+    ? selectedCompany === 'Ambizcon - Australia'
+    : currentUser?.company === 'Ambizcon - Australia';
+  const isTeamLead = currentUser?.role === 'Team Lead' || isSuperAdmin;
   const [claims, setClaims] = useState<ReimbursementClaim[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,9 +55,6 @@ export default function ReimbursementsPage() {
 
   // Category Filter
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<ClaimCategory | 'All'>('All');
-
-  const isSuperAdmin = currentUser?.role === 'Super Admin';
-  const isTeamLead = currentUser?.role === 'Team Lead' || isSuperAdmin;
 
   useEffect(() => {
     async function loadData() {

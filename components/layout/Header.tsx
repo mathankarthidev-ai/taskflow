@@ -117,13 +117,21 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
   const isSuperAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
   const isReception = currentUser.role === 'Reception Staff';
+  const isAustralia = isSuperAdmin
+    ? selectedCompany === 'Ambizcon - Australia'
+    : currentUser.company === 'Ambizcon - Australia';
 
-  // Ambizcon Health - India is strictly restricted to Administrators
+  // Automatically sync company store to member's assigned branch
   useEffect(() => {
-    if (!isSuperAdmin && selectedCompany === 'Ambizcon Health - India') {
-      setSelectedCompany('Ambizcon - Australia');
+    if (!currentUser) return;
+    if (!isSuperAdmin) {
+      if (currentUser.company === 'Ambizcon - Australia') {
+        setSelectedCompany('Ambizcon - Australia');
+      } else {
+        setSelectedCompany('Ambizcon Health - India');
+      }
     }
-  }, [isSuperAdmin, selectedCompany, setSelectedCompany]);
+  }, [currentUser, isSuperAdmin, setSelectedCompany]);
 
   return (
     <header className="sticky top-0 z-20 flex h-16 w-full items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 bg-background/80 px-3 sm:px-4 md:px-6 backdrop-blur-xl">
@@ -241,7 +249,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               </div>
             )}
           </div>
-        ) : (
+        ) : isAustralia ? (
           <div
             className="flex h-10 items-center gap-1.5 sm:gap-2 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/70 dark:bg-zinc-900/70 px-2.5 sm:px-3 text-xs font-semibold text-foreground shadow-sm select-none"
             title="Assigned Branch: Ambizcon - Australia"
@@ -254,6 +262,19 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             </span>
             <span className="md:hidden">
               🇦🇺 AUS
+            </span>
+          </div>
+        ) : (
+          <div
+            className="flex h-10 items-center gap-1.5 sm:gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2.5 sm:px-3 text-xs font-semibold text-foreground shadow-sm select-none"
+            title="Assigned Branch: Ambizcon Health - India"
+          >
+            <img src="/ambizcon-logo.png" alt="IND" className="h-5 w-5 rounded-md object-cover border border-emerald-500/30 shrink-0" />
+            <span className="hidden md:inline-flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-300">
+              🇮🇳 Ambizcon Health - India
+            </span>
+            <span className="md:hidden font-bold text-emerald-700 dark:text-emerald-300">
+              🇮🇳 IND
             </span>
           </div>
         )}

@@ -66,8 +66,10 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
 
   if (!currentUser) return null;
 
-  const isAustralia = currentUser.company === 'Ambizcon - Australia' || selectedCompany === 'Ambizcon - Australia';
   const isSuperAdmin = currentUser.role === 'Super Admin';
+  const isAustralia = isSuperAdmin
+    ? selectedCompany === 'Ambizcon - Australia'
+    : currentUser.company === 'Ambizcon - Australia';
   const isTeamLead = currentUser.role === 'Team Lead' || isSuperAdmin;
   const isReception = currentUser.role === 'Reception Staff';
 

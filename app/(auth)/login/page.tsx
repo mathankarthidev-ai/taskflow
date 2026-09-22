@@ -22,7 +22,7 @@ import {
 import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const [selectedBranch, setSelectedBranch] = useState<CompanyBranch>('Ambizcon - Australia');
+  const [selectedBranch, setSelectedBranch] = useState<CompanyBranch>('Ambizcon Health - India');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -52,23 +52,21 @@ export default function LoginPage() {
     const success = await login(emailInput.trim());
     if (success) {
       const currentUser = useAuthStore.getState().currentUser;
-      const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+      const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
 
-      // Ambizcon Health - India is strictly restricted to Admin accounts
-      if (selectedBranch === 'Ambizcon Health - India' && !isAdmin) {
-        logout();
-        setErrorMsg('Access Denied: Ambizcon Health - India is restricted to Administrator accounts only. Regular staff must select Ambizcon - Australia.');
-        toast.error('Restricted: Ambizcon Health - India is for Admins only.');
-        return;
+      // Auto-assign branch based on employee registration
+      let branchToSet: CompanyBranch = selectedBranch;
+      if (!isSuperAdmin) {
+        if (currentUser?.company === 'Ambizcon - Australia') {
+          branchToSet = 'Ambizcon - Australia';
+        } else {
+          branchToSet = 'Ambizcon Health - India';
+        }
       }
 
-      setSelectedCompany(selectedBranch);
-      toast.success('Signed in successfully!');
-      if (currentUser?.role === 'Reception Staff') {
-        router.push('/attendance');
-      } else {
-        router.push('/dashboard');
-      }
+      setSelectedCompany(branchToSet);
+      toast.success(`Signed in to ${branchToSet}!`);
+      router.push('/dashboard');
     } else {
       setErrorMsg('Account not found in Ambizcon directory.');
     }
@@ -182,16 +180,9 @@ export default function LoginPage() {
                   <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                   Select Company / Branch
                 </label>
-                {selectedBranch === 'Ambizcon Health - India' ? (
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                    <ShieldCheck className="h-3 w-3" />
-                    Admin Only
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-medium text-muted-foreground">
-                    All Staff Members
-                  </span>
-                )}
+                <span className="text-[10px] font-medium text-muted-foreground">
+                  {selectedBranch === 'Ambizcon Health - India' ? 'Chennai HQ' : 'Brisbane HQ'}
+                </span>
               </div>
               <div className="relative">
                 <select
@@ -199,18 +190,10 @@ export default function LoginPage() {
                   onChange={(e) => setSelectedBranch(e.target.value as CompanyBranch)}
                   className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all font-semibold"
                 >
-                  <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ • Global Staff)</option>
-                  <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Admin Only)</option>
+                  <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Chennai HQ)</option>
+                  <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ)</option>
                 </select>
               </div>
-              {selectedBranch === 'Ambizcon Health - India' && (
-                <div className="mt-2 p-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2 animate-fade">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
-                  <span>
-                    <strong>Admin Notice:</strong> Ambizcon Health - India is strictly restricted to <strong>Super Admin & Admin</strong> accounts.
-                  </span>
-                </div>
-              )}
             </div>
 
             <div>
