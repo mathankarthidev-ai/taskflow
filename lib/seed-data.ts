@@ -51,7 +51,7 @@ export const SEED_USERS: Omit<
     email: 'mathan@ambizcon.com',
     role: 'Super Admin',
     team: 'Development',
-    company: 'Ambizcon Health - India',
+    company: 'India & Australia',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mathan',
     birthday: '16 Oct',
     dob: '16 Oct',

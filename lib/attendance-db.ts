@@ -59,6 +59,7 @@ const ROSTER_MEMBERS = [
 
   // Ambizcon - Australia Roster (Brisbane HQ - Leadership)
   { id: 'user_anirudh_aus', name: 'Anirudh', team: 'Development', email: 'anirudh@ambizcon.com', company: 'Ambizcon - Australia' },
+  { id: 'user_mathan_aus', name: 'Mathan P', team: 'Development', email: 'mathan@ambizcon.com', company: 'Ambizcon - Australia' },
 ];
 
 const LAST_10_DAYS = [

@@ -444,8 +444,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                         <button
                           key={persona.email}
                           onClick={async () => {
-                            if (persona.company) {
-                              setSelectedCompany(persona.company);
+                            if (persona.company && persona.company !== 'India & Australia') {
+                              setSelectedCompany(persona.company as any);
                             }
                             await login(persona.email);
                             closeAllMenus();
@@ -460,7 +460,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                             <div className="flex items-center gap-1.5">
                               <span className="truncate">{persona.name}</span>
                               <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">
-                                {persona.company === 'Ambizcon - Australia' ? '🇦🇺 AUS' : '🇮🇳 IND'}
+                                {persona.company === 'India & Australia' ? '🌐 IND & AUS' : persona.company === 'Ambizcon - Australia' ? '🇦🇺 AUS' : '🇮🇳 IND'}
                               </Badge>
                             </div>
                             <span className="text-[10px] text-zinc-400">{persona.role} • {persona.team}</span>
