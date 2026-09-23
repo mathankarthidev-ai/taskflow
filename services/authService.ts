@@ -152,10 +152,16 @@ export async function createUser(input: {
   team: TeamName;
   company?: CompanyBranch;
   avatar?: string;
+  birthday?: string;
+  dob?: string;
+  workMode?: WorkMode;
 }): Promise<User> {
   const db = await connectDB();
   const avatar = input.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(input.name)}`;
   const company = input.company || 'Ambizcon Health - India';
+  const birthday = input.birthday || '14 Oct';
+  const dob = input.dob || '14 Oct';
+  const workMode = input.workMode || 'Work From Office';
 
   if (db) {
     try {
@@ -166,6 +172,9 @@ export async function createUser(input: {
         team: input.team,
         company,
         avatar,
+        birthday,
+        dob,
+        workMode,
       });
 
       return {
@@ -176,6 +185,9 @@ export async function createUser(input: {
         team: doc.team,
         company: (doc as any).company || company,
         avatar: doc.avatar,
+        birthday,
+        dob,
+        workMode,
         createdAt: doc.createdAt.toISOString(),
       };
     } catch (e) {
@@ -191,6 +203,9 @@ export async function createUser(input: {
     team: input.team,
     company,
     avatar,
+    birthday,
+    dob,
+    workMode,
     createdAt: new Date().toISOString(),
   };
 

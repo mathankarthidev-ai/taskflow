@@ -62,6 +62,8 @@ export function UserManagementTable() {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newDob, setNewDob] = useState('');
+  const [newBirthday, setNewBirthday] = useState('');
+  const [newWorkMode, setNewWorkMode] = useState<WorkMode>('Work From Office');
   const [newRole, setNewRole] = useState<UserRole>('Team Member');
   const [newTeam, setNewTeam] = useState<TeamName>('Development');
   const [newCompany, setNewCompany] = useState<CompanyBranch>('Ambizcon Health - India');
@@ -104,10 +106,13 @@ export function UserManagementTable() {
     try {
       const created = await createUserAction({
         name: newName.trim(),
-        email: newEmail.trim(),
+        email: newEmail.trim().toLowerCase(),
         role: newRole,
         team: newTeam,
         company: newCompany,
+        dob: newDob.trim() || '14 Oct',
+        birthday: newBirthday.trim() || newDob.trim() || '14 Oct',
+        workMode: newWorkMode,
       });
 
       setUsers([created, ...users]);
@@ -115,6 +120,9 @@ export function UserManagementTable() {
       setIsAddModalOpen(false);
       setNewName('');
       setNewEmail('');
+      setNewDob('');
+      setNewBirthday('');
+      setNewWorkMode('Work From Office');
     } catch (e) {
       toast.error('Failed to create user');
     } finally {
@@ -579,6 +587,42 @@ export function UserManagementTable() {
                 <option value="Team Lead">Team Lead</option>
                 <option value="Super Admin">Super Admin</option>
                 <option value="Reception Staff">Reception Staff</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-foreground">Date of Birth (Day & Month only) *</label>
+              <input
+                type="text"
+                value={newDob}
+                onChange={(e) => setNewDob(e.target.value)}
+                placeholder="e.g. 29 Jun or 14 Oct"
+                className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground">Birthday (Calendar Day)</label>
+              <input
+                type="text"
+                value={newBirthday}
+                onChange={(e) => setNewBirthday(e.target.value)}
+                placeholder="e.g. 14 Oct"
+                className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground">Default Work Mode</label>
+              <select
+                value={newWorkMode}
+                onChange={(e) => setNewWorkMode(e.target.value as WorkMode)}
+                className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+              >
+                <option value="Work From Office">Work From Office</option>
+                <option value="Work From Home">Work From Home</option>
               </select>
             </div>
           </div>

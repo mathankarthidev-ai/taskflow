@@ -19,6 +19,9 @@ export async function createUserAction(data: {
   team: TeamName;
   company?: CompanyBranch;
   avatar?: string;
+  birthday?: string;
+  dob?: string;
+  workMode?: WorkMode;
 }) {
   const newUser = await createUser(data);
   revalidatePath('/users');
