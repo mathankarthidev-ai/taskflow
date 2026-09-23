@@ -33,6 +33,12 @@ const MONTH_WISE_BIRTHDAYS = [
     ],
   },
   {
+    month: 'May',
+    users: [
+      { name: 'Adriana', date: '15 May', team: 'Marketing', role: 'Team Member (Australia)' },
+    ],
+  },
+  {
     month: 'June',
     users: [
       { name: 'Anirudh', date: '29 Jun', team: 'Development', role: 'Super Admin (India & AU)' },

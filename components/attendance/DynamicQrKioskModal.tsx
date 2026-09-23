@@ -22,6 +22,7 @@ import {
   Minimize2,
 } from 'lucide-react';
 import { SEED_USERS } from '@/lib/seed-data';
+import { formatTimeIST, formatTimeAEST } from '@/lib/utils';
 
 interface DynamicQrKioskModalProps {
   isOpen: boolean;
@@ -127,7 +128,7 @@ export function DynamicQrKioskModal({
         name: targetUser.name,
         team: targetUser.team,
         type: data.action === 'PUNCH_OUT' ? 'Clock Out' : 'Clock In',
-        time: data.punch?.time || new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        time: data.punch?.time || (isAus ? formatTimeAEST() : formatTimeIST()),
         location: isAus ? 'Queen Street, Brisbane CBD' : 'Anna Nagar, Chennai',
       };
 

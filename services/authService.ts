@@ -1,4 +1,4 @@
-import { User, UserRole, TeamName, CompanyBranch } from '@/types';
+import { User, UserRole, TeamName, CompanyBranch, WorkMode } from '@/types';
 import { connectDB } from '@/lib/db';
 import { User as UserModel } from '@/models/User';
 import { mockStore } from '@/lib/mock-store';
@@ -20,6 +20,14 @@ export async function getUserByEmail(email: string): Promise<User | null> {
           avatar: doc.avatar,
           birthday: (doc as any).birthday,
           dob: (doc as any).dob,
+          workMode: (doc as any).workMode || 'Work From Office',
+          permissionCount: (doc as any).permissionCount || 0,
+          phone: (doc as any).phone,
+          emergencyContact: (doc as any).emergencyContact,
+          address: (doc as any).address,
+          bankAccount: (doc as any).bankAccount,
+          taxId: (doc as any).taxId,
+          bloodGroup: (doc as any).bloodGroup,
           createdAt: doc.createdAt?.toISOString(),
         };
       }
@@ -50,6 +58,14 @@ export async function getAllUsers(): Promise<User[]> {
           avatar: doc.avatar,
           birthday: (doc as any).birthday,
           dob: (doc as any).dob,
+          workMode: (doc as any).workMode || 'Work From Office',
+          permissionCount: (doc as any).permissionCount || 0,
+          phone: (doc as any).phone,
+          emergencyContact: (doc as any).emergencyContact,
+          address: (doc as any).address,
+          bankAccount: (doc as any).bankAccount,
+          taxId: (doc as any).taxId,
+          bloodGroup: (doc as any).bloodGroup,
           createdAt: doc.createdAt?.toISOString(),
         }));
       }
@@ -138,6 +154,59 @@ export async function updateUserRole(userId: string, role: UserRole): Promise<Us
   const u = mockStore.users.find((user) => user._id === userId);
   if (u) {
     u.role = role;
+    return { ...u };
+  }
+  return null;
+}
+
+export async function updateUser(
+  userId: string,
+  updates: {
+    name?: string;
+    email?: string;
+    role?: UserRole;
+    team?: TeamName;
+    company?: CompanyBranch;
+    birthday?: string;
+    dob?: string;
+    workMode?: WorkMode;
+    avatar?: string;
+  }
+): Promise<User | null> {
+  const db = await connectDB();
+
+  if (db) {
+    try {
+      const doc = await UserModel.findByIdAndUpdate(userId, updates, { new: true }).lean();
+      if (doc) {
+        return {
+          _id: doc._id.toString(),
+          name: doc.name,
+          email: doc.email,
+          role: doc.role,
+          team: doc.team,
+          company: (doc as any).company || updates.company || 'Ambizcon Health - India',
+          avatar: doc.avatar,
+          birthday: (doc as any).birthday || updates.birthday,
+          dob: (doc as any).dob || updates.dob,
+          createdAt: doc.createdAt?.toISOString(),
+        };
+      }
+    } catch (e) {
+      console.error('Error updating user in DB:', e);
+    }
+  }
+
+  const u = mockStore.users.find((user) => user._id === userId || user.email.toLowerCase() === updates.email?.toLowerCase());
+  if (u) {
+    if (updates.name) u.name = updates.name;
+    if (updates.email) u.email = updates.email.toLowerCase();
+    if (updates.role) u.role = updates.role;
+    if (updates.team) u.team = updates.team;
+    if (updates.company) u.company = updates.company;
+    if (updates.birthday) u.birthday = updates.birthday;
+    if (updates.dob) u.dob = updates.dob;
+    if (updates.workMode) (u as any).workMode = updates.workMode;
     return { ...u };
   }
   return null;

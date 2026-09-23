@@ -1,14 +1,23 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
-import { UserRole, TeamName } from '@/types';
+import { UserRole, TeamName, CompanyBranch, WorkMode } from '@/types';
 
 export interface IUserDocument extends Document {
   name: string;
   email: string;
   role: UserRole;
   team: TeamName;
+  company?: CompanyBranch;
   avatar: string;
   birthday?: string;
   dob?: string;
+  workMode?: WorkMode;
+  permissionCount?: number;
+  phone?: string;
+  emergencyContact?: string;
+  address?: string;
+  bankAccount?: string;
+  taxId?: string;
+  bloodGroup?: string;
   createdAt: Date;
 }
 
@@ -18,7 +27,7 @@ const UserSchema = new Schema<IUserDocument>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     role: {
       type: String,
-      enum: ['Team Member', 'Team Lead', 'Super Admin'],
+      enum: ['Team Member', 'Team Lead', 'Super Admin', 'Admin', 'Reception Staff'],
       default: 'Team Member',
     },
     team: {
@@ -26,9 +35,26 @@ const UserSchema = new Schema<IUserDocument>(
       enum: ['Creative', 'Marketing', 'Development'],
       required: true,
     },
+    company: {
+      type: String,
+      enum: ['Ambizcon Health - India', 'Ambizcon - Australia', 'India & Australia'],
+      default: 'Ambizcon Health - India',
+    },
     avatar: { type: String, default: '' },
     birthday: { type: String },
     dob: { type: String },
+    workMode: {
+      type: String,
+      enum: ['Work From Office', 'Work From Home'],
+      default: 'Work From Office',
+    },
+    permissionCount: { type: Number, default: 0 },
+    phone: { type: String },
+    emergencyContact: { type: String },
+    address: { type: String },
+    bankAccount: { type: String },
+    taxId: { type: String },
+    bloodGroup: { type: String },
   },
   { timestamps: true }
 );
@@ -36,3 +62,4 @@ const UserSchema = new Schema<IUserDocument>(
 export const User: Model<IUserDocument> =
   (mongoose?.models?.User as Model<IUserDocument>) ||
   (mongoose?.model ? mongoose.model<IUserDocument>('User', UserSchema) : ({} as Model<IUserDocument>));
+

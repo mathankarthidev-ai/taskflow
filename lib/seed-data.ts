@@ -138,7 +138,7 @@ export const SEED_USERS: Omit<
   // Marketing / Operations Team Members (India)
   {
     name: 'Mathi Pandian',
-    email: 'mathi@ambizcon.com',
+    email: 'mathi.p@ambizcon.com',
     role: 'Team Member',
     team: 'Marketing',
     company: 'Ambizcon Health - India',
@@ -150,11 +150,11 @@ export const SEED_USERS: Omit<
   },
   {
     name: 'Kiruthikashri M',
-    email: 'krithikashri@ambizcon.com',
+    email: 'kiruthikashri@ambizcon.com',
     role: 'Team Member',
     team: 'Marketing',
     company: 'Ambizcon Health - India',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Krithikashri',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kiruthikashri',
     birthday: '07 Jun',
     dob: '07 Jun',
     workMode: 'Work From Office',
@@ -220,6 +220,19 @@ export const SEED_USERS: Omit<
     birthday: '15 Nov',
     dob: '15 Nov',
     workMode: 'Work From Home',
+    permissionCount: 0,
+  },
+  // Australian Team Members (Brisbane Branch)
+  {
+    name: 'Adriana',
+    email: 'adriana@ambizcon.com',
+    role: 'Team Member',
+    team: 'Marketing',
+    company: 'Ambizcon - Australia',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Adriana',
+    birthday: '15 May',
+    dob: '15 May',
+    workMode: 'Work From Office',
     permissionCount: 0,
   },
 ];

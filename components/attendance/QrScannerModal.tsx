@@ -17,6 +17,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import { formatTimeIST, formatTimeAEST } from '@/lib/utils';
 
 interface QrScannerModalProps {
   isOpen: boolean;
@@ -236,7 +237,7 @@ export function QrScannerModal({ isOpen, onClose, onPunchSuccess }: QrScannerMod
       const punchInfo = {
         name: currentUser.name,
         type: data.action === 'PUNCH_OUT' ? 'Clock Out' : 'Clock In',
-        time: data.punch?.time || new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        time: data.punch?.time || (isAustralia ? formatTimeAEST() : formatTimeIST()),
         branch: branchName,
         totalHours: data.punch?.totalHours,
       };

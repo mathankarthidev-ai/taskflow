@@ -49,17 +49,18 @@ const ROSTER_MEMBERS = [
   { id: 'user_thanikaivel_06', name: 'Thanikaivel Arumugam', team: 'Development', email: 'thanikaivel@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_naraine_07', name: 'Naraine R', team: 'Development', email: 'naraine@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_mathanmk_08', name: 'Mathanmk', team: 'Development', email: 'mathanmk@ambizcon.com', company: 'Ambizcon Health - India' },
-  { id: 'user_mathi_09', name: 'Mathi Pandian', team: 'Marketing', email: 'mathi@ambizcon.com', company: 'Ambizcon Health - India' },
-  { id: 'user_krithika_10', name: 'Kiruthikashri M', team: 'Marketing', email: 'krithikashri@ambizcon.com', company: 'Ambizcon Health - India' },
+  { id: 'user_mathi_09', name: 'Mathi Pandian', team: 'Marketing', email: 'mathi.p@ambizcon.com', company: 'Ambizcon Health - India' },
+  { id: 'user_krithika_10', name: 'Kiruthikashri M', team: 'Marketing', email: 'kiruthikashri@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_siddesh_11', name: 'B. Siddesh', team: 'Marketing', email: 'siddesh@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_sathish_12', name: 'V. Sathish Kumar', team: 'Creative', email: 'sathish@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_kavish_13', name: 'Kavish TG', team: 'Creative', email: 'kavish@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_kasthuri_14', name: 'Kasthuri M', team: 'Creative', email: 'kasthuri@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_ahamed_15', name: 'Ahamed', team: 'Creative', email: 'ahamed@ambizcon.com', company: 'Ambizcon Health - India' },
 
-  // Ambizcon - Australia Roster (Brisbane HQ - Leadership)
+  // Ambizcon - Australia Roster (Brisbane HQ)
   { id: 'user_anirudh_aus', name: 'Anirudh', team: 'Development', email: 'anirudh@ambizcon.com', company: 'Ambizcon - Australia' },
   { id: 'user_mathan_aus', name: 'Mathan P', team: 'Development', email: 'mathan@ambizcon.com', company: 'Ambizcon - Australia' },
+  { id: 'user_adriana_aus', name: 'Adriana', team: 'Marketing', email: 'adriana@ambizcon.com', company: 'Ambizcon - Australia' },
 ];
 
 const LAST_10_DAYS = [

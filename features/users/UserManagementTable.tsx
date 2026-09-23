@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import {
   fetchAllUsersAction,
   updateUserRoleAction,
+  updateUserAction,
   createUserAction,
   deleteUserAction,
 } from '@/actions/userActions';
@@ -133,16 +134,46 @@ export function UserManagementTable() {
     setEditWorkMode(u.workMode || 'Work From Office');
   };
 
-  const handleSaveEditUser = (e: React.FormEvent) => {
+  const handleSaveEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
 
-    const updated = users.map((u) => {
-      if (u._id === editingUser._id) {
-        return {
-          ...u,
-          name: editName,
-          email: editEmail,
+    try {
+      const updatedUser = await updateUserAction(editingUser._id, {
+        name: editName.trim(),
+        email: editEmail.trim().toLowerCase(),
+        role: editRole,
+        team: editTeam,
+        company: editCompany,
+        birthday: editBirthday,
+        dob: editDob,
+        workMode: editWorkMode,
+      });
+
+      const updated = users.map((u) => {
+        if (u._id === editingUser._id) {
+          return updatedUser || {
+            ...u,
+            name: editName.trim(),
+            email: editEmail.trim().toLowerCase(),
+            role: editRole,
+            team: editTeam,
+            company: editCompany,
+            birthday: editBirthday,
+            dob: editDob,
+            workMode: editWorkMode,
+          };
+        }
+        return u;
+      });
+
+      setUsers(updated);
+
+      if (currentUser && editingUser._id === currentUser._id) {
+        const saved = updatedUser || {
+          ...currentUser,
+          name: editName.trim(),
+          email: editEmail.trim().toLowerCase(),
           role: editRole,
           team: editTeam,
           company: editCompany,
@@ -150,13 +181,18 @@ export function UserManagementTable() {
           dob: editDob,
           workMode: editWorkMode,
         };
+        useAuthStore.getState().setCurrentUser(saved);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('taskflow_user_email', saved.email);
+          document.cookie = `taskflow_user=${encodeURIComponent(JSON.stringify(saved))}; path=/; max-age=864000`;
+        }
       }
-      return u;
-    });
 
-    setUsers(updated);
-    toast.success(`Employee ${editName} details updated successfully!`);
-    setEditingUser(null);
+      toast.success(`Employee ${editName} details saved and updated successfully!`);
+      setEditingUser(null);
+    } catch (err) {
+      toast.error('Failed to update employee details');
+    }
   };
 
   const handleRoleChange = async (userId: string, role: UserRole) => {

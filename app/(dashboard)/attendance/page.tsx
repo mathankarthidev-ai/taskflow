@@ -211,7 +211,7 @@ export default function AttendancePage() {
     }
 
     // Dual Time Zone Interval (Chennai IST & Brisbane AEST) + Live Midnight Rollover Watcher
-    const timer = setInterval(() => {
+    const updateWorldClocks = () => {
       const now = new Date();
       // Chennai IST
       setChennaiTimeStr(
@@ -233,9 +233,14 @@ export default function AttendancePage() {
           hour12: true,
         }) + ' AEST'
       );
+    };
+
+    updateWorldClocks();
+    const timer = setInterval(() => {
+      updateWorldClocks();
 
       // Nightly Midnight Reset Watcher: Check if midnight has passed
-      const currentDayKey = now.toLocaleDateString('en-CA');
+      const currentDayKey = new Date().toLocaleDateString('en-CA');
       setShiftDate((prevDate) => {
         if (prevDate && prevDate !== currentDayKey) {
           // Midnight has passed! Reset daily login and shift timer to zero
@@ -449,10 +454,11 @@ export default function AttendancePage() {
     { name: 'Ahamed', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
   ];
 
-  // Australian Roster for Brisbane Branch View (Global Leadership)
+  // Australian Roster for Brisbane Branch View (Global Leadership & Team)
   const initialAusRoster = [
     { name: 'Anirudh', role: 'Super Admin', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
     { name: 'Mathan P', role: 'Super Admin', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
+    { name: 'Adriana', role: 'Team Member', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
   ];
 
   const baseMuster = isAustralia ? initialAusRoster : initialIndiaRoster;
@@ -901,7 +907,7 @@ export default function AttendancePage() {
               <span className="text-[10px] font-extrabold uppercase text-muted-foreground block tracking-wider">
                 CHENNAI
               </span>
-              <span className="text-xs sm:text-sm font-extrabold font-mono text-foreground">{chennaiTimeStr || '02:52:28 PM IST'}</span>
+              <span className="text-xs sm:text-sm font-extrabold font-mono text-foreground">{chennaiTimeStr || formatTimeIST(new Date())}</span>
             </div>
 
             <div className="border-l border-zinc-200/60 dark:border-zinc-800/60 pl-3 sm:pl-6">
@@ -909,7 +915,7 @@ export default function AttendancePage() {
                 BRISBANE
               </span>
               <span className="text-xs sm:text-sm font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
-                {brisbaneTimeStr || '07:22:28 PM AEST'}
+                {brisbaneTimeStr || formatTimeAEST(new Date())}
               </span>
             </div>
           </div>
@@ -1117,10 +1123,10 @@ export default function AttendancePage() {
 
                 <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground pt-1">
                   <span className={!isAustralia ? 'font-bold text-foreground' : 'text-zinc-500'}>
-                    CHENNAI <strong className={!isAustralia ? 'text-foreground' : 'text-zinc-600 dark:text-zinc-400'}>{chennaiTimeStr || '02:52:28 PM IST'}</strong>
+                    CHENNAI <strong className={!isAustralia ? 'text-foreground' : 'text-zinc-600 dark:text-zinc-400'}>{chennaiTimeStr || formatTimeIST(new Date())}</strong>
                   </span>
                   <span className={isAustralia ? 'font-bold text-emerald-500' : 'text-zinc-500'}>
-                    BRISBANE <strong className={isAustralia ? 'text-emerald-500' : 'text-zinc-600 dark:text-zinc-400'}>{brisbaneTimeStr || '07:22:28 PM AEST'}</strong>
+                    BRISBANE <strong className={isAustralia ? 'text-emerald-500' : 'text-zinc-600 dark:text-zinc-400'}>{brisbaneTimeStr || formatTimeAEST(new Date())}</strong>
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground pt-1">
