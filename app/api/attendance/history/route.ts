@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
 import { supabase } from '@/lib/supabase';
+import { formatTimeIST, formatTimeAEST } from '@/lib/utils';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -33,10 +34,10 @@ export async function GET(req: Request) {
           userTeam: r.user_team,
           company: r.company,
           date: r.session_date,
-          clockIn: r.clock_in,
-          clockInAest: r.clock_in_aest,
-          clockOut: r.clock_out || '—',
-          clockOutAest: r.clock_out_aest || '—',
+          clockIn: r.created_at ? formatTimeIST(r.created_at) : r.clock_in,
+          clockInAest: r.created_at ? formatTimeAEST(r.created_at) : r.clock_in_aest,
+          clockOut: r.clock_out && r.clock_out !== '—' && r.updated_at && r.status === 'completed' ? formatTimeIST(r.updated_at) : (r.clock_out || '—'),
+          clockOutAest: r.clock_out && r.clock_out !== '—' && r.updated_at && r.status === 'completed' ? formatTimeAEST(r.updated_at) : (r.clock_out_aest || '—'),
           status: r.status === 'working' ? 'Active Shift' : 'Completed',
           workMode: r.work_mode,
           ipAddress: r.ip_address,

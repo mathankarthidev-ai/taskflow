@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
 import { supabase } from '@/lib/supabase';
+import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
 
 export async function POST(req: Request) {
   try {
@@ -36,10 +37,8 @@ export async function POST(req: Request) {
       const clockOutMs = new Date(nowIso).getTime();
       const totalSeconds = Math.max(0, Math.floor((clockOutMs - clockInMs) / 1000));
       const totalHours = Math.round((totalSeconds / 3600) * 100) / 100;
-      const d = new Date();
-      const formattedIst = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
-      const aestDate = new Date(d.getTime() + 4.5 * 3600 * 1000);
-      const formattedAest = aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST';
+      const formattedIst = formatTimeIST(nowIso);
+      const formattedAest = formatTimeAEST(nowIso);
       const workedHoursStr = `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`;
 
       const updated = attendanceDb.update(active.id, {
@@ -64,7 +63,7 @@ export async function POST(req: Request) {
         const { data: supaActive } = await supabase
           .from('attendance')
           .select('*')
-          .eq('user_id', userId)
+          .or(`user_id.eq.${userId},user_name.ilike.%${userName}%`)
           .eq('status', 'working')
           .order('created_at', { ascending: false })
           .limit(1);
@@ -99,11 +98,9 @@ export async function POST(req: Request) {
       });
     } else {
       // Punch In / Start Shift
-      const d = new Date();
-      const formattedIst = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
-      const aestDate = new Date(d.getTime() + 4.5 * 3600 * 1000);
-      const formattedAest = aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST';
-      const sessionDate = `Today (${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })})`;
+      const formattedIst = formatTimeIST(nowIso);
+      const formattedAest = formatTimeAEST(nowIso);
+      const sessionDate = formatSessionDateIST(nowIso);
       const recordId = `ATT-QR-${Date.now()}-${String(userId).replace(/[^a-zA-Z0-9]/g, '')}`;
 
       const newAttendance = attendanceDb.add({
@@ -142,6 +139,7 @@ export async function POST(req: Request) {
           id: recordId,
           user_id: userId,
           user_name: userName,
+          user_email: body.userEmail || (String(userId).includes('@') ? userId : undefined),
           user_team: userTeam || 'General',
           company: isAus ? 'Ambizcon - Australia' : 'Ambizcon Health - India',
           session_date: sessionDate,

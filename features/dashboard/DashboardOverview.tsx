@@ -35,6 +35,15 @@ export function DashboardOverview() {
   const [loading, setLoading] = useState(true);
   const [quote, setQuote] = useState('');
   const [timeGreeting, setTimeGreeting] = useState({ greeting: 'Welcome back!', icon: '' });
+  const [currentShift, setCurrentShift] = useState<{
+    isWorking: boolean;
+    clockIn: string;
+    clockOut: string;
+    status: string;
+    workedHours: string;
+  } | null>(null);
+  const [chennaiTime, setChennaiTime] = useState('');
+  const [brisbaneTime, setBrisbaneTime] = useState('');
 
   useEffect(() => {
     async function loadData() {
@@ -47,6 +56,57 @@ export function DashboardOverview() {
     setQuote(getRandomQuote());
     setTimeGreeting(getTimeBasedGreeting());
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const user = currentUser;
+    async function loadCurrentShift() {
+      try {
+        const res = await fetch(
+          `/api/attendance/current?email=${encodeURIComponent(user.email)}&name=${encodeURIComponent(
+            user.name
+          )}&userId=${encodeURIComponent(user._id)}`
+        );
+        const data = await res.json();
+        if (data.success && data.attendance) {
+          setCurrentShift({
+            isWorking: data.isWorking,
+            clockIn: data.clockIn || '—',
+            clockOut: data.clockOut || '—',
+            status: data.status,
+            workedHours: data.workedHours || '0h 00m',
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to load dashboard shift status:', e);
+      }
+    }
+    loadCurrentShift();
+
+    const timer = setInterval(() => {
+      const now = new Date();
+      setChennaiTime(
+        now.toLocaleTimeString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }) + ' IST'
+      );
+      setBrisbaneTime(
+        now.toLocaleTimeString('en-IN', {
+          timeZone: 'Australia/Brisbane',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }) + ' AEST'
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [currentUser]);
 
   if (!currentUser) return null;
 
@@ -110,6 +170,79 @@ export function DashboardOverview() {
             <Plus className="h-4 w-4" />
             Create Task
           </Button>
+        </div>
+      </div>
+
+      {/* Real-time Shift & Attendance Status Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card/60 backdrop-blur-md shadow-sm">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 relative">
+              {currentShift?.isWorking && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              )}
+              <span
+                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                  currentShift?.isWorking
+                    ? 'bg-emerald-500'
+                    : currentShift?.status === 'completed'
+                    ? 'bg-zinc-400'
+                    : 'bg-amber-500'
+                }`}
+              />
+            </span>
+            <span className="text-xs font-bold text-foreground">
+              {currentShift?.isWorking
+                ? 'Live Shift Active'
+                : currentShift?.status === 'completed'
+                ? 'Shift Completed Today'
+                : 'Not Clocked In Today'}
+            </span>
+          </div>
+
+          <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+            <span>•</span>
+            {currentShift?.isWorking ? (
+              <span>
+                Clocked In at{' '}
+                <strong className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                  {currentShift.clockIn}
+                </strong>
+              </span>
+            ) : currentShift?.status === 'completed' ? (
+              <span>
+                Shift: In <strong className="font-mono text-foreground">{currentShift.clockIn}</strong> • Out{' '}
+                <strong className="font-mono text-foreground">{currentShift.clockOut}</strong> ({currentShift.workedHours})
+              </span>
+            ) : (
+              <span>Office Shift: 8:30 AM – 5:00 PM IST (Anna Nagar, Chennai)</span>
+            )}
+          </div>
+        </div>
+
+        {/* Dual Live World Clocks & Quick Action */}
+        <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
+          <div className="hidden sm:flex items-center gap-3">
+            <span>
+              CHENNAI <strong className="text-foreground">{chennaiTime || 'Loading...'}</strong>
+            </span>
+            <span>•</span>
+            <span>
+              BRISBANE <strong className="text-emerald-600 dark:text-emerald-400">{brisbaneTime || 'Loading...'}</strong>
+            </span>
+          </div>
+          <Link href="/attendance">
+            <Button
+              size="sm"
+              variant={currentShift?.isWorking ? 'outline' : 'default'}
+              className={`h-8 text-xs font-bold gap-1.5 ${
+                !currentShift?.isWorking ? 'ambizcon-gradient text-white shadow-glow' : ''
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              {currentShift?.isWorking ? 'View Attendance' : 'Clock In Now'}
+            </Button>
+          </Link>
         </div>
       </div>
 

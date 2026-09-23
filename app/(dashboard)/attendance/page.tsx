@@ -64,6 +64,7 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { DynamicQrKioskModal } from '@/components/attendance/DynamicQrKioskModal';
 import { QrScannerModal } from '@/components/attendance/QrScannerModal';
 import { supabase } from '@/lib/supabase';
+import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
 
 export default function AttendancePage() {
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -214,14 +215,23 @@ export default function AttendancePage() {
       const now = new Date();
       // Chennai IST
       setChennaiTimeStr(
-        now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) +
-          ' IST'
+        now.toLocaleTimeString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }) + ' IST'
       );
-      // Brisbane AEST (UTC+10, offset from IST +4.5 hrs)
-      const aestDate = new Date(now.getTime() + 4.5 * 3600 * 1000);
+      // Brisbane AEST (UTC+10)
       setBrisbaneTimeStr(
-        aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) +
-          ' AEST'
+        now.toLocaleTimeString('en-IN', {
+          timeZone: 'Australia/Brisbane',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }) + ' AEST'
       );
 
       // Nightly Midnight Reset Watcher: Check if midnight has passed
@@ -290,7 +300,10 @@ export default function AttendancePage() {
     );
     if (myActive) {
       setIsClockedIn(true);
-      setClockInTime(myActive.clock_in);
+      const activeIn = myActive.created_at
+        ? (isAustralia ? formatTimeAEST(myActive.created_at) : formatTimeIST(myActive.created_at))
+        : myActive.clock_in;
+      setClockInTime(activeIn);
       if (myActive.created_at) {
         const ts = new Date(myActive.created_at).getTime();
         setClockInTimestamp(ts);
@@ -458,10 +471,17 @@ export default function AttendancePage() {
 
     if (livePunch) {
       const isWorking = livePunch.status === 'working' && (!livePunch.clock_out || livePunch.clock_out === '—');
+      const punchLoginTime = livePunch.created_at
+        ? (isAustralia ? formatTimeAEST(livePunch.created_at) : formatTimeIST(livePunch.created_at))
+        : (livePunch.clock_in || '—');
+      const punchLogoutTime =
+        livePunch.clock_out && livePunch.clock_out !== '—' && livePunch.updated_at && livePunch.status === 'completed'
+          ? (isAustralia ? formatTimeAEST(livePunch.updated_at) : formatTimeIST(livePunch.updated_at))
+          : (livePunch.clock_out || '—');
       return {
         ...item,
-        login: livePunch.clock_in || '—',
-        logout: livePunch.clock_out || '—',
+        login: punchLoginTime,
+        logout: punchLogoutTime,
         status: isWorking ? 'ontime' : 'nopunch',
         startPct: isWorking ? 8 : 0,
         widthPct: isWorking ? 70 : 0,
@@ -504,10 +524,9 @@ export default function AttendancePage() {
 
     try {
       const d = new Date();
-      const formatted = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-      const clockInTimeStr = formatted + ' IST';
-      const aestDate = new Date(d.getTime() + 4.5 * 3600 * 1000);
-      const clockInAestStr = aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST';
+      const clockInTimeStr = formatTimeIST(d);
+      const clockInAestStr = formatTimeAEST(d);
+      const formatted = isAustralia ? clockInAestStr : clockInTimeStr;
 
       if (!isClockedIn) {
         // API Call: POST /api/attendance/clock-in
@@ -811,10 +830,16 @@ export default function AttendancePage() {
             userTeam: r.user_team,
             company: r.company || 'Ambizcon Health - India',
             date: r.session_date || 'Today',
-            clockIn: r.clock_in,
-            clockInAest: r.clock_in_aest,
-            clockOut: r.clock_out || '—',
-            clockOutAest: r.clock_out_aest || '—',
+            clockIn: r.created_at ? formatTimeIST(r.created_at) : r.clock_in,
+            clockInAest: r.created_at ? formatTimeAEST(r.created_at) : r.clock_in_aest,
+            clockOut:
+              r.clock_out && r.clock_out !== '—' && r.updated_at && r.status === 'completed'
+                ? formatTimeIST(r.updated_at)
+                : (r.clock_out || '—'),
+            clockOutAest:
+              r.clock_out && r.clock_out !== '—' && r.updated_at && r.status === 'completed'
+                ? formatTimeAEST(r.updated_at)
+                : (r.clock_out_aest || '—'),
             workMode: r.work_mode || 'Work From Office',
             ipAddress: r.ip_address || '192.168.1.104',
             location: r.location || 'Anna Nagar, Chennai',

@@ -85,3 +85,40 @@ export function exportToCSV(filename: string, rows: Record<string, unknown>[]) {
   link.click();
   document.body.removeChild(link);
 }
+
+export function formatTimeIST(dateInput: string | Date | number = new Date()): string {
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '—';
+  return (
+    d.toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }) + ' IST'
+  );
+}
+
+export function formatTimeAEST(dateInput: string | Date | number = new Date()): string {
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '—';
+  return (
+    d.toLocaleTimeString('en-IN', {
+      timeZone: 'Australia/Brisbane',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }) + ' AEST'
+  );
+}
+
+export function formatSessionDateIST(dateInput: string | Date | number = new Date()): string {
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return 'Today';
+  return `Today (${d.toLocaleDateString('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })})`;
+}

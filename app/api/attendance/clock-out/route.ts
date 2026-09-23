@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
 import { supabase } from '@/lib/supabase';
+import { formatTimeIST, formatTimeAEST } from '@/lib/utils';
 
 export async function POST(req: Request) {
   try {
@@ -10,10 +11,8 @@ export async function POST(req: Request) {
     const userTeam = body.userTeam || 'General';
 
     const nowIso = new Date().toISOString();
-    const d = new Date();
-    const formattedIst = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
-    const aestDate = new Date(d.getTime() + 4.5 * 3600 * 1000);
-    const formattedAest = aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST';
+    const formattedIst = formatTimeIST(nowIso);
+    const formattedAest = formatTimeAEST(nowIso);
 
     // 1. In-memory update
     let active = attendanceDb.getActiveByUser(userId);
@@ -70,7 +69,7 @@ export async function POST(req: Request) {
       const { data: latestRecords } = await supabase
         .from('attendance')
         .select('*')
-        .eq('user_id', userId)
+        .or(`user_id.eq.${userId},user_name.ilike.%${userName}%`)
         .eq('status', 'working')
         .order('created_at', { ascending: false })
         .limit(1);

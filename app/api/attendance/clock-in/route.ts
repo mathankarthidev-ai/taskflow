@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb, AttendanceRecord } from '@/lib/attendance-db';
 import { supabase } from '@/lib/supabase';
+import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
 
 export async function POST(req: Request) {
   try {
@@ -27,13 +28,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Format Server Timestamps
+    // 2. Format Server Timestamps accurately with IST and AEST timezones
     const nowIso = new Date().toISOString();
-    const d = new Date();
-    const formattedIst = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
-    const aestDate = new Date(d.getTime() + 4.5 * 3600 * 1000);
-    const formattedAest = aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST';
-    const sessionDate = `Today (${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })})`;
+    const formattedIst = formatTimeIST(nowIso);
+    const formattedAest = formatTimeAEST(nowIso);
+    const sessionDate = formatSessionDateIST(nowIso);
 
     const recordId = `ATT-${Date.now()}`;
     const newRecord: AttendanceRecord = {
