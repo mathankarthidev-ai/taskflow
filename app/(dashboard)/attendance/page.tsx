@@ -63,6 +63,7 @@ import { toast } from 'sonner';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { DynamicQrKioskModal } from '@/components/attendance/DynamicQrKioskModal';
 import { QrScannerModal } from '@/components/attendance/QrScannerModal';
+import { supabase } from '@/lib/supabase';
 
 export default function AttendancePage() {
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -73,6 +74,7 @@ export default function AttendancePage() {
     : currentUser?.company === 'Ambizcon - Australia';
   const isTeamLead = currentUser?.role === 'Team Lead' || isSuperAdmin;
   const isReception = currentUser?.role === 'Reception Staff';
+  const [liveAttendanceRecords, setLiveAttendanceRecords] = useState<any[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -246,6 +248,58 @@ export default function AttendancePage() {
     return () => clearInterval(timer);
   }, [currentUser]);
 
+  // Fetch Live Attendance Records from Supabase and listen for Realtime broadcast
+  const fetchLiveAttendance = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        setLiveAttendanceRecords(data);
+      }
+    } catch (e) {
+      console.warn('Failed to load live attendance:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveAttendance();
+
+    // Supabase Realtime Subscription: Instantly wakes up and updates when anyone clocks in/out
+    const channel = supabase
+      .channel('attendance_live_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
+        fetchLiveAttendance();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Sync current user's active shift from Supabase cloud if active today
+  useEffect(() => {
+    if (!currentUser || liveAttendanceRecords.length === 0) return;
+    const myActive = liveAttendanceRecords.find(
+      (r) =>
+        (r.user_id === currentUser._id || r.user_name === currentUser.name) &&
+        r.status === 'working' &&
+        (!r.clock_out || r.clock_out === '—')
+    );
+    if (myActive) {
+      setIsClockedIn(true);
+      setClockInTime(myActive.clock_in);
+      if (myActive.created_at) {
+        const ts = new Date(myActive.created_at).getTime();
+        setClockInTimestamp(ts);
+        const elapsed = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+        setWorkedSeconds(elapsed);
+      }
+    }
+  }, [currentUser, liveAttendanceRecords]);
+
   // Listen for native phone camera scan link (?qrToken=...)
   useEffect(() => {
     if (typeof window === 'undefined' || !currentUser) return;
@@ -391,6 +445,31 @@ export default function AttendancePage() {
   const baseMuster = isAustralia ? initialAusRoster : initialIndiaRoster;
 
   const activeMusterRoster = baseMuster.map((item) => {
+    // 1. Look for matching live record from Supabase
+    const livePunch = liveAttendanceRecords.find((rec) => {
+      const recName = (rec.user_name || '').toLowerCase().trim();
+      const itemName = item.name.toLowerCase().trim();
+      return (
+        recName === itemName ||
+        recName.includes(itemName) ||
+        itemName.includes(recName)
+      );
+    });
+
+    if (livePunch) {
+      const isWorking = livePunch.status === 'working' && (!livePunch.clock_out || livePunch.clock_out === '—');
+      return {
+        ...item,
+        login: livePunch.clock_in || '—',
+        logout: livePunch.clock_out || '—',
+        status: isWorking ? 'ontime' : 'nopunch',
+        startPct: isWorking ? 8 : 0,
+        widthPct: isWorking ? 70 : 0,
+        hoursWorked: isWorking ? 'Live Shift Active' : (livePunch.worked_hours || '0h 00m'),
+      };
+    }
+
+    // 2. Fallback to active state for current user
     if (currentUser && (item.name === currentUser.name || (currentUser.name.startsWith(item.name) && item.name.length > 3))) {
       if (isClockedIn) {
         return {
@@ -439,6 +518,8 @@ export default function AttendancePage() {
             userId: currentUser._id,
             userName: currentUser.name,
             userTeam: currentUser.team,
+            userEmail: currentUser.email,
+            company: isAustralia ? 'Ambizcon - Australia' : 'Ambizcon Health - India',
             workMode: activeWorkMode,
           }),
         });
@@ -448,6 +529,9 @@ export default function AttendancePage() {
           toast.error(data.message || 'Clock In failed');
           return;
         }
+
+        // Immediately refresh live attendance records from Supabase
+        await fetchLiveAttendance();
 
         // Starting a fresh clock-in shift
         setIsClockedIn(true);
@@ -511,6 +595,9 @@ export default function AttendancePage() {
         } catch (err) {
           console.warn('Clock out sync warning:', err);
         }
+
+        // Immediately refresh live attendance records from Supabase
+        await fetchLiveAttendance();
 
         // Clocking out / Closing shift
         setIsClockedIn(false);
@@ -688,6 +775,64 @@ export default function AttendancePage() {
     return u.email === currentUser?.email;
   });
 
+  // Real-time calculation of active floor presence from Supabase
+  const onTheFloorRecords = liveAttendanceRecords.filter((rec) => {
+    if (rec.status !== 'working' || (rec.clock_out && rec.clock_out !== '—')) return false;
+    if (isSuperAdmin) return true;
+    if (currentUser?.role === 'Team Lead') return rec.user_team === currentUser.team;
+    return rec.user_id === currentUser?._id;
+  });
+  const onTheFloorCount = Math.max(isClockedIn ? 1 : 0, onTheFloorRecords.length);
+
+  // Unified Live Punch History (Supabase Cloud + Local fallback)
+  const displayHistory = (() => {
+    if (liveAttendanceRecords && liveAttendanceRecords.length > 0) {
+      const scoped = liveAttendanceRecords.filter((rec) => {
+        if (isSuperAdmin) return true;
+        if (currentUser?.role === 'Team Lead') return rec.user_team === currentUser.team;
+        return (
+          rec.user_id === currentUser?._id ||
+          rec.user_email === currentUser?.email ||
+          (currentUser?.name && rec.user_name?.toLowerCase().includes(currentUser.name.toLowerCase()))
+        );
+      });
+
+      if (scoped.length > 0) {
+        return scoped.map((r) => {
+          const isMe =
+            currentUser &&
+            (r.user_id === currentUser._id ||
+              r.user_email === currentUser.email ||
+              (currentUser.name && r.user_name?.toLowerCase().includes(currentUser.name.toLowerCase())));
+          const isActive = r.status === 'working' && (!r.clock_out || r.clock_out === '—');
+          return {
+            id: r.id,
+            userName: r.user_name,
+            userTeam: r.user_team,
+            company: r.company || 'Ambizcon Health - India',
+            date: r.session_date || 'Today',
+            clockIn: r.clock_in,
+            clockInAest: r.clock_in_aest,
+            clockOut: r.clock_out || '—',
+            clockOutAest: r.clock_out_aest || '—',
+            workMode: r.work_mode || 'Work From Office',
+            ipAddress: r.ip_address || '192.168.1.104',
+            location: r.location || 'Anna Nagar, Chennai',
+            hoursWorked: isActive
+              ? isMe
+                ? formatWorkedTime(workedSeconds)
+                : 'In Progress (Live)'
+              : r.worked_hours || '0h 00m',
+            status: isActive ? 'Active Shift' : 'Completed',
+            geofenceVerified: r.geofence_verified !== false,
+            isCurrentUser: isMe,
+          };
+        });
+      }
+    }
+    return loginHistory;
+  })();
+
   return (
     <div className="space-y-6">
       {/* Top Status Bar Banner */}
@@ -818,22 +963,22 @@ export default function AttendancePage() {
       {/* TAB 1: TODAY (Personal Attendance, Clock In/Out, KPI Cards & History) */}
       {activeTab === 'today' && (
         <div className="space-y-6">
-          {/* 4 Stat KPI Cards Row (TL & Admin ONLY) */}
-          {isTeamLead && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Card 1: ON THE FLOOR NOW */}
-              <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    ON THE FLOOR NOW
-                  </span>
-                  <UserCheck className="h-4 w-4 text-emerald-500" />
-                </div>
-                <div className="text-2xl font-extrabold text-foreground mt-1">
-                  {isClockedIn ? '1' : '0'} of {scopedRegister.length}
-                </div>
-                <span className="text-[11px] text-muted-foreground mt-0.5 block">Signed in, active on shift</span>
-              </Card>
+            {/* 4 Stat KPI Cards Row (TL & Admin ONLY) */}
+            {isTeamLead && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Card 1: ON THE FLOOR NOW */}
+                <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      ON THE FLOOR NOW
+                    </span>
+                    <UserCheck className="h-4 w-4 text-emerald-500" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-foreground mt-1">
+                    {onTheFloorCount} of {scopedRegister.length}
+                  </div>
+                  <span className="text-[11px] text-muted-foreground mt-0.5 block">Signed in, active on shift</span>
+                </Card>
 
               {/* Card 2: LATE ARRIVALS */}
               <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80">
@@ -1116,142 +1261,153 @@ export default function AttendancePage() {
             </Card>
           </div>
 
-          {/* HISTORY OF LOGINS (Personal Punch & Shift Logins Audit Register) */}
+          {/* HISTORY OF LOGINS (Personal / Squad / All Squads Punch & Shift Audit Register) */}
           <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                    <History className="h-4 w-4 text-emerald-500" />
-                    Personal Login & Logout History
-                  </h3>
-                  <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px] uppercase font-bold">
-                    PUNCH REGISTER LOGS
-                  </Badge>
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <History className="h-4 w-4 text-emerald-500" />
+                        {isSuperAdmin
+                          ? 'All Squads Live Punch & Shift Audit'
+                          : isTeamLead
+                          ? `${currentUser?.team} Squad Live Punch & Shift Audit`
+                          : 'Personal Login & Logout History'}
+                      </h3>
+                      <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px] uppercase font-bold">
+                        {isSuperAdmin ? 'EXECUTIVE REALTIME AUDIT' : isTeamLead ? 'TEAM REALTIME AUDIT' : 'PUNCH REGISTER LOGS'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isSuperAdmin
+                        ? 'Live cloud-synced punch audit of all workspace members across Development, Marketing, and Creative teams (Supabase Cloud).'
+                        : isTeamLead
+                        ? `Live cloud-synced punch audit of all ${currentUser?.team} squad members (Supabase Cloud).`
+                        : 'Chronological audit log of your daily clock-in, clock-out, geofence verification, IP address, and total hours worked.'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs font-mono text-muted-foreground">
+                      Total Recorded Logs: {displayHistory.length} Sessions
+                    </Badge>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Chronological audit log of your daily clock-in, clock-out, geofence verification, IP address, and total hours worked.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs font-mono text-muted-foreground">
-                  Total Recorded Logs: {loginHistory.length} Sessions
-                </Badge>
-              </div>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-muted-foreground font-semibold uppercase text-[10px]">
-                  <tr>
-                    <th className="px-4 py-3">EMPLOYEE NAME</th>
-                    <th className="px-4 py-3">SESSION & DATE</th>
-                    <th className="px-4 py-3">
-                      CLOCK IN <span className="text-[9px] text-muted-foreground block font-mono">IST / AEST</span>
-                    </th>
-                    <th className="px-4 py-3">
-                      CLOCK OUT <span className="text-[9px] text-muted-foreground block font-mono">IST / AEST</span>
-                    </th>
-                    <th className="px-4 py-3">WORK MODE & GEOFENCE</th>
-                    <th className="px-4 py-3">IP ADDRESS & LOCATION</th>
-                    <th className="px-4 py-3 text-center">WORKED HOURS</th>
-                    <th className="px-4 py-3 text-right">STATUS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {loginHistory.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground text-xs">
-                        No punch history recorded yet. Clock in or scan the office QR kiosk to record your attendance.
-                      </td>
-                    </tr>
-                  ) : (
-                    loginHistory.map((item) => (
-                    <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
-                      {/* Employee Name */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar src={currentUser?.avatar} name={item.userName || currentUser?.name} size="sm" />
-                          <div>
-                            <span className="font-bold text-foreground block text-xs">{item.userName || currentUser?.name}</span>
-                            <span className="text-[10px] text-muted-foreground">{item.userTeam || currentUser?.team} • {isAustralia ? 'Ambizcon - Australia' : 'Ambizcon Health - India'}</span>
-                          </div>
-                        </div>
-                      </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-muted-foreground font-semibold uppercase text-[10px]">
+                      <tr>
+                        <th className="px-4 py-3">EMPLOYEE NAME</th>
+                        <th className="px-4 py-3">SESSION & DATE</th>
+                        <th className="px-4 py-3">
+                          CLOCK IN <span className="text-[9px] text-muted-foreground block font-mono">IST / AEST</span>
+                        </th>
+                        <th className="px-4 py-3">
+                          CLOCK OUT <span className="text-[9px] text-muted-foreground block font-mono">IST / AEST</span>
+                        </th>
+                        <th className="px-4 py-3">WORK MODE & GEOFENCE</th>
+                        <th className="px-4 py-3">IP ADDRESS & LOCATION</th>
+                        <th className="px-4 py-3 text-center">WORKED HOURS</th>
+                        <th className="px-4 py-3 text-right">STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                      {displayHistory.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground text-xs">
+                            No punch history recorded yet. Clock in or scan the office QR kiosk to record your attendance.
+                          </td>
+                        </tr>
+                      ) : (
+                        displayHistory.map((item) => (
+                          <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
+                            {/* Employee Name */}
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 font-bold text-xs shrink-0">
+                                  {(item.userName || '?').charAt(0)}
+                                </div>
+                                <div>
+                                  <span className="font-bold text-foreground block text-xs">{item.userName}</span>
+                                  <span className="text-[10px] text-muted-foreground">{item.userTeam} • {item.company}</span>
+                                </div>
+                              </div>
+                            </td>
 
-                      {/* Session ID & Date */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-brand-500 text-xs">{item.id}</span>
-                          <span className="font-semibold text-foreground text-xs">{item.date}</span>
-                        </div>
-                      </td>
+                            {/* Session ID & Date */}
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-brand-500 text-xs">{item.id}</span>
+                                <span className="font-semibold text-foreground text-xs">{item.date}</span>
+                              </div>
+                            </td>
 
-                      {/* Clock In Dual Time */}
-                      <td className="px-4 py-3 font-mono">
-                        <span className="font-bold text-foreground block">{item.clockIn}</span>
-                        <span className="text-[10px] text-muted-foreground block">{item.clockInAest}</span>
-                      </td>
+                            {/* Clock In Dual Time */}
+                            <td className="px-4 py-3 font-mono">
+                              <span className="font-bold text-foreground block">{item.clockIn}</span>
+                              <span className="text-[10px] text-muted-foreground block">{item.clockInAest}</span>
+                            </td>
 
-                      {/* Clock Out Dual Time */}
-                      <td className="px-4 py-3 font-mono">
-                        <span className="font-bold text-foreground block">{item.clockOut}</span>
-                        <span className="text-[10px] text-muted-foreground block">{item.clockOutAest}</span>
-                      </td>
+                            {/* Clock Out Dual Time */}
+                            <td className="px-4 py-3 font-mono">
+                              <span className="font-bold text-foreground block">{item.clockOut || '—'}</span>
+                              <span className="text-[10px] text-muted-foreground block">{item.clockOutAest || '—'}</span>
+                            </td>
 
-                      {/* Work Mode & Geofence */}
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          <Badge variant="outline" className="text-[10px] font-semibold">
-                            {item.workMode}
-                          </Badge>
-                          {item.geofenceVerified && (
-                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block flex items-center gap-1 font-medium">
-                              <ShieldCheck className="h-3 w-3" /> Geofence Verified (200m)
-                            </span>
-                          )}
-                        </div>
-                      </td>
+                            {/* Work Mode & Geofence */}
+                            <td className="px-4 py-3">
+                              <div className="space-y-1">
+                                <Badge variant="outline" className="text-[10px] font-semibold">
+                                  {item.workMode}
+                                </Badge>
+                                {item.geofenceVerified && (
+                                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block flex items-center gap-1 font-medium">
+                                    <ShieldCheck className="h-3 w-3" /> Geofence Verified (200m)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
 
-                      {/* IP Address & Physical Location */}
-                      <td className="px-4 py-3 font-mono text-xs">
-                        <span className="font-bold text-foreground block">{item.ipAddress}</span>
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block flex items-center gap-1 font-sans font-semibold mt-0.5">
-                          <MapPin className="h-3 w-3 shrink-0" />
-                          {item.location || 'Anna Nagar, Chennai'}
-                        </span>
-                      </td>
+                            {/* IP Address & Physical Location */}
+                            <td className="px-4 py-3 font-mono text-xs">
+                              <span className="font-bold text-foreground block">{item.ipAddress}</span>
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block flex items-center gap-1 font-sans font-semibold mt-0.5">
+                                <MapPin className="h-3 w-3 shrink-0" />
+                                {item.location || 'Anna Nagar, Chennai'}
+                              </span>
+                            </td>
 
-                      {/* Worked Hours */}
-                      <td className="px-4 py-3 text-center font-mono font-extrabold text-foreground">
-                        {item.status === 'Active Shift' ? (
-                          <span className="text-emerald-600 dark:text-emerald-400 animate-pulse">
-                            {formatWorkedTime(workedSeconds)}
-                          </span>
-                        ) : (
-                          item.hoursWorked
-                        )}
-                      </td>
+                            {/* Worked Hours */}
+                            <td className="px-4 py-3 text-center font-mono font-extrabold text-foreground">
+                              {item.status === 'Active Shift' ? (
+                                <span className="text-emerald-600 dark:text-emerald-400 animate-pulse">
+                                  {item.isCurrentUser ? formatWorkedTime(workedSeconds) : item.hoursWorked}
+                                </span>
+                              ) : (
+                                item.hoursWorked
+                              )}
+                            </td>
 
-                      {/* Status */}
-                      <td className="px-4 py-3 text-right">
-                        <Badge
-                          className={
-                            item.status === 'Active Shift'
-                              ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-bold animate-pulse'
-                              : item.status === 'Completed'
-                              ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
-                              : 'bg-amber-500/20 text-amber-600 border-amber-500/30'
-                          }
-                        >
-                          {item.status === 'Active Shift' ? '● Live Shift Active' : item.status}
-                        </Badge>
-                      </td>
-                    </tr>
-                  )))}
-                </tbody>
-              </table>
-            </div>
+                            {/* Status */}
+                            <td className="px-4 py-3 text-right">
+                              <Badge
+                                className={
+                                  item.status === 'Active Shift'
+                                    ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-bold animate-pulse'
+                                    : item.status === 'Completed'
+                                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
+                                    : 'bg-amber-500/20 text-amber-600 border-amber-500/30'
+                                }
+                              >
+                                {item.status === 'Active Shift' ? '● Live Shift Active' : item.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
           </Card>
         </div>
       )}

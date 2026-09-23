@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
+import { supabase } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
@@ -35,6 +36,11 @@ export async function POST(req: Request) {
       const clockOutMs = new Date(nowIso).getTime();
       const totalSeconds = Math.max(0, Math.floor((clockOutMs - clockInMs) / 1000));
       const totalHours = Math.round((totalSeconds / 3600) * 100) / 100;
+      const d = new Date();
+      const formattedIst = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
+      const aestDate = new Date(d.getTime() + 4.5 * 3600 * 1000);
+      const formattedAest = aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST';
+      const workedHoursStr = `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`;
 
       const updated = attendanceDb.update(active.id, {
         clockOut: nowIso,
@@ -53,6 +59,30 @@ export async function POST(req: Request) {
         createdAt: nowIso,
       });
 
+      // Update in Supabase
+      try {
+        const { data: supaActive } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'working')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (supaActive && supaActive.length > 0) {
+          await supabase.from('attendance').update({
+            clock_out: isAus ? formattedAest : formattedIst,
+            clock_out_aest: formattedAest,
+            status: 'completed',
+            worked_seconds: totalSeconds,
+            worked_hours: workedHoursStr,
+            updated_at: nowIso,
+          }).eq('id', supaActive[0].id);
+        }
+      } catch (dbErr) {
+        console.warn('QR clock-out sync warning:', dbErr);
+      }
+
       return NextResponse.json({
         success: true,
         action: 'PUNCH_OUT',
@@ -69,8 +99,15 @@ export async function POST(req: Request) {
       });
     } else {
       // Punch In / Start Shift
+      const d = new Date();
+      const formattedIst = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
+      const aestDate = new Date(d.getTime() + 4.5 * 3600 * 1000);
+      const formattedAest = aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST';
+      const sessionDate = `Today (${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })})`;
+      const recordId = `ATT-QR-${Date.now()}-${String(userId).replace(/[^a-zA-Z0-9]/g, '')}`;
+
       const newAttendance = attendanceDb.add({
-        id: `ATT-QR-${Date.now()}-${String(userId).replace(/[^a-zA-Z0-9]/g, '')}`,
+        id: recordId,
         userId,
         userName,
         userTeam: userTeam || 'General',
@@ -98,6 +135,33 @@ export async function POST(req: Request) {
         changedBy: `QR_KIOSK_${userName}`,
         createdAt: nowIso,
       });
+
+      // Insert into Supabase
+      try {
+        await supabase.from('attendance').upsert({
+          id: recordId,
+          user_id: userId,
+          user_name: userName,
+          user_team: userTeam || 'General',
+          company: isAus ? 'Ambizcon - Australia' : 'Ambizcon Health - India',
+          session_date: sessionDate,
+          clock_in: isAus ? formattedAest : formattedIst,
+          clock_in_aest: formattedAest,
+          clock_out: '—',
+          clock_out_aest: '—',
+          status: 'working',
+          work_mode: 'Work From Office',
+          ip_address: ip,
+          location,
+          geofence_verified: true,
+          worked_seconds: 0,
+          worked_hours: '0h 00m',
+          created_at: nowIso,
+          updated_at: nowIso,
+        });
+      } catch (dbErr) {
+        console.warn('QR clock-in sync warning:', dbErr);
+      }
 
       return NextResponse.json({
         success: true,

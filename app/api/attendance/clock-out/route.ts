@@ -1,23 +1,29 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
+import { supabase } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const userId = body.userId || 'user_anirudh_01';
+    const userName = body.userName || userId;
+    const userTeam = body.userTeam || 'General';
 
-    // 1. Verify or initialize active session
-    let active = attendanceDb.getActiveByUser(userId);
     const nowIso = new Date().toISOString();
+    const d = new Date();
+    const formattedIst = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
+    const aestDate = new Date(d.getTime() + 4.5 * 3600 * 1000);
+    const formattedAest = aestDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST';
 
+    // 1. In-memory update
+    let active = attendanceDb.getActiveByUser(userId);
     if (!active) {
-      // If serverless container cold-started or session was client-side, synthesize active session to allow clean clock-out
       const fallbackIn = new Date(Date.now() - 3600 * 1000).toISOString();
       active = attendanceDb.add({
         id: `ATT-${Date.now()}-${String(userId).replace(/[^a-zA-Z0-9]/g, '')}`,
         userId,
-        userName: body.userName || userId,
-        userTeam: body.userTeam || 'General',
+        userName,
+        userTeam,
         sessionName: 'Current Shift',
         clockIn: fallbackIn,
         clockOut: null,
@@ -33,11 +39,11 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Server-side timestamp for clock out
     const clockInMs = new Date(active.clockIn).getTime();
     const clockOutMs = new Date(nowIso).getTime();
     const totalSeconds = Math.max(0, Math.floor((clockOutMs - clockInMs) / 1000));
     const totalHours = Math.round((totalSeconds / 3600) * 100) / 100;
+    const workedHoursStr = `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`;
 
     const updated = attendanceDb.update(active.id, {
       clockOut: nowIso,
@@ -58,10 +64,41 @@ export async function POST(req: Request) {
       });
     }
 
+    // 2. Supabase Cloud update
+    try {
+      // Find latest working record in Supabase
+      const { data: latestRecords } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'working')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (latestRecords && latestRecords.length > 0) {
+        const recordId = latestRecords[0].id;
+        await supabase
+          .from('attendance')
+          .update({
+            clock_out: formattedIst,
+            clock_out_aest: formattedAest,
+            status: 'completed',
+            worked_seconds: totalSeconds,
+            worked_hours: workedHoursStr,
+            updated_at: nowIso,
+          })
+          .eq('id', recordId);
+      }
+    } catch (dbErr) {
+      console.warn('Supabase clock-out exception:', dbErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Clocked out successfully',
       attendance: updated,
+      clockOutTime: formattedIst,
+      clockOutAest: formattedAest,
     });
   } catch (error) {
     return NextResponse.json(

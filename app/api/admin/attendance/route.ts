@@ -1,37 +1,49 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search')?.toLowerCase();
-  const status = searchParams.get('status');
   const team = searchParams.get('team');
-  const page = parseInt(searchParams.get('page') || '1', 10);
-  const limit = parseInt(searchParams.get('limit') || '20', 10);
+
+  try {
+    let query = supabase.from('attendance').select('*').order('created_at', { ascending: false });
+
+    if (team && team !== 'All') {
+      query = query.eq('user_team', team);
+    }
+
+    const { data: supaRecords, error } = await query;
+    if (!error && supaRecords) {
+      let filtered = supaRecords;
+      if (search) {
+        filtered = filtered.filter(
+          (r: any) =>
+            r.user_name.toLowerCase().includes(search) ||
+            r.user_team.toLowerCase().includes(search) ||
+            r.user_email?.toLowerCase().includes(search)
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        source: 'supabase',
+        records: filtered,
+        total: filtered.length,
+      });
+    }
+  } catch (e) {
+    console.warn('Supabase admin fetch warning:', e);
+  }
 
   let records = attendanceDb.getAll();
-
   if (team && team !== 'All') {
     records = records.filter((r) => r.userTeam === team);
   }
-
-  if (status) {
-    records = records.filter((r) => r.status === status);
-  }
-
-  if (search) {
-    records = records.filter(
-      (r) => r.userName.toLowerCase().includes(search) || r.userTeam.toLowerCase().includes(search)
-    );
-  }
-
-  const total = records.length;
-  const startIndex = (page - 1) * limit;
-  const paginated = records.slice(startIndex, startIndex + limit);
-
   return NextResponse.json({
     success: true,
-    records: paginated,
-    pagination: { page, limit, total },
+    source: 'memory',
+    records,
+    total: records.length,
   });
 }
