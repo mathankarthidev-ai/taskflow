@@ -223,7 +223,7 @@ export function UserManagementTable() {
     if (
       selectedCompanyFilter !== 'All' &&
       u.company !== 'India & Australia' &&
-      u.name !== 'Anirudh' &&
+      !u.name.startsWith('Anirudh') &&
       (u.company || 'Ambizcon Health - India') !== selectedCompanyFilter
     )
       return false;
@@ -337,7 +337,7 @@ export function UserManagementTable() {
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant="outline" className="text-[10px] font-semibold whitespace-nowrap">
-                        {u.company === 'India & Australia' || u.name === 'Anirudh'
+                        {u.company === 'India & Australia' || u.name.startsWith('Anirudh')
                           ? '🌐 India & Australia'
                           : (u.company || 'Ambizcon Health - India') === 'Ambizcon - Australia'
                           ? '🇦🇺 Australia'

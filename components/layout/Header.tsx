@@ -34,15 +34,14 @@ const MONTH_WISE_BIRTHDAYS = [
   },
   {
     month: 'May',
-    users: [
-      { name: 'Adriana', date: '15 May', team: 'Marketing', role: 'Team Member (Australia)' },
-    ],
+    users: [],
   },
   {
     month: 'June',
     users: [
-      { name: 'Anirudh', date: '29 Jun', team: 'Development', role: 'Super Admin (India & AU)' },
       { name: 'Kiruthikashri M', date: '07 Jun', team: 'Marketing', role: 'Team Member' },
+      { name: 'Adriana Ruju', date: '12 Jun', team: 'Marketing', role: 'Team Member (Australia)' },
+      { name: 'Anirudh', date: '29 Jun', team: 'Development', role: 'Super Admin (India & AU)' },
     ],
   },
   {

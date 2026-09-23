@@ -458,7 +458,7 @@ export default function AttendancePage() {
   const initialAusRoster = [
     { name: 'Anirudh', role: 'Super Admin', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
     { name: 'Mathan P', role: 'Super Admin', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
-    { name: 'Adriana', role: 'Team Member', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
+    { name: 'Adriana Ruju', role: 'Team Member', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
   ];
 
   const baseMuster = isAustralia ? initialAusRoster : initialIndiaRoster;

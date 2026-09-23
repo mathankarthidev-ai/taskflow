@@ -113,7 +113,7 @@ export default function FinancePage() {
     { name: 'Kavish TG', email: 'kavish@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43222', bank: 'ICICI Bank • XXXX-XXXX-1199', emergency: 'Spouse: +91 98765 30303', taxId: 'KAVI9012R', blood: 'B+', address: 'No. 19, Art Block, Chennai' },
     { name: 'Kasthuri', email: 'kasthuri@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43223', bank: 'Axis Bank • XXXX-XXXX-8877', emergency: 'Mother: +91 98765 40404', taxId: 'KAST3456S', blood: 'A+', address: 'No. 52, Vector Way, Chennai' },
     { name: 'Ahamed', email: 'ahamed@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43224', bank: 'SBI Bank • XXXX-XXXX-3366', emergency: 'Brother: +91 98765 50505', taxId: 'AHAM7890T', blood: 'O+', address: 'No. 84, Brand Boulevard, Chennai' },
-    { name: 'Adriana', email: 'adriana@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 0, phone: '+61 412 345 678', bank: 'Commonwealth Bank • XXXX-XXXX-4455', emergency: 'Spouse: +61 412 999 888', taxId: 'ADRI9012AU', blood: 'O+', address: 'Queen Street, Brisbane CBD, Australia' },
+    { name: 'Adriana Ruju', email: 'adriana@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 0, phone: '+61 412 345 678', bank: 'Commonwealth Bank • XXXX-XXXX-4455', emergency: 'Spouse: +61 412 999 888', taxId: 'ADRI9012AU', blood: 'O+', address: 'Queen Street, Brisbane CBD, Australia' },
   ];
 
   // Operational Expenses Roster
