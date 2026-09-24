@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LeaveRequest, LeaveType, WorkMode } from '@/types';
 import {
@@ -46,6 +46,7 @@ import {
   MapPin,
   QrCode,
   Camera,
+  Users,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -110,6 +111,7 @@ export default function AttendancePage() {
 
   // Login History State: Clean slate at 0
   const [loginHistory, setLoginHistory] = useState<any[]>([]);
+  const [selectedAuditDate, setSelectedAuditDate] = useState<string>('All');
 
   // Break Management Engine State
   const [isOnBreak, setIsOnBreak] = useState(false);
@@ -830,12 +832,55 @@ export default function AttendancePage() {
               r.user_email === currentUser.email ||
               (currentUser.name && r.user_name?.toLowerCase().includes(currentUser.name.toLowerCase())));
           const isActive = r.status === 'working' && (!r.clock_out || r.clock_out === '—');
+
+          // Normalize Date Label accurately
+          let sessionDayLabel = r.session_date || 'Today';
+          if (r.created_at) {
+            try {
+              const punchDate = new Date(r.created_at);
+              const now = new Date();
+              const isToday =
+                punchDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) ===
+                now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+              const yesterday = new Date(now);
+              yesterday.setDate(yesterday.getDate() - 1);
+              const isYesterday =
+                punchDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) ===
+                yesterday.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+              const dateOnlyStr = punchDate.toLocaleDateString('en-GB', {
+                timeZone: 'Asia/Kolkata',
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              });
+
+              if (isToday) {
+                sessionDayLabel = `Today (${dateOnlyStr})`;
+              } else if (isYesterday) {
+                sessionDayLabel = `Yesterday (${dateOnlyStr})`;
+              } else {
+                sessionDayLabel = dateOnlyStr;
+              }
+            } catch (err) {}
+          } else if (sessionDayLabel.startsWith('Today')) {
+            const match = sessionDayLabel.match(/\((.*?)\)/);
+            if (match) {
+              const inside = match[1];
+              const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+              if (!inside.toLowerCase().includes(todayStr.toLowerCase().slice(0, 6))) {
+                sessionDayLabel = inside;
+              }
+            }
+          }
+
           return {
             id: r.id,
             userName: r.user_name,
             userTeam: r.user_team,
             company: r.company || 'Ambizcon Health - India',
-            date: r.session_date || 'Today',
+            date: sessionDayLabel,
             clockIn: r.created_at ? formatTimeIST(r.created_at) : r.clock_in,
             clockInAest: r.created_at ? formatTimeAEST(r.created_at) : r.clock_in_aest,
             clockOut:
@@ -863,6 +908,72 @@ export default function AttendancePage() {
     }
     return loginHistory;
   })();
+
+  // Day-wise Grouping and Summaries for Admin & Team Leads
+  const dayWiseAuditSummaries = useMemo(() => {
+    const map = new Map<string, typeof displayHistory>();
+    displayHistory.forEach((item) => {
+      const key = item.date;
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key)!.push(item);
+    });
+
+    return Array.from(map.entries()).map(([dateKey, items]) => {
+      const uniqueEmployees = new Set(items.map((i) => (i.userName || '').toLowerCase().trim())).size;
+      const activeCount = items.filter((i) => i.status === 'Active Shift').length;
+      const completedCount = items.filter((i) => i.status === 'Completed').length;
+      const wfoCount = items.filter((i) => i.workMode === 'Work From Office').length;
+      const wfhCount = items.filter((i) => i.workMode === 'Work From Home').length;
+      const devCount = items.filter((i) => i.userTeam === 'Development').length;
+      const mktgCount = items.filter((i) => i.userTeam === 'Marketing').length;
+      const creativeCount = items.filter((i) => i.userTeam === 'Creative').length;
+
+      return {
+        dateKey,
+        totalPunches: items.length,
+        uniqueEmployees,
+        activeCount,
+        completedCount,
+        wfoCount,
+        wfhCount,
+        devCount,
+        mktgCount,
+        creativeCount,
+        items,
+      };
+    });
+  }, [displayHistory]);
+
+  const filteredAuditHistory = useMemo(() => {
+    if (selectedAuditDate === 'All') return displayHistory;
+    return displayHistory.filter((item) => item.date === selectedAuditDate);
+  }, [displayHistory, selectedAuditDate]);
+
+  const currentAuditKPI = useMemo(() => {
+    const list = filteredAuditHistory;
+    const uniqueEmployees = new Set(list.map((i) => (i.userName || '').toLowerCase().trim())).size;
+    const activeCount = list.filter((i) => i.status === 'Active Shift').length;
+    const completedCount = list.filter((i) => i.status === 'Completed').length;
+    const wfoCount = list.filter((i) => i.workMode === 'Work From Office').length;
+    const wfhCount = list.filter((i) => i.workMode === 'Work From Home').length;
+    const devCount = list.filter((i) => i.userTeam === 'Development').length;
+    const mktgCount = list.filter((i) => i.userTeam === 'Marketing').length;
+    const creativeCount = list.filter((i) => i.userTeam === 'Creative').length;
+
+    return {
+      totalPunches: list.length,
+      uniqueEmployees,
+      activeCount,
+      completedCount,
+      wfoCount,
+      wfhCount,
+      devCount,
+      mktgCount,
+      creativeCount,
+    };
+  }, [filteredAuditHistory]);
 
   return (
     <div className="space-y-6">
@@ -1324,6 +1435,234 @@ export default function AttendancePage() {
                   </div>
                 </div>
 
+                {/* Day-Wise Summary & Filter Bar for Admin and Team Lead */}
+                {(isSuperAdmin || isTeamLead) && (
+                  <div className="space-y-4 mb-5">
+                    {/* Day Selector Tabs Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-2 rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 flex items-center gap-1">
+                          <CalendarIcon className="h-3 w-3 text-emerald-500" />
+                          Filter by Day:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAuditDate('All')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                            selectedAuditDate === 'All'
+                              ? 'bg-emerald-500 text-white shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
+                          }`}
+                        >
+                          All Dates ({displayHistory.length})
+                        </button>
+
+                        {dayWiseAuditSummaries.map((summary) => {
+                          const isSelected = selectedAuditDate === summary.dateKey;
+                          return (
+                            <button
+                              key={summary.dateKey}
+                              type="button"
+                              onClick={() => setSelectedAuditDate(summary.dateKey)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                isSelected
+                                  ? 'bg-emerald-500 text-white shadow-sm'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
+                              }`}
+                            >
+                              <span>{summary.dateKey}</span>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                                  isSelected ? 'bg-white/20 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-foreground'
+                                }`}
+                              >
+                                {summary.totalPunches}
+                              </span>
+                              {summary.activeCount > 0 && (
+                                <span
+                                  className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"
+                                  title={`${summary.activeCount} currently on shift`}
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="text-[11px] font-medium text-muted-foreground px-2">
+                        Showing: <span className="font-bold text-foreground">{filteredAuditHistory.length} Sessions</span>
+                      </div>
+                    </div>
+
+                    {/* Day-Wise KPI Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {/* 1. Presence */}
+                      <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5 text-emerald-500" />
+                            Total Presence
+                          </span>
+                          <Badge variant="outline" className="text-[9px] font-mono">
+                            {selectedAuditDate === 'All' ? 'All Days' : 'Selected Day'}
+                          </Badge>
+                        </div>
+                        <div className="text-xl font-extrabold text-foreground mt-1.5">
+                          {currentAuditKPI.uniqueEmployees}{' '}
+                          <span className="text-xs font-semibold text-muted-foreground">Members</span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                          {currentAuditKPI.totalPunches} Total punch sessions logged
+                        </div>
+                      </div>
+
+                      {/* 2. Active vs Closed */}
+                      <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5 text-blue-500" />
+                            Shift State
+                          </span>
+                          {currentAuditKPI.activeCount > 0 && (
+                            <span className="flex h-2 w-2 relative">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xl font-extrabold text-foreground mt-1.5 flex items-center gap-2">
+                          <span className="text-emerald-600 dark:text-emerald-400">{currentAuditKPI.activeCount} Active</span>
+                          <span className="text-xs font-semibold text-muted-foreground">
+                            / {currentAuditKPI.completedCount} Closed
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                          {currentAuditKPI.activeCount > 0 ? '🟢 Realtime active presence' : 'All shifts logged out'}
+                        </div>
+                      </div>
+
+                      {/* 3. Work Mode */}
+                      <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Building2 className="h-3.5 w-3.5 text-amber-500" />
+                            Work Mode
+                          </span>
+                        </div>
+                        <div className="text-xl font-extrabold text-foreground mt-1.5 flex items-center gap-2">
+                          <span className="text-emerald-600 dark:text-emerald-400">{currentAuditKPI.wfoCount} WFO</span>
+                          <span className="text-xs font-semibold text-muted-foreground">• {currentAuditKPI.wfhCount} WFH</span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground mt-0.5">Office vs Remote Distribution</div>
+                      </div>
+
+                      {/* 4. Squad Distribution */}
+                      <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Trophy className="h-3.5 w-3.5 text-purple-500" />
+                            Squad Turnout
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold font-mono">
+                            {currentAuditKPI.devCount} Dev
+                          </span>
+                          <span className="px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold font-mono">
+                            {currentAuditKPI.mktgCount} Mktg
+                          </span>
+                          <span className="px-2 py-0.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold font-mono">
+                            {currentAuditKPI.creativeCount} Creative
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground mt-1">Squad-wise punch breakdown</div>
+                      </div>
+                    </div>
+
+                    {/* Day-Wise Comparative Summary Table (Only when "All Dates" is selected) */}
+                    {selectedAuditDate === 'All' && dayWiseAuditSummaries.length > 1 && (
+                      <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 overflow-hidden bg-zinc-50/30 dark:bg-zinc-900/30">
+                        <div className="px-4 py-2.5 bg-zinc-100/80 dark:bg-zinc-900/80 border-b border-zinc-200/70 dark:border-zinc-800/70 flex items-center justify-between">
+                          <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                            <BarChart3 className="h-3.5 w-3.5 text-emerald-500" />
+                            Day-by-Day Comparative Turnover Summary
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            Click any day tab above to focus
+                          </span>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="text-[10px] font-bold text-muted-foreground uppercase bg-zinc-100/40 dark:bg-zinc-900/40 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                              <tr>
+                                <th className="px-4 py-2">DATE</th>
+                                <th className="px-4 py-2 text-center">TOTAL SESSIONS</th>
+                                <th className="px-4 py-2 text-center">UNIQUE MEMBERS</th>
+                                <th className="px-4 py-2 text-center">ACTIVE SHIFTS</th>
+                                <th className="px-4 py-2 text-center">COMPLETED</th>
+                                <th className="px-4 py-2 text-center">WFO / WFH</th>
+                                <th className="px-4 py-2 text-center">SQUAD SPLIT</th>
+                                <th className="px-4 py-2 text-right">ACTION</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
+                              {dayWiseAuditSummaries.map((summary) => (
+                                <tr
+                                  key={summary.dateKey}
+                                  className="hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40 transition-colors"
+                                >
+                                  <td className="px-4 py-2.5 font-bold text-foreground flex items-center gap-2">
+                                    <CalendarIcon className="h-3.5 w-3.5 text-emerald-500" />
+                                    {summary.dateKey}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center font-mono font-bold">{summary.totalPunches}</td>
+                                  <td className="px-4 py-2.5 text-center font-semibold text-foreground">
+                                    {summary.uniqueEmployees} Members
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    {summary.activeCount > 0 ? (
+                                      <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px] font-bold">
+                                        {summary.activeCount} Active Now
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-muted-foreground text-[11px]">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center font-mono text-muted-foreground">
+                                    {summary.completedCount}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                      {summary.wfoCount} Office
+                                    </span>
+                                    {summary.wfhCount > 0 && (
+                                      <span className="text-muted-foreground"> • {summary.wfhCount} Remote</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    <span className="text-[11px] font-mono text-muted-foreground">
+                                      {summary.devCount}D • {summary.mktgCount}M • {summary.creativeCount}C
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedAuditDate(summary.dateKey)}
+                                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                                    >
+                                      Filter Logs →
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-muted-foreground font-semibold uppercase text-[10px]">
@@ -1343,14 +1682,14 @@ export default function AttendancePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                      {displayHistory.length === 0 ? (
+                      {filteredAuditHistory.length === 0 ? (
                         <tr>
                           <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground text-xs">
-                            No punch history recorded yet. Clock in or scan the office QR kiosk to record your attendance.
+                            No punch history recorded for the selected filter.
                           </td>
                         </tr>
                       ) : (
-                        displayHistory.map((item) => (
+                        filteredAuditHistory.map((item) => (
                           <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
                             {/* Employee Name */}
                             <td className="px-4 py-3">
@@ -1367,9 +1706,11 @@ export default function AttendancePage() {
 
                             {/* Session ID & Date */}
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-brand-500 text-xs">{item.id}</span>
-                                <span className="font-semibold text-foreground text-xs">{item.date}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-bold text-foreground text-xs">{item.date}</span>
+                                <span className="font-mono text-[10px] text-muted-foreground/80 bg-zinc-100 dark:bg-zinc-800/80 px-1.5 py-0.2 rounded border border-zinc-200/50 dark:border-zinc-800/50 w-fit">
+                                  ID: #{item.id.replace('ATT-', '').slice(-6)}
+                                </span>
                               </div>
                             </td>
 
