@@ -18,7 +18,6 @@ import { toast } from 'sonner';
 
 import { SEED_CLIENTS_FULL } from '@/lib/seed-data';
 import { Copy, Lock, Globe, CheckCircle2, Shield, Timer } from 'lucide-react';
-import { ReminderRecurrenceCard } from '@/components/tasks/ReminderRecurrenceCard';
 
 export function TaskDetailModal() {
   const { selectedTask, isDetailModalOpen, setDetailModalOpen, setSelectedTask, setTasks, tasks } = useTaskStore();
@@ -604,17 +603,6 @@ export function TaskDetailModal() {
                 </div>
               )}
             </div>
-
-            {/* Reminder & Recurrence Section */}
-            <ReminderRecurrenceCard
-              value={selectedTask.reminderSettings}
-              onChange={(updated) => {
-                const newTasks = tasks.map((t) =>
-                  t._id === selectedTask._id ? { ...t, reminderSettings: updated } : t
-                );
-                setTasks(newTasks);
-              }}
-            />
 
             {/* Audit History Timeline */}
             <div className="space-y-2 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-4">
