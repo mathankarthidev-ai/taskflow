@@ -6,8 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { ReminderRecurrenceCard } from '@/components/tasks/ReminderRecurrenceCard';
-import { TaskPriority, TaskStatus, TeamName, User, ReminderSettings } from '@/types';
+import { TaskPriority, TaskStatus, TeamName, User } from '@/types';
 import { createTaskAction } from '@/actions/taskActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { toast } from 'sonner';
@@ -37,17 +36,6 @@ export function TaskCreateModal() {
   const [selectedTaskType, setSelectedTaskType] = useState<string>('');
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [estimatedHours, setEstimatedHours] = useState<number>(8);
-  const [isRecurring, setIsRecurring] = useState<boolean>(false);
-  const [recurringFrequency, setRecurringFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly'>('monthly');
-
-  // Reminder & Recurrence Card State
-  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>({
-    enabled: true,
-    frequency: 'Yearly',
-    reminderDate: '2026-10-01',
-    reminderTime: '10:00 AM',
-    repeatEndsOption: 'never',
-  });
 
   // Client Selection State
   const [clients, setClients] = useState(getStoredClients());
@@ -171,7 +159,6 @@ export function TaskCreateModal() {
         clientName: selectedClient,
         doctorName: doctorName.trim() || undefined,
         specialist: specialist || undefined,
-        reminderSettings,
       });
 
       const fullTask = {
@@ -179,7 +166,6 @@ export function TaskCreateModal() {
         clientName: selectedClient,
         doctorName: doctorName.trim() || undefined,
         specialist: specialist || undefined,
-        reminderSettings,
         clientApproved: true,
         approvalStatus,
         history: [
@@ -413,52 +399,19 @@ export function TaskCreateModal() {
           />
         </div>
 
-        {/* Cross-Team & Recurring Options */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-3">
-            <div>
-              <p className="text-xs font-semibold text-foreground">Cross-Team Request</p>
-              <p className="text-[11px] text-muted-foreground">Raise task to another team's Incoming Queue</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={isCrossTeam}
-              onChange={(e) => setIsCrossTeam(e.target.checked)}
-              className="h-4 w-4 rounded accent-primary cursor-pointer"
-            />
+        {/* Cross-Team Request Option */}
+        <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-3">
+          <div>
+            <p className="text-xs font-semibold text-foreground">Cross-Team Request</p>
+            <p className="text-[11px] text-muted-foreground">Raise task to another team's Incoming Queue</p>
           </div>
-
-          <div className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-500/10 p-3">
-            <div>
-              <p className="text-xs font-bold text-purple-900 dark:text-purple-200">Recurring Task</p>
-              <p className="text-[11px] text-purple-700 dark:text-purple-300">Auto-generate recurring reports/audits</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={isRecurring}
-              onChange={(e) => setIsRecurring(e.target.checked)}
-              className="h-4 w-4 rounded accent-purple-600 cursor-pointer"
-            />
-          </div>
+          <input
+            type="checkbox"
+            checked={isCrossTeam}
+            onChange={(e) => setIsCrossTeam(e.target.checked)}
+            className="h-4 w-4 rounded accent-primary cursor-pointer"
+          />
         </div>
-
-        {isRecurring && (
-          <div className="p-3 rounded-xl border border-purple-500/30 bg-purple-500/5 flex items-center gap-3">
-            <label className="text-xs font-semibold text-purple-900 dark:text-purple-200 shrink-0">
-              Recurring Frequency:
-            </label>
-            <select
-              value={recurringFrequency}
-              onChange={(e) => setRecurringFrequency(e.target.value as any)}
-              className="rounded-xl border border-purple-500/40 bg-background px-3 py-1.5 text-xs font-bold focus-ring"
-            >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-            </select>
-          </div>
-        )}
 
         {/* Team & Assignee Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -583,9 +536,6 @@ export function TaskCreateModal() {
             className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
           />
         </div>
-
-        {/* Reminder & Recurrence Card Section */}
-        <ReminderRecurrenceCard value={reminderSettings} onChange={setReminderSettings} />
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-200/60 dark:border-zinc-800/60">

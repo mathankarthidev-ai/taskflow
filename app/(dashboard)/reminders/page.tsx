@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Task, ReminderSettings } from '@/types';
 import { fetchTasksAction } from '@/actions/taskActions';
 import { TaskDetailModal } from '@/features/tasks/TaskDetailModal';
-import { TaskCreateModal } from '@/features/tasks/TaskCreateModal';
+import { ReminderCreateModal } from '@/components/tasks/ReminderCreateModal';
 import { getPriorityBadgeColor, getStatusBadgeColor } from '@/lib/utils';
 import {
   Bell,
@@ -48,7 +48,7 @@ interface TaskWithReminder {
 }
 
 export default function RemindersPage() {
-  const { tasks, setTasks, setSelectedTask, setDetailModalOpen, setCreateModalOpen } = useTaskStore();
+  const { tasks, setTasks, setSelectedTask, setDetailModalOpen } = useTaskStore();
   const currentUser = useAuthStore((s) => s.currentUser);
 
   const [loading, setLoading] = useState(true);
@@ -67,6 +67,40 @@ export default function RemindersPage() {
 
   // Month selector for Monthly Flow (Default: October 2026)
   const [selectedMonth, setSelectedMonth] = useState('October 2026');
+
+  // Dedicated Reminder Create Modal State
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [reminderDefaults, setReminderDefaults] = useState<{
+    frequency?: 'Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom';
+    dayName?: string;
+    slotTime?: string;
+    weekName?: string;
+    dateStr?: string;
+  }>({});
+
+  const handleOpenReminderModal = (options?: {
+    frequency?: 'Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom';
+    dayName?: string;
+    slotTime?: string;
+    weekName?: string;
+    dateStr?: string;
+  }) => {
+    const freq =
+      options?.frequency ||
+      (activeFrequency === 'Customized'
+        ? 'Custom'
+        : activeFrequency === 'All'
+        ? 'Daily'
+        : (activeFrequency as any));
+    setReminderDefaults({
+      frequency: freq,
+      dayName: options?.dayName || 'Monday',
+      slotTime: options?.slotTime || '09:30 AM',
+      weekName: options?.weekName || 'Week 1',
+      dateStr: options?.dateStr || '',
+    });
+    setIsReminderModalOpen(true);
+  };
 
   useEffect(() => {
     fetchTasksAction().then((res) => {
@@ -496,7 +530,7 @@ export default function RemindersPage() {
 
         {isTeamLeadOrAdmin ? (
           <Button
-            onClick={() => setCreateModalOpen(true)}
+            onClick={() => handleOpenReminderModal()}
             className="ambizcon-gradient text-white gap-2 font-bold shadow-glow text-xs sm:text-sm self-start sm:self-auto rounded-xl"
           >
             <Plus className="h-4 w-4" />
@@ -752,7 +786,13 @@ export default function RemindersPage() {
                   <div className="space-y-2">
                     {dayGroup.tasks.length === 0 ? (
                       <div
-                        onClick={() => setCreateModalOpen(true)}
+                        onClick={() =>
+                          handleOpenReminderModal({
+                            frequency: 'Weekly',
+                            dayName: dayGroup.dayName,
+                            slotTime: '09:30 AM',
+                          })
+                        }
                         className="text-center py-6 px-3 border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-teal-500/50 hover:bg-teal-500/5 rounded-2xl cursor-pointer transition-all group"
                       >
                         <p className="text-xs font-semibold text-muted-foreground group-hover:text-foreground">
@@ -883,7 +923,13 @@ export default function RemindersPage() {
                           setSelectedTask(row.item.task);
                           setDetailModalOpen(true);
                         } else {
-                          setCreateModalOpen(true);
+                          handleOpenReminderModal({
+                            frequency: 'Monthly',
+                            weekName: weekBlock.weekName,
+                            dayName: row.dayName,
+                            dateStr: row.dateStr,
+                            slotTime: row.time,
+                          });
                         }
                       }}
                       className="py-2.5 px-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-3 group"
@@ -991,9 +1037,17 @@ export default function RemindersPage() {
         </div>
       )}
 
-      {/* Global Modals for Task Detail & Creation */}
+      {/* Modals for Task Detail & Dedicated Reminder Creation */}
       <TaskDetailModal />
-      <TaskCreateModal />
+      <ReminderCreateModal
+        isOpen={isReminderModalOpen}
+        onClose={() => setIsReminderModalOpen(false)}
+        defaultFrequency={reminderDefaults.frequency}
+        defaultDay={reminderDefaults.dayName}
+        defaultTime={reminderDefaults.slotTime}
+        defaultWeek={reminderDefaults.weekName}
+        defaultDate={reminderDefaults.dateStr}
+      />
     </div>
   );
 }
