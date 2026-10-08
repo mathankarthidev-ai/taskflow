@@ -4,7 +4,7 @@ import { create } from 'zustand';
 
 export interface AppNotification {
   id: string;
-  type: 'assigned' | 'updated' | 'due_date_reminder' | 'overdue' | 'comment' | 'task_completed' | 'task_approval' | 'review_assigned' | 'client_approval';
+  type: 'assigned' | 'updated' | 'due_date_reminder' | 'overdue' | 'comment' | 'task_completed' | 'task_approval' | 'review_assigned' | 'client_approval' | 'chat_message';
   title: string;
   text: string;
   time: string;

@@ -1,7 +1,7 @@
 import { ChatChannel, ChatMessage, TeamName, UserRole } from '@/types';
 
-const CHANNELS_KEY = 'taskflow_chat_channels_v1';
-const MESSAGES_KEY = 'taskflow_chat_messages_v1';
+const CHANNELS_KEY = 'taskflow_chat_channels_v2';
+const MESSAGES_KEY = 'taskflow_chat_messages_v2';
 
 export const DEFAULT_CHANNELS: ChatChannel[] = [
   {
@@ -9,8 +9,8 @@ export const DEFAULT_CHANNELS: ChatChannel[] = [
     name: '🌐 All-in-One Company Group',
     scope: 'all',
     description: 'Company-wide chat space for All Team Members, Team Leads, and Admins.',
-    lastMessage: 'Welcome to Ambizcon TaskFlow Team Messaging!',
-    lastMessageTime: '10:00 AM',
+    lastMessage: 'No messages yet',
+    lastMessageTime: '',
   },
   {
     id: 'channel_creative',
@@ -18,8 +18,8 @@ export const DEFAULT_CHANNELS: ChatChannel[] = [
     scope: 'team',
     team: 'Creative',
     description: 'Designers, Copywriters, and Creative Leads collaboration space.',
-    lastMessage: 'Updated vector campaign assets uploaded.',
-    lastMessageTime: '11:15 AM',
+    lastMessage: 'No messages yet',
+    lastMessageTime: '',
   },
   {
     id: 'channel_marketing',
@@ -27,8 +27,8 @@ export const DEFAULT_CHANNELS: ChatChannel[] = [
     scope: 'team',
     team: 'Marketing',
     description: 'SEO, Google Ads, and Social Media Strategy discussion.',
-    lastMessage: 'Monthly retainer client performance report ready.',
-    lastMessageTime: '11:45 AM',
+    lastMessage: 'No messages yet',
+    lastMessageTime: '',
   },
   {
     id: 'channel_development',
@@ -36,8 +36,8 @@ export const DEFAULT_CHANNELS: ChatChannel[] = [
     scope: 'team',
     team: 'Development',
     description: 'Full-stack engineers, WordPress Devs, and Tech Leads channel.',
-    lastMessage: 'WordPress 6.7 compatibility testing completed.',
-    lastMessageTime: '12:10 PM',
+    lastMessage: 'No messages yet',
+    lastMessageTime: '',
   },
 ];
 
@@ -48,8 +48,18 @@ export const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
   channel_development: [],
 };
 
+// Auto-clean legacy v1 data from localStorage on first run
+function purgeLegacyV1() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('taskflow_chat_channels_v1');
+    localStorage.removeItem('taskflow_chat_messages_v1');
+  } catch (_) {}
+}
+
 export function getStoredChannels(): ChatChannel[] {
   if (typeof window === 'undefined') return DEFAULT_CHANNELS;
+  purgeLegacyV1();
   try {
     const raw = localStorage.getItem(CHANNELS_KEY);
     if (!raw) {
@@ -64,6 +74,7 @@ export function getStoredChannels(): ChatChannel[] {
 
 export function getStoredMessages(channelId: string): ChatMessage[] {
   if (typeof window === 'undefined') return INITIAL_MESSAGES[channelId] || [];
+  purgeLegacyV1();
   try {
     const raw = localStorage.getItem(MESSAGES_KEY);
     if (!raw) {
@@ -85,7 +96,7 @@ export function sendChatMessage(
   linkUrl?: string
 ): ChatMessage {
   const newMsg: ChatMessage = {
-    id: `msg_${Date.now()}`,
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     channelId,
     senderId: sender._id,
     senderName: sender.name,
@@ -119,12 +130,101 @@ export function sendChatMessage(
           : c
       );
       localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
+
+      // Dispatch window event for cross-component / live-tab sync
+      window.dispatchEvent(
+        new CustomEvent('taskflow_chat_message_sent', {
+          detail: { channelId, message: newMsg },
+        })
+      );
     } catch (err) {
       console.error('Failed to save message', err);
     }
   }
 
   return newMsg;
+}
+
+export function deleteChatMessage(channelId: string, messageId: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem(MESSAGES_KEY);
+    if (!raw) return false;
+    const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
+    const list = allMsgs[channelId] || [];
+    const updatedList = list.filter((m) => m.id !== messageId);
+    allMsgs[channelId] = updatedList;
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(allMsgs));
+
+    // Update Channel Last Message info
+    const channels = getStoredChannels();
+    const lastMsg = updatedList[updatedList.length - 1];
+    const updatedChannels = channels.map((c) =>
+      c.id === channelId
+        ? {
+            ...c,
+            lastMessage: lastMsg
+              ? (lastMsg.text.slice(0, 40) || (lastMsg.fileAttachment ? `Attachment: ${lastMsg.fileAttachment.name}` : 'File/Link'))
+              : 'No messages yet',
+            lastMessageTime: lastMsg
+              ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '',
+          }
+        : c
+    );
+    localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
+
+    window.dispatchEvent(
+      new CustomEvent('taskflow_chat_message_deleted', {
+        detail: { channelId, messageId },
+      })
+    );
+    return true;
+  } catch (err) {
+    console.error('Failed to delete message', err);
+    return false;
+  }
+}
+
+export function clearChannelMessages(channelId: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem(MESSAGES_KEY);
+    const allMsgs: Record<string, ChatMessage[]> = raw ? JSON.parse(raw) : { ...INITIAL_MESSAGES };
+    allMsgs[channelId] = [];
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(allMsgs));
+
+    const channels = getStoredChannels();
+    const updatedChannels = channels.map((c) =>
+      c.id === channelId
+        ? {
+            ...c,
+            lastMessage: 'No messages yet',
+            lastMessageTime: '',
+          }
+        : c
+    );
+    localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
+    return true;
+  } catch (err) {
+    console.error('Failed to clear channel messages', err);
+    return false;
+  }
+}
+
+export function clearAllStoredMessages(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(INITIAL_MESSAGES));
+    const resetChannels = DEFAULT_CHANNELS.map((c) => ({
+      ...c,
+      lastMessage: 'No messages yet',
+      lastMessageTime: '',
+    }));
+    localStorage.setItem(CHANNELS_KEY, JSON.stringify(resetChannels));
+  } catch (err) {
+    console.error('Failed to clear all messages', err);
+  }
 }
 
 export function createDirectChannel(

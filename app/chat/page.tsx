@@ -2,13 +2,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { ChatChannel, ChatMessage, User } from '@/types';
 import {
   getStoredChannels,
   getStoredMessages,
   sendChatMessage,
+  deleteChatMessage,
+  clearChannelMessages,
+  clearAllStoredMessages,
   createDirectChannel,
 } from '@/lib/chat-db';
+import { playNotificationChime } from '@/lib/audio-chime';
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -29,6 +34,9 @@ import {
   CheckCircle,
   Globe,
   UserCheck,
+  Trash2,
+  Volume2,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -45,11 +53,13 @@ export default function TeamChatPage() {
   const [showLinkField, setShowLinkField] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; url: string; size?: string; type?: string } | null>(null);
 
-  // New Direct DM Modal State
+  // Direct DM Modal State
   const [isNewDmModalOpen, setIsNewDmModalOpen] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
 
   useEffect(() => {
     fetchAllUsersAction().then(setUsers);
@@ -67,6 +77,38 @@ export default function TeamChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Real-time synchronization & cross-tab events listener
+  useEffect(() => {
+    const handleRemoteMessage = (e: any) => {
+      const { channelId, message } = e.detail || {};
+      if (channelId === activeChannelId && message) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === message.id)) return prev;
+          return [...prev, message];
+        });
+      }
+      if (message && message.senderId !== currentUser?._id) {
+        playNotificationChime();
+      }
+      setChannels(getStoredChannels());
+    };
+
+    const handleDeletedMessage = (e: any) => {
+      const { channelId, messageId } = e.detail || {};
+      if (channelId === activeChannelId && messageId) {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }
+      setChannels(getStoredChannels());
+    };
+
+    window.addEventListener('taskflow_chat_message_sent', handleRemoteMessage);
+    window.addEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+    return () => {
+      window.removeEventListener('taskflow_chat_message_sent', handleRemoteMessage);
+      window.removeEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+    };
+  }, [activeChannelId, currentUser?._id]);
 
   if (!currentUser) return null;
 
@@ -120,13 +162,58 @@ export default function TeamChatPage() {
       linkInput || undefined
     );
 
+    // Audio chime sound on send
+    playNotificationChime();
+
+    // Notify all via In-App Notification Store
+    useNotificationStore.getState().addNotification({
+      type: 'chat_message',
+      category: activeChannel?.name || 'Group Chat',
+      title: `💬 New Message in ${activeChannel?.name || 'Group Chat'}`,
+      text: `${currentUser.name}: ${messageText.trim() || (attachedFile ? `Attached: ${attachedFile.name}` : 'Shared a link')}`,
+      color: 'bg-teal-500',
+      link: '/chat',
+    });
+
     setMessages((prev) => [...prev, created]);
     setMessageText('');
     setLinkInput('');
     setShowLinkField(false);
     setAttachedFile(null);
     setChannels(getStoredChannels());
-    toast.success('Message sent');
+    toast.success(`Message broadcasted to ${activeChannel?.name || 'group'}`, { icon: '🔔' });
+  };
+
+  // Admin delete message action
+  const handleDeleteMessage = (msgId: string) => {
+    const success = deleteChatMessage(activeChannelId, msgId);
+    if (success) {
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+      setChannels(getStoredChannels());
+      toast.success('Message deleted from group');
+    }
+  };
+
+  // Admin clear current channel messages
+  const handleClearGroup = () => {
+    if (!isAdmin) return;
+    if (window.confirm(`Are you sure you want to delete all messages in "${activeChannel?.name}"? This action cannot be undone.`)) {
+      clearChannelMessages(activeChannelId);
+      setMessages([]);
+      setChannels(getStoredChannels());
+      toast.success(`All messages removed from ${activeChannel?.name}`);
+    }
+  };
+
+  // Admin clear all messages across all channels
+  const handleClearAllChats = () => {
+    if (!isAdmin) return;
+    if (window.confirm('Are you sure you want to permanently clear all messages across ALL groups and direct chats?')) {
+      clearAllStoredMessages();
+      setMessages([]);
+      setChannels(getStoredChannels());
+      toast.success('All chat message history has been wiped.');
+    }
   };
 
   const handleStartDirectChat = (targetUser: User) => {
@@ -162,13 +249,15 @@ export default function TeamChatPage() {
             <MessageSquare className="h-5 w-5 text-brand-500" />
             <h2 className="font-extrabold text-sm text-foreground tracking-tight">Team Messaging</h2>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setIsNewDmModalOpen(true)}
-            className="text-[11px] font-bold py-1 px-2.5 bg-brand-600 text-white rounded-xl gap-1"
-          >
-            <Plus className="h-3.5 w-3.5" /> Direct Chat
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              onClick={() => setIsNewDmModalOpen(true)}
+              className="text-[11px] font-bold py-1 px-2.5 bg-brand-600 text-white rounded-xl gap-1"
+            >
+              <Plus className="h-3.5 w-3.5" /> Direct Chat
+            </Button>
+          </div>
         </div>
 
         {/* Channels List */}
@@ -261,6 +350,20 @@ export default function TeamChatPage() {
             </div>
           </div>
         </div>
+
+        {/* Admin Clean Action in Sidebar Footer */}
+        {isAdmin && (
+          <div className="p-2.5 border-t border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/60">
+            <button
+              type="button"
+              onClick={handleClearAllChats}
+              className="w-full text-center py-1.5 px-2 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 rounded-lg transition flex items-center justify-center gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Wipe All Chat History (Admin)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Chat Conversation Workspace */}
@@ -273,9 +376,27 @@ export default function TeamChatPage() {
               <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 font-bold">
                 {activeChannel?.scope === 'all' ? 'Group (TL, Member, Admin)' : activeChannel?.scope === 'team' ? `${activeChannel.team} Team` : 'Direct DM'}
               </Badge>
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold ml-2">
+                <Volume2 className="h-3.5 w-3.5" /> Sound & Alerts Active
+              </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">{activeChannel?.description || 'Collaborate with text updates, share files, and link resources.'}</p>
           </div>
+
+          {/* Admin Group Controls */}
+          {isAdmin && messages.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleClearGroup}
+              className="text-xs text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1.5"
+              title="Admin: Clear all messages in this group"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear Group
+            </Button>
+          )}
         </div>
 
         {/* Message Feed */}
@@ -284,10 +405,10 @@ export default function TeamChatPage() {
             messages.map((msg) => {
               const isMe = msg.senderId === currentUser._id;
               return (
-                <div key={msg.id} className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div key={msg.id} className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} group`}>
                   <Avatar name={msg.senderName} src={msg.senderAvatar} size="md" className="shrink-0" />
                   <div className={`max-w-xl space-y-1 ${isMe ? 'items-end text-right' : 'items-start'}`}>
-                    {/* Sender Info */}
+                    {/* Sender Info & Admin Delete Action */}
                     <div className={`flex items-center gap-2 text-[11px] text-muted-foreground ${isMe ? 'justify-end' : ''}`}>
                       <span className="font-bold text-foreground">{msg.senderName}</span>
                       <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
@@ -296,6 +417,17 @@ export default function TeamChatPage() {
                       <span className="font-mono text-[10px]">
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
+                      {/* Admin Delete Action */}
+                      {(isAdmin || isMe) && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          className="opacity-40 group-hover:opacity-100 hover:text-rose-600 dark:hover:text-rose-400 transition-opacity p-0.5 ml-1"
+                          title={isAdmin ? "Delete message (Admin)" : "Delete my message"}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
 
                     {/* Message Content Box */}
@@ -364,7 +496,7 @@ export default function TeamChatPage() {
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-2 p-8 text-center">
               <MessageSquare className="h-10 w-10 text-brand-500 opacity-40" />
               <p className="font-bold text-sm text-foreground">No messages yet in this group</p>
-              <p className="text-xs max-w-sm">Start the conversation by sharing updates, attaching documents (&lt; 5MB limit), or pasting links below.</p>
+              <p className="text-xs max-w-sm">Start the conversation by sharing updates, attaching documents (&lt; 5MB limit), or pasting links below. Group messages trigger audio & notification alerts for all members.</p>
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -395,7 +527,7 @@ export default function TeamChatPage() {
                 type="url"
                 value={linkInput}
                 onChange={(e) => setLinkInput(e.target.value)}
-                placeholder="Paste share link (e.g. https://taskflow-saas-app-five.vercel.app/approval/...)"
+                placeholder="Paste share link (e.g. https://taskflow-saas-app-five.vercel.app/...)"
                 className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-mono focus-ring"
               />
               <Button type="button" size="sm" variant="outline" onClick={() => setShowLinkField(false)} className="text-xs">
@@ -450,29 +582,29 @@ export default function TeamChatPage() {
               type="text"
               value={userSearchTerm}
               onChange={(e) => setUserSearchTerm(e.target.value)}
-              placeholder="Search by name, role (Team Lead, Admin), or team..."
-              className="w-full pl-9 pr-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background text-xs focus-ring"
+              placeholder="Search by name, role, or team..."
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background pl-9 pr-3 py-2 text-xs focus-ring"
             />
           </div>
 
-          <div className="max-h-60 overflow-y-auto space-y-1.5 pt-1">
+          <div className="max-h-60 overflow-y-auto space-y-1">
             {filteredUsersForDm.map((u) => (
-              <div
+              <button
                 key={u._id}
                 onClick={() => handleStartDirectChat(u)}
-                className="flex items-center justify-between p-2.5 rounded-xl border border-zinc-200/70 dark:border-zinc-800/70 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 cursor-pointer transition-colors"
+                className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors text-left"
               >
                 <div className="flex items-center gap-2.5">
                   <Avatar name={u.name} src={u.avatar} size="sm" />
                   <div>
-                    <span className="font-bold text-foreground block">{u.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{u.role} · {u.team} Team</span>
+                    <p className="font-bold text-foreground text-xs">{u.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{u.role} • {u.team}</p>
                   </div>
                 </div>
-                <Button size="sm" variant="outline" className="text-[11px] font-semibold py-1 px-2.5">
-                  Message
-                </Button>
-              </div>
+                <Badge variant="outline" className="text-[9px]">
+                  {u.company || 'India & Australia'}
+                </Badge>
+              </button>
             ))}
           </div>
         </div>

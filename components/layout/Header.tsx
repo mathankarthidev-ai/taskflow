@@ -36,6 +36,7 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { SEED_USERS } from '@/lib/seed-data';
 import { QrScannerModal } from '@/components/attendance/QrScannerModal';
+import { playNotificationChime } from '@/lib/audio-chime';
 import { toast } from 'sonner';
 
 interface HeaderProps {
@@ -131,6 +132,34 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   };
 
   const closeAllMenus = () => setActiveMenu(null);
+
+  // Group & Team Chat Notification & Audio Chime Listener
+  useEffect(() => {
+    const handleChatNotify = (e: any) => {
+      const { message, channelId } = e.detail || {};
+      if (!message) return;
+      if (message.senderId !== currentUser?._id) {
+        playNotificationChime();
+        useNotificationStore.getState().addNotification({
+          type: 'chat_message',
+          category: 'Group Chat',
+          title: `💬 ${message.senderName} posted in Group`,
+          text: message.text || (message.fileAttachment ? `Attached: ${message.fileAttachment.name}` : 'Shared a link'),
+          color: 'bg-teal-500',
+          link: '/chat',
+        });
+        toast.info(`New message from ${message.senderName}`, {
+          description: message.text ? message.text.slice(0, 50) : 'Check team chat',
+          icon: '💬',
+        });
+      }
+    };
+
+    window.addEventListener('taskflow_chat_message_sent', handleChatNotify);
+    return () => {
+      window.removeEventListener('taskflow_chat_message_sent', handleChatNotify);
+    };
+  }, [currentUser?._id]);
 
   // 1-Click Manual Workspace Refresh for All Users
   const handleManualRefresh = () => {
