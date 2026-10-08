@@ -45,7 +45,7 @@ export async function getTasks(options: TaskFilterOptions = {}): Promise<Task[]>
         .sort({ updatedAt: -1 })
         .lean();
 
-      if (docs.length >= 0) {
+      if (docs.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return docs.map((doc: any) => ({
           _id: doc._id.toString(),
@@ -88,6 +88,11 @@ export async function getTasks(options: TaskFilterOptions = {}): Promise<Task[]>
           createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : new Date().toISOString(),
           updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : new Date().toISOString(),
         }));
+      }
+
+      const totalCount = await TaskModel.countDocuments();
+      if (totalCount > 0) {
+        return [];
       }
     } catch (e) {
       console.error('Error fetching tasks from DB:', e);

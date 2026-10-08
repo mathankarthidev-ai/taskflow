@@ -57,12 +57,22 @@ function KanbanBoardContent() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [fetchedTasks, userList] = await Promise.all([
+      let [fetchedTasks, userList] = await Promise.all([
         fetchTasksAction(),
         fetchAllUsersAction(),
       ]);
-      setTasks(fetchedTasks);
-      setUsers(userList);
+
+      if (!fetchedTasks || fetchedTasks.length === 0) {
+        try {
+          await fetch('/api/seed', { method: 'POST' });
+          fetchedTasks = await fetchTasksAction();
+        } catch {
+          // fallback
+        }
+      }
+
+      setTasks(fetchedTasks || []);
+      setUsers(userList || []);
       setLoading(false);
     }
     loadData();
