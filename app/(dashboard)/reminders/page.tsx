@@ -750,46 +750,60 @@ export default function RemindersPage() {
 
                   {/* Tasks under this Day */}
                   <div className="space-y-2">
-                    {dayGroup.tasks.map(({ tag, item, time }) => (
+                    {dayGroup.tasks.length === 0 ? (
                       <div
-                        key={tag + item.task._id}
-                        onClick={() => {
-                          setSelectedTask(item.task);
-                          setDetailModalOpen(true);
-                        }}
-                        className="p-3 rounded-2xl bg-zinc-50/70 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-teal-500/40 hover:bg-teal-500/5 transition-all cursor-pointer group"
+                        onClick={() => setCreateModalOpen(true)}
+                        className="text-center py-6 px-3 border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-teal-500/50 hover:bg-teal-500/5 rounded-2xl cursor-pointer transition-all group"
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-[10px] font-black font-mono bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded-md">
-                            {tag} – Task / Reminder
-                          </span>
-                          <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-brand-500" />
-                            {time}
-                          </span>
-                        </div>
-
-                        <h5 className="text-xs font-bold text-foreground group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors line-clamp-1">
-                          {item.task.title}
-                        </h5>
-
-                        <div className="flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-zinc-200/40 dark:border-zinc-800/40 text-[11px] text-muted-foreground">
-                          <div className="flex items-center gap-1.5">
-                            <Badge className={`${getPriorityBadgeColor(item.task.priority)} text-[9px] py-0 px-1.5`}>
-                              {item.task.priority}
-                            </Badge>
-                            {item.task.clientName && (
-                              <span className="truncate max-w-[90px] font-semibold text-foreground">
-                                {item.task.clientName}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] font-bold text-brand-500 group-hover:translate-x-0.5 transition-transform flex items-center">
-                            Open →
-                          </span>
-                        </div>
+                        <p className="text-xs font-semibold text-muted-foreground group-hover:text-foreground">
+                          No tasks scheduled for {dayGroup.dayName}
+                        </p>
+                        <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 mt-1 inline-flex items-center gap-1">
+                          <Plus className="h-3 w-3" /> Click to Schedule Task
+                        </span>
                       </div>
-                    ))}
+                    ) : (
+                      dayGroup.tasks.map(({ tag, item, time }) => (
+                        <div
+                          key={tag + item.task._id}
+                          onClick={() => {
+                            setSelectedTask(item.task);
+                            setDetailModalOpen(true);
+                          }}
+                          className="p-3 rounded-2xl bg-zinc-50/70 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-teal-500/40 hover:bg-teal-500/5 transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-[10px] font-black font-mono bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded-md">
+                              {tag} – Task / Reminder
+                            </span>
+                            <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-brand-500" />
+                              {time}
+                            </span>
+                          </div>
+
+                          <h5 className="text-xs font-bold text-foreground group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors line-clamp-1">
+                            {item.task.title}
+                          </h5>
+
+                          <div className="flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-zinc-200/40 dark:border-zinc-800/40 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1.5">
+                              <Badge className={`${getPriorityBadgeColor(item.task.priority)} text-[9px] py-0 px-1.5`}>
+                                {item.task.priority}
+                              </Badge>
+                              {item.task.clientName && (
+                                <span className="truncate max-w-[90px] font-semibold text-foreground">
+                                  {item.task.clientName}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold text-brand-500 group-hover:translate-x-0.5 transition-transform flex items-center">
+                              Open →
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -868,6 +882,8 @@ export default function RemindersPage() {
                         if (row.item?.task) {
                           setSelectedTask(row.item.task);
                           setDetailModalOpen(true);
+                        } else {
+                          setCreateModalOpen(true);
                         }
                       }}
                       className="py-2.5 px-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-3 group"
@@ -897,7 +913,7 @@ export default function RemindersPage() {
 
                         {/* Task Title */}
                         <h5 className="text-xs font-semibold text-foreground truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex-1 min-w-[150px]">
-                          {row.item?.task.title || 'Client Retainer Audit & Progress Sign-off'}
+                          {row.item?.task.title || `Scheduled Retainer Slot (${row.dayName})`}
                         </h5>
                       </div>
 
@@ -909,7 +925,7 @@ export default function RemindersPage() {
                           </span>
                         )}
                         <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                          Details <ArrowRight className="h-3 w-3" />
+                          {row.item?.task ? 'Details' : '+ Schedule'} <ArrowRight className="h-3 w-3" />
                         </span>
                       </div>
                     </div>
