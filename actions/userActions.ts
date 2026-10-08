@@ -1,7 +1,7 @@
 'use server';
 
-import { getUserByEmail, getAllUsers, updateUserRole, updateUser, createUser, deleteUser } from '@/services/authService';
-import { UserRole, TeamName, CompanyBranch, WorkMode } from '@/types';
+import { getUserByEmail, getAllUsers, updateUserRole, updateUser, updateUserProfile, createUser, deleteUser } from '@/services/authService';
+import { UserRole, TeamName, CompanyBranch, WorkMode, EducationRecord, ExperienceRecord } from '@/types';
 import { revalidatePath } from 'next/cache';
 
 export async function getUserByEmailAction(email: string) {
@@ -43,6 +43,29 @@ export async function updateUserAction(
   }
 ) {
   const updated = await updateUser(userId, updates);
+  revalidatePath('/users');
+  return updated;
+}
+
+export async function updateUserProfileSectionAction(
+  userId: string,
+  profileData: {
+    name?: string;
+    avatar?: string;
+    phone?: string;
+    emergencyContact?: string;
+    address?: string;
+    bloodGroup?: string;
+    birthday?: string;
+    dob?: string;
+    workMode?: WorkMode;
+    education?: EducationRecord[];
+    experience?: ExperienceRecord[];
+    skills?: string[];
+  }
+) {
+  const updated = await updateUserProfile(userId, profileData);
+  revalidatePath('/profile');
   revalidatePath('/users');
   return updated;
 }

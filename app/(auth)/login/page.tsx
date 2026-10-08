@@ -57,8 +57,8 @@ export default function LoginPage() {
       // Auto-assign branch based on employee registration
       let branchToSet: CompanyBranch = selectedBranch;
       if (!isSuperAdmin) {
-        if (currentUser?.company === 'Ambizcon - Australia') {
-          branchToSet = 'Ambizcon - Australia';
+        if (currentUser?.company === 'Ambizcon') {
+          branchToSet = 'Ambizcon';
         } else {
           branchToSet = 'Ambizcon Health - India';
         }
@@ -115,18 +115,18 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-lg space-y-8 my-8">
         {/* AMBIZCON Brand Header (Dynamic: Ambizcon Australia vs Ambizcon Health) */}
         <div className="text-center space-y-3">
-          {selectedBranch === 'Ambizcon - Australia' ? (
+          {selectedBranch === 'Ambizcon' ? (
             <div className="flex items-center justify-center gap-3.5">
               <div className="h-16 w-16 md:h-20 md:w-20 rounded-2xl bg-white p-2 shadow-glow border border-amber-500/40 flex items-center justify-center">
                 <img
                   src="/ambizcon-australia-icon.png"
-                  alt="AMBIZCON Australia Logo"
+                  alt="AMBIZCON Logo"
                   className="h-full w-full object-contain"
                 />
               </div>
               <div className="text-left">
                 <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
-                  AMBIZCON<span className="text-amber-500 dark:text-amber-400 font-bold ml-1.5">Australia</span>
+                  AMBIZCON
                 </h1>
                 <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mt-1">
                   Brisbane HQ • Global Operations
@@ -191,7 +191,7 @@ export default function LoginPage() {
                   className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all font-semibold"
                 >
                   <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Chennai HQ)</option>
-                  <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ)</option>
+                  <option value="Ambizcon">🇦🇺 Ambizcon (Brisbane HQ)</option>
                 </select>
               </div>
             </div>
@@ -247,14 +247,14 @@ export default function LoginPage() {
         {/* Footer */}
         <div className="text-center space-y-1">
           <div className="font-extrabold text-sm tracking-tight text-foreground">
-            {selectedBranch === 'Ambizcon - Australia' ? (
-              <>AMBIZCON<span className="text-amber-500 dark:text-amber-400 ml-1">Australia</span></>
+            {selectedBranch === 'Ambizcon' ? (
+              <>AMBIZCON</>
             ) : (
               <>AMBIZCON<span className="text-emerald-600 dark:text-emerald-400 ml-1">Health</span></>
             )}
           </div>
           <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-            {selectedBranch === 'Ambizcon - Australia' ? 'Brisbane HQ • Global Operations' : 'Beyond Marketing • Beyond Healthcare'}
+            {selectedBranch === 'Ambizcon' ? 'Brisbane HQ • Global Operations' : 'Beyond Marketing • Beyond Healthcare'}
           </div>
         </div>
       </div>

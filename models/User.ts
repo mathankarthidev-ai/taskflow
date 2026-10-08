@@ -18,6 +18,9 @@ export interface IUserDocument extends Document {
   bankAccount?: string;
   taxId?: string;
   bloodGroup?: string;
+  education?: any[];
+  experience?: any[];
+  skills?: string[];
   createdAt: Date;
 }
 
@@ -37,7 +40,7 @@ const UserSchema = new Schema<IUserDocument>(
     },
     company: {
       type: String,
-      enum: ['Ambizcon Health - India', 'Ambizcon - Australia', 'India & Australia'],
+      enum: ['Ambizcon Health - India', 'Ambizcon', 'India & Australia'],
       default: 'Ambizcon Health - India',
     },
     avatar: { type: String, default: '' },
@@ -55,6 +58,9 @@ const UserSchema = new Schema<IUserDocument>(
     bankAccount: { type: String },
     taxId: { type: String },
     bloodGroup: { type: String },
+    education: { type: Schema.Types.Mixed, default: [] },
+    experience: { type: Schema.Types.Mixed, default: [] },
+    skills: { type: [String], default: [] },
   },
   { timestamps: true }
 );

@@ -11,7 +11,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function initAuth() {
       const storedCompany = localStorage.getItem('ambizcon_selected_company') as any;
-      if (storedCompany === 'Ambizcon Health - India' || storedCompany === 'Ambizcon - Australia') {
+      if (storedCompany === 'Ambizcon Health - India' || storedCompany === 'Ambizcon') {
         useCompanyStore.getState().setSelectedCompany(storedCompany);
       }
 
@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCurrentUser(user);
           // If user is not Super Admin, strictly bind company to their assigned branch
           if (user.role !== 'Super Admin' && user.role !== 'Admin') {
-            const userBranch = user.company === 'Ambizcon - Australia' ? 'Ambizcon - Australia' : 'Ambizcon Health - India';
+            const userBranch = user.company === 'Ambizcon' ? 'Ambizcon' : 'Ambizcon Health - India';
             useCompanyStore.getState().setSelectedCompany(userBranch);
           }
         } else {

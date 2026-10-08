@@ -20,6 +20,10 @@ export async function createTaskAction(data: {
   incoming?: boolean;
   dueDate: string;
   labels: string[];
+  clientName?: string;
+  doctorName?: string;
+  specialist?: string;
+  reminderSettings?: any;
   attachments?: { name: string; url: string; type: string }[];
 }) {
   const task = await createTask(data);

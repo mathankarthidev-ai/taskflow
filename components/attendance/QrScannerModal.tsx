@@ -30,8 +30,8 @@ export function QrScannerModal({ isOpen, onClose, onPunchSuccess }: QrScannerMod
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
   const isAustralia = isSuperAdmin
-    ? selectedCompany === 'Ambizcon - Australia'
-    : currentUser?.company === 'Ambizcon - Australia';
+    ? selectedCompany === 'Ambizcon'
+    : currentUser?.company === 'Ambizcon';
 
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -164,14 +164,14 @@ export function QrScannerModal({ isOpen, onClose, onPunchSuccess }: QrScannerMod
     setIsProcessing(true);
 
     let extractedToken = '';
-    let extractedBranch = isAustralia ? 'Ambizcon - Australia' : 'Ambizcon Health - India';
+    let extractedBranch = isAustralia ? 'Ambizcon' : 'Ambizcon Health - India';
     let expiresAt: number | undefined = undefined;
 
     // Check if rawData is a JSON payload
     try {
       const parsed = JSON.parse(rawData);
       if (parsed.token) extractedToken = parsed.token;
-      if (parsed.branch) extractedBranch = parsed.branch.includes('Australia') ? 'Ambizcon - Australia' : 'Ambizcon Health - India';
+      if (parsed.branch) extractedBranch = parsed.branch.includes('Australia') ? 'Ambizcon' : 'Ambizcon Health - India';
       if (parsed.t) expiresAt = parsed.t;
     } catch {
       // Check if rawData is a URL: https://...?qrToken=...&branch=...
@@ -180,7 +180,7 @@ export function QrScannerModal({ isOpen, onClose, onPunchSuccess }: QrScannerMod
         const tParam = url.searchParams.get('qrToken') || url.searchParams.get('token');
         if (tParam) extractedToken = tParam;
         const bParam = url.searchParams.get('branch');
-        if (bParam) extractedBranch = bParam.includes('Australia') ? 'Ambizcon - Australia' : 'Ambizcon Health - India';
+        if (bParam) extractedBranch = bParam.includes('Australia') ? 'Ambizcon' : 'Ambizcon Health - India';
         const expParam = url.searchParams.get('exp');
         if (expParam) expiresAt = parseInt(expParam, 10);
       } catch {

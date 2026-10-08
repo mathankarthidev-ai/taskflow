@@ -57,10 +57,10 @@ const ROSTER_MEMBERS = [
   { id: 'user_kasthuri_14', name: 'Kasthuri M', team: 'Creative', email: 'kasthuri@ambizcon.com', company: 'Ambizcon Health - India' },
   { id: 'user_ahamed_15', name: 'Ahamed', team: 'Creative', email: 'ahamed@ambizcon.com', company: 'Ambizcon Health - India' },
 
-  // Ambizcon - Australia Roster (Brisbane HQ)
-  { id: 'user_anirudh_aus', name: 'Anirudh', team: 'Development', email: 'anirudh@ambizcon.com', company: 'Ambizcon - Australia' },
-  { id: 'user_mathan_aus', name: 'Mathan P', team: 'Development', email: 'mathan@ambizcon.com', company: 'Ambizcon - Australia' },
-  { id: 'user_adriana_aus', name: 'Adriana Ruju', team: 'Marketing', email: 'adriana@ambizcon.com', company: 'Ambizcon - Australia' },
+  // Ambizcon Roster (Brisbane HQ)
+  { id: 'user_anirudh_aus', name: 'Anirudh', team: 'Development', email: 'anirudh@ambizcon.com', company: 'Ambizcon' },
+  { id: 'user_mathan_aus', name: 'Mathan P', team: 'Development', email: 'mathan@ambizcon.com', company: 'Ambizcon' },
+  { id: 'user_adriana_aus', name: 'Adriana Ruju', team: 'Marketing', email: 'adriana@ambizcon.com', company: 'Ambizcon' },
 ];
 
 const LAST_10_DAYS = [
@@ -116,8 +116,42 @@ const auditRecords: AttendanceAudit[] = [];
 export const attendanceDb = {
   getAll: () => attendanceRecords,
   getById: (id: string) => attendanceRecords.find((r) => r.id === id),
-  getActiveByUser: (userId: string) =>
-    attendanceRecords.find((r) => (r.userId === userId || r.userName.toLowerCase() === userId.toLowerCase()) && r.status === 'working' && r.clockOut === null),
+  getActiveByUser: (userId: string, userName?: string, userEmail?: string) => {
+    const normId = (userId || '').toLowerCase().trim();
+    const normName = (userName || '').toLowerCase().trim();
+    const normEmail = (userEmail || '').toLowerCase().trim();
+
+    return attendanceRecords.find((r) => {
+      if (r.status !== 'working' || r.clockOut !== null) return false;
+      const rId = (r.userId || '').toLowerCase().trim();
+      const rName = (r.userName || '').toLowerCase().trim();
+      return (
+        (normId && (rId === normId || rName === normId || rId.includes(normId))) ||
+        (normName && (rName === normName || rName.includes(normName) || normName.includes(rName))) ||
+        (normEmail && (rId === normEmail || rId.includes(normEmail)))
+      );
+    });
+  },
+  clearUserWorking: (userId: string, userName?: string, userEmail?: string) => {
+    const normId = (userId || '').toLowerCase().trim();
+    const normName = (userName || '').toLowerCase().trim();
+    const normEmail = (userEmail || '').toLowerCase().trim();
+
+    attendanceRecords.forEach((r) => {
+      const rId = (r.userId || '').toLowerCase().trim();
+      const rName = (r.userName || '').toLowerCase().trim();
+      const isMatch =
+        (normId && (rId === normId || rName === normId || rId.includes(normId))) ||
+        (normName && (rName === normName || rName.includes(normName) || normName.includes(rName))) ||
+        (normEmail && (rId === normEmail || rId.includes(normEmail)));
+
+      if (isMatch && r.status === 'working') {
+        r.status = 'completed';
+        r.clockOut = new Date().toISOString();
+        r.updatedAt = new Date().toISOString();
+      }
+    });
+  },
   getByUser: (userId: string) =>
     attendanceRecords.filter((r) => r.userId === userId || r.userName.toLowerCase() === userId.toLowerCase() || userId.toLowerCase().includes(r.userName.toLowerCase())),
   add: (record: AttendanceRecord) => {

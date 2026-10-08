@@ -204,6 +204,10 @@ export async function createTask(input: {
   incoming?: boolean;
   dueDate: string;
   labels: string[];
+  clientName?: string;
+  doctorName?: string;
+  specialist?: string;
+  reminderSettings?: any;
   attachments?: { name: string; url: string; type: string }[];
 }): Promise<Task> {
   const db = await connectDB();
@@ -238,6 +242,10 @@ export async function createTask(input: {
         status: createdDoc.status,
         priority: createdDoc.priority,
         team: createdDoc.team,
+        clientName: input.clientName,
+        doctorName: input.doctorName,
+        specialist: input.specialist,
+        reminderSettings: input.reminderSettings,
         assignedTo: assignedUser?._id,
         assignedUser,
         createdBy: creatorUser?._id || '',
@@ -264,6 +272,10 @@ export async function createTask(input: {
     priority: input.priority,
     status: input.status,
     team: input.team,
+    clientName: input.clientName || 'Coomera Town Medical Center',
+    doctorName: input.doctorName,
+    specialist: input.specialist,
+    reminderSettings: input.reminderSettings,
     assignedTo: assignedUser?._id,
     assignedUser,
     createdBy: creatorUser?._id || input.createdBy,

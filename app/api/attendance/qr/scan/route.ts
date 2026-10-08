@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
 import { supabase } from '@/lib/supabase';
 import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
+import { SEED_USERS } from '@/lib/seed-data';
 
 export async function POST(req: Request) {
   try {
@@ -29,11 +30,51 @@ export async function POST(req: Request) {
     const location = isAus ? 'Queen Street, Brisbane CBD, Australia' : 'Anna Nagar, Chennai';
     const nowIso = new Date().toISOString();
 
-    const active = attendanceDb.getActiveByUser(userId);
+    const normEmail = (body.userEmail || userId || '').toLowerCase().trim();
+    const seedUser = SEED_USERS.find(
+      (u) =>
+        (normEmail && u.email.toLowerCase() === normEmail) ||
+        u.name.toLowerCase() === userName.toLowerCase()
+    );
+    const isSuperAdminUser = seedUser?.role === 'Super Admin' || seedUser?.role === 'Admin';
+    const registeredCompany = seedUser?.company;
 
-    if (active) {
+    let company = isAus ? 'Ambizcon' : 'Ambizcon Health - India';
+    if (!isSuperAdminUser && registeredCompany && registeredCompany !== 'India & Australia') {
+      company = registeredCompany;
+    }
+
+    const active = attendanceDb.getActiveByUser(userId, userName, body.userEmail);
+
+    // Query Supabase Cloud to see if employee is currently clocked in
+    let supaActiveRecord: any = null;
+    try {
+      const { data: supaActive } = await supabase
+        .from('attendance')
+        .select('*')
+        .or(`user_id.eq.${userId},user_name.ilike.%${userName}%,user_email.eq.${body.userEmail || userId}`)
+        .eq('status', 'working')
+        .order('created_at', { ascending: false });
+
+      if (supaActive && supaActive.length > 0) {
+        supaActiveRecord = supaActive[0];
+      }
+    } catch (checkErr) {
+      console.warn('QR scan active check warning:', checkErr);
+    }
+
+    // Only treat as working if Supabase Cloud confirms an active shift is in progress
+    const isAlreadyWorking = !!supaActiveRecord;
+
+    if (!isAlreadyWorking) {
+      // If Supabase confirms shift is completed, clear any stale in-memory residue
+      attendanceDb.clearUserWorking(userId, userName, body.userEmail);
+    }
+
+    if (isAlreadyWorking) {
       // Punch Out / Close Shift
-      const clockInMs = new Date(active.clockIn).getTime();
+      const activeIn = supaActiveRecord?.created_at || active?.clockIn || nowIso;
+      const clockInMs = new Date(activeIn).getTime();
       const clockOutMs = new Date(nowIso).getTime();
       const totalSeconds = Math.max(0, Math.floor((clockOutMs - clockInMs) / 1000));
       const totalHours = Math.round((totalSeconds / 3600) * 100) / 100;
@@ -41,43 +82,39 @@ export async function POST(req: Request) {
       const formattedAest = formatTimeAEST(nowIso);
       const workedHoursStr = `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`;
 
-      const updated = attendanceDb.update(active.id, {
-        clockOut: nowIso,
-        status: 'completed',
-        totalSeconds,
-        totalHours,
-      });
+      if (active) {
+        const updated = attendanceDb.update(active.id, {
+          clockOut: nowIso,
+          status: 'completed',
+          totalSeconds,
+          totalHours,
+        });
 
-      attendanceDb.addAudit({
-        id: `AUD-QR-${Date.now()}`,
-        attendanceId: active.id,
-        action: 'CLOCK_OUT',
-        oldValue: active,
-        newValue: updated,
-        changedBy: `QR_KIOSK_${userName}`,
-        createdAt: nowIso,
-      });
+        attendanceDb.addAudit({
+          id: `AUD-QR-${Date.now()}`,
+          attendanceId: active.id,
+          action: 'CLOCK_OUT',
+          oldValue: active,
+          newValue: updated,
+          changedBy: `QR_KIOSK_${userName}`,
+          createdAt: nowIso,
+        });
+      }
 
-      // Update in Supabase
+      // Update in Supabase - Close ALL working shifts for this user to prevent any duplicate active shifts
       try {
-        const { data: supaActive } = await supabase
+        await supabase
           .from('attendance')
-          .select('*')
-          .or(`user_id.eq.${userId},user_name.ilike.%${userName}%`)
-          .eq('status', 'working')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (supaActive && supaActive.length > 0) {
-          await supabase.from('attendance').update({
+          .update({
             clock_out: isAus ? formattedAest : formattedIst,
             clock_out_aest: formattedAest,
             status: 'completed',
             worked_seconds: totalSeconds,
             worked_hours: workedHoursStr,
             updated_at: nowIso,
-          }).eq('id', supaActive[0].id);
-        }
+          })
+          .or(`user_id.eq.${userId},user_name.ilike.%${userName}%,user_email.eq.${body.userEmail || userId}`)
+          .eq('status', 'working');
       } catch (dbErr) {
         console.warn('QR clock-out sync warning:', dbErr);
       }
@@ -85,10 +122,10 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         action: 'PUNCH_OUT',
-        message: `${userName} clocked out successfully via QR Kiosk!`,
+        message: `${userName} clocked out successfully via QR Kiosk! Shift completed.`,
         punch: {
           userName,
-          userTeam: userTeam || active.userTeam,
+          userTeam: userTeam || supaActiveRecord?.user_team || active?.userTeam || 'General',
           type: 'Clock Out',
           time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
           totalHours,
@@ -101,14 +138,14 @@ export async function POST(req: Request) {
       const formattedIst = formatTimeIST(nowIso);
       const formattedAest = formatTimeAEST(nowIso);
       const sessionDate = formatSessionDateIST(nowIso);
-      const recordId = `ATT-QR-${Date.now()}-${String(userId).replace(/[^a-zA-Z0-9]/g, '')}`;
+      const recordId = `ATT-QR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
       const newAttendance = attendanceDb.add({
         id: recordId,
         userId,
         userName,
         userTeam: userTeam || 'General',
-        company: isAus ? 'Ambizcon - Australia' : 'Ambizcon Health - India',
+        company,
         sessionName: 'QR Kiosk Shift',
         clockIn: nowIso,
         clockOut: null,
@@ -141,7 +178,7 @@ export async function POST(req: Request) {
           user_name: userName,
           user_email: body.userEmail || (String(userId).includes('@') ? userId : undefined),
           user_team: userTeam || 'General',
-          company: isAus ? 'Ambizcon - Australia' : 'Ambizcon Health - India',
+          company,
           session_date: sessionDate,
           clock_in: isAus ? formattedAest : formattedIst,
           clock_in_aest: formattedAest,

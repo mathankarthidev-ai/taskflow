@@ -15,11 +15,11 @@ export async function POST(req: Request) {
     const formattedAest = formatTimeAEST(nowIso);
 
     // 1. In-memory update
-    let active = attendanceDb.getActiveByUser(userId);
+    let active = attendanceDb.getActiveByUser(userId, userName, body.userEmail);
     if (!active) {
       const fallbackIn = new Date(Date.now() - 3600 * 1000).toISOString();
       active = attendanceDb.add({
-        id: `ATT-${Date.now()}-${String(userId).replace(/[^a-zA-Z0-9]/g, '')}`,
+        id: `ATT-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
         userId,
         userName,
         userTeam,
@@ -63,31 +63,23 @@ export async function POST(req: Request) {
       });
     }
 
+    // Clear any working shift residue for this user in memory
+    attendanceDb.clearUserWorking(userId, userName, body.userEmail);
+
     // 2. Supabase Cloud update
     try {
-      // Find latest working record in Supabase
-      const { data: latestRecords } = await supabase
+      await supabase
         .from('attendance')
-        .select('*')
+        .update({
+          clock_out: formattedIst,
+          clock_out_aest: formattedAest,
+          status: 'completed',
+          worked_seconds: totalSeconds,
+          worked_hours: workedHoursStr,
+          updated_at: nowIso,
+        })
         .or(`user_id.eq.${userId},user_name.ilike.%${userName}%`)
-        .eq('status', 'working')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (latestRecords && latestRecords.length > 0) {
-        const recordId = latestRecords[0].id;
-        await supabase
-          .from('attendance')
-          .update({
-            clock_out: formattedIst,
-            clock_out_aest: formattedAest,
-            status: 'completed',
-            worked_seconds: totalSeconds,
-            worked_hours: workedHoursStr,
-            updated_at: nowIso,
-          })
-          .eq('id', recordId);
-      }
+        .eq('status', 'working');
     } catch (dbErr) {
       console.warn('Supabase clock-out exception:', dbErr);
     }

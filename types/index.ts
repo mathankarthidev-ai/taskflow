@@ -1,8 +1,8 @@
 export type UserRole = 'Team Member' | 'Team Lead' | 'Super Admin' | 'Admin' | 'Reception Staff';
-export type CompanyBranch = 'Ambizcon Health - India' | 'Ambizcon - Australia' | 'India & Australia';
-export type TeamName = 'Creative' | 'Marketing' | 'Development';
-export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Critical';
-export type TaskStatus = 'Todo' | 'In Progress' | 'Review' | 'Support' | 'Done';
+export type CompanyBranch = 'Ambizcon Health - India' | 'Ambizcon' | 'India & Australia';
+export type TeamName = 'Creative' | 'Marketing' | 'Development' | string;
+export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Critical' | 'Urgent';
+export type TaskStatus = 'Backlog' | 'Todo' | 'In Progress' | 'Review' | 'Support' | 'Done';
 export type WorkMode = 'Work From Office' | 'Work From Home';
 
 export interface EducationRecord {
@@ -36,6 +36,7 @@ export interface User {
   birthday?: string; // e.g. "27 Sep"
   dob?: string; // e.g. "14/10/2000"
   workMode?: WorkMode;
+  skills?: string[]; // e.g. ["WordPress", "SEO", "Google Ads", "React", "Node.js"]
   permissionCount?: number;
   hasResetPassword?: boolean;
   phone?: string;
@@ -65,8 +66,81 @@ export interface Comment {
   userId: string;
   user?: User;
   message: string;
+  isInternal?: boolean; // Client-visible vs internal team note
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface ClientSite {
+  id: string;
+  clientId: string;
+  clientName: string;
+  siteName: string;
+  liveUrl: string;
+  stagingUrl?: string;
+  hostingProvider?: string;
+  credentialsRef?: string; // Pointer to Password Manager entry (e.g. 1Password / Bitwarden vault ref)
+  notes?: string;
+  createdAt: string;
+}
+
+export interface ClientService {
+  id: string;
+  clientId: string;
+  clientName: string;
+  serviceName: string; // e.g. "Monthly SEO Retainer", "WordPress Maintenance", "Google Ads"
+  retainerHours: number; // e.g. 20 hours/month
+  monthlyFee: number;
+  status: 'active' | 'paused' | 'completed';
+}
+
+export interface Project {
+  id: string;
+  clientId: string;
+  clientName: string;
+  title: string; // e.g. "Website Redesign 2026", "SEO Growth Campaign"
+  description?: string;
+  status: 'active' | 'completed' | 'on_hold';
+  startDate?: string;
+  targetDate?: string;
+}
+
+export interface ClientItem {
+  id: string;
+  name: string;
+  category?: string; // e.g. "Medical Centers", "Specialist", "Wellness", "Telehealth", "Cardiologists", "Business / Other Services", "Diagnostics", "Dermatology / Cosmetics", "Others"
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  assetsUrl?: string;
+  status: 'active' | 'pending_admin_approval';
+  addedBy: string;
+  addedByRole?: string;
+  sites?: ClientSite[];
+  services?: ClientService[];
+  createdAt: string;
+}
+
+export interface TaskTypeTemplate {
+  id: string;
+  name: string; // e.g. "WordPress Site Build", "Monthly SEO Audit", "Ad Campaign Setup", "WP Core & Plugin Update", "Speed Optimization"
+  category: string;
+  description: string;
+  defaultChecklist: string[];
+  defaultEstimatedHours: number;
+}
+
+export interface TimeEntry {
+  id: string;
+  taskId: string;
+  taskTitle?: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  hoursLogged: number;
+  workDescription: string;
+  date: string;
+  createdAt: string;
 }
 
 export interface TaskAttachment {
@@ -74,6 +148,38 @@ export interface TaskAttachment {
   url: string;
   type: string;
   size?: string;
+  bytes?: number;
+}
+
+export interface TaskHistoryItem {
+  id: string;
+  action: string;
+  performedBy: string;
+  performedRole?: string;
+  timestamp: string;
+  note?: string;
+}
+
+export interface SubtaskItem {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+export type NotificationRecipientType = 'all_teams' | 'all_tl' | 'specific_team' | 'custom_members';
+
+export interface ReminderSettings {
+  enabled: boolean;
+  frequency: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly' | 'Custom';
+  reminderDate: string; // YYYY-MM-DD
+  reminderTime: string; // e.g. "10:00 AM"
+  remindBeforeDays?: number; // e.g. 30, 14, 7, 1
+  repeatEndsOption: 'never' | 'until_date';
+  repeatUntilDate?: string;
+  recipientType?: NotificationRecipientType;
+  targetTeam?: string; // e.g. "Development", "Marketing", "Creative"
+  targetUserIds?: string[]; // Array of selected user IDs when custom_members is chosen
+  summaryText?: string;
 }
 
 export interface Task {
@@ -83,6 +189,17 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   team: TeamName;
+  clientName?: string;
+  clientId?: string;
+  doctorName?: string; // Doctor / GP Name e.g. "Dr. Umed", "Dr. Sarah Jenkins"
+  specialist?: string; // Medical Specialty e.g. "Cardiology", "General Practice", "Gastroenterology"
+  projectId?: string;
+  projectName?: string;
+  taskTypeId?: string;
+  taskTypeName?: string;
+  clientApproved?: boolean;
+  approvalToken?: string; // Share-link token for external client sign-off without login
+  approvalExpiresAt?: string;
   assignedTo?: string; // User ID
   assignedUser?: User;
   createdBy: string; // User ID
@@ -90,11 +207,28 @@ export interface Task {
   raisedBy?: string; // User ID or Team Name
   raisedByUser?: User;
   incoming: boolean;
+  approvalStatus?: 'approved' | 'pending_approval' | 'rejected';
+  approvedBy?: string;
+  assignedReviewerId?: string;
+  assignedReviewerName?: string;
+  reviewStatus?: 'none' | 'pending_review' | 'approved' | 'changes_requested';
+  reviewNote?: string;
+  startDate?: string;
   dueDate: string;
+  estimatedHours?: number;
+  actualHours?: number;
+  timeEntries?: TimeEntry[];
+  progressPct?: number;
+  subtasks?: SubtaskItem[];
+  dependencies?: string[];
+  isRecurring?: boolean;
+  recurringFrequency?: 'daily' | 'weekly' | 'monthly' | 'quarterly';
+  reminderSettings?: ReminderSettings;
   labels: string[];
   attachments?: TaskAttachment[];
   commentsCount?: number;
   comments?: Comment[];
+  history?: TaskHistoryItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -102,13 +236,14 @@ export interface Task {
 export interface NotificationItem {
   _id: string;
   userId: string;
-  type: 'assigned' | 'updated' | 'comment' | 'status_change' | 'incoming';
+  type: 'assigned' | 'updated' | 'comment' | 'status_change' | 'incoming' | 'task_approval' | 'review_assigned' | 'client_approval';
   title: string;
   message: string;
   read: boolean;
   link?: string;
   createdAt: string;
 }
+
 
 export interface DateRangeFilter {
   range: 'today' | 'week' | 'month' | 'custom';
@@ -223,8 +358,27 @@ export interface AttendanceRecord {
 }
 
 /* ================= AMBIZCLAIM REIMBURSEMENTS ================= */
-export type ClaimCategory = 'Travel' | 'Client Lunch' | 'Software' | 'Equipment' | 'Office Supplies' | 'Medical';
-export type ClaimStatus = 'Pending TL' | 'Pending CEO' | 'Approved' | 'Paid' | 'Rejected';
+export type ClaimCategory = string;
+export type ClaimStatus = 'Draft' | 'Pending Approval' | 'Approved' | 'Paid' | 'Rejected' | 'Cancelled';
+
+export interface ExpenseItem {
+  id: string;
+  category: ClaimCategory;
+  amount: number;
+  date: string;
+  description: string;
+  receiptName?: string;
+  receiptUrl?: string;
+}
+
+export interface ClaimComment {
+  id: string;
+  authorName: string;
+  authorAvatar?: string;
+  authorRole: string;
+  text: string;
+  createdAt: string;
+}
 
 export interface BreakSession {
   id: string;
@@ -256,15 +410,55 @@ export interface ReimbursementClaim {
   userName: string;
   userTeam: TeamName;
   userAvatar?: string;
+  company?: string;
   category: ClaimCategory;
   amount: number;
   date: string;
   description: string;
   receiptName?: string;
   receiptUrl?: string;
-  tlStatus: 'approved' | 'rejected' | null;
-  ceoStatus: 'approved' | 'rejected' | null;
+  items?: ExpenseItem[];
+  comments?: ClaimComment[];
+  rejectionReason?: string;
+  draftSavedAt?: string;
+  adminStatus?: 'approved' | 'rejected' | null;
+  tlStatus?: 'approved' | 'rejected' | null;
+  ceoStatus?: 'approved' | 'rejected' | null;
   isPaid: boolean;
   status: ClaimStatus;
   createdAt: string;
+}
+
+/* ================= AMBIZCON TEAM MESSAGING ================= */
+export type ChatScope = 'all' | 'team' | 'direct';
+
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  senderAvatar?: string;
+  senderTeam?: TeamName;
+  text: string;
+  fileAttachment?: {
+    name: string;
+    url: string;
+    size?: string;
+    type?: string;
+  };
+  linkUrl?: string;
+  createdAt: string;
+}
+
+export interface ChatChannel {
+  id: string;
+  name: string;
+  scope: ChatScope;
+  team?: TeamName;
+  participantIds?: string[]; // user IDs for direct messages
+  description?: string;
+  unreadCount?: number;
+  lastMessage?: string;
+  lastMessageTime?: string;
 }

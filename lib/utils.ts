@@ -32,6 +32,8 @@ export function formatTimeAgo(dateString: string | Date | undefined): string {
 
 export function getPriorityBadgeColor(priority: TaskPriority): string {
   switch (priority) {
+    case 'Urgent':
+      return 'bg-red-600/20 text-red-600 dark:text-red-400 border-red-500/40 font-bold animate-pulse';
     case 'Critical':
       return 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
     case 'High':
@@ -54,6 +56,8 @@ export function getStatusBadgeColor(status: TaskStatus): string {
       return 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30';
     case 'Support':
       return 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30';
+    case 'Backlog':
+      return 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30';
     case 'Todo':
     default:
       return 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/30';

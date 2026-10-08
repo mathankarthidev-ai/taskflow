@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, UserRole, TeamName, WorkMode, CompanyBranch } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
@@ -17,8 +17,10 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Link from 'next/link';
-import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2 } from 'lucide-react';
+import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2, UserCheck, ShieldCheck, CheckCircle2, Plus, Sparkles, FolderPlus } from 'lucide-react';
 import { toast } from 'sonner';
+
+import { useCompanyStore } from '@/store/useCompanyStore';
 
 // Format date of birth to strictly Date and Month only (No year)
 export function formatDayMonthOnly(val?: string): string {
@@ -39,6 +41,7 @@ export function formatDayMonthOnly(val?: string): string {
 
 export function UserManagementTable() {
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -56,7 +59,75 @@ export function UserManagementTable() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<TeamName | 'All'>('All');
-  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<CompanyBranch | 'All'>('All');
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<CompanyBranch | 'All'>(selectedCompany || 'All');
+  const [activeTab, setActiveTab] = useState<'directory' | 'approvals'>('directory');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#approvals') {
+      setActiveTab('approvals');
+    }
+  }, []);
+
+  // Teams List State
+  const [teamsList, setTeamsList] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('taskflow_teams_list');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return ['Creative', 'Marketing', 'Development'];
+  });
+
+  // Add Team Modal State
+  const [isAddTeamModalOpen, setIsAddTeamModalOpen] = useState(false);
+  const [newTeamNameInput, setNewTeamNameInput] = useState('');
+  const [newTeamDescInput, setNewTeamDescInput] = useState('');
+
+  // Calculate team headcount
+  const teamCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    teamsList.forEach((t) => (counts[t] = 0));
+    users.forEach((u) => {
+      const t = u.team || 'Development';
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return counts;
+  }, [users, teamsList]);
+
+  const handleCreateTeam = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newTeamNameInput.trim();
+    if (!trimmed) {
+      toast.error('Please enter a team name');
+      return;
+    }
+    if (teamsList.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error(`Team "${trimmed}" already exists!`);
+      return;
+    }
+    const updated = [...teamsList, trimmed];
+    setTeamsList(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('taskflow_teams_list', JSON.stringify(updated));
+    }
+    setNewTeam(trimmed);
+    setNewTeamNameInput('');
+    setNewTeamDescInput('');
+    setIsAddTeamModalOpen(false);
+    toast.success(`Team "${trimmed}" added to workspace!`, {
+      description: 'You can now assign members and filter by this team.',
+    });
+  };
+
+  useEffect(() => {
+    if (selectedCompany) {
+      setSelectedCompanyFilter(selectedCompany);
+    }
+  }, [selectedCompany]);
+
 
   // Add Form State
   const [newName, setNewName] = useState('');
@@ -211,30 +282,42 @@ export function UserManagementTable() {
     }
   };
 
-  const handleDeleteUser = async (userId: string, userName: string) => {
+  const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const handleDeleteUser = (userId: string, userName: string) => {
     if (userId === currentUser._id) {
       toast.error('You cannot delete your own logged-in Super Admin account');
       return;
     }
+    setUserToDelete({ id: userId, name: userName });
+  };
 
-    if (confirm(`Are you sure you want to delete workspace user "${userName}"?`)) {
-      const success = await deleteUserAction(userId);
-      if (success) {
-        setUsers(users.filter((u) => u._id !== userId));
-        toast.success(`User ${userName} removed.`);
-      }
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    const { id, name } = userToDelete;
+    const success = await deleteUserAction(id);
+    if (success) {
+      setUsers(users.filter((u) => u._id !== id));
+      toast.success(`User ${name} removed.`);
     }
+    setUserToDelete(null);
   };
 
   const filteredUsers = users.filter((u) => {
     if (selectedTeamFilter !== 'All' && u.team !== selectedTeamFilter) return false;
-    if (
-      selectedCompanyFilter !== 'All' &&
-      u.company !== 'India & Australia' &&
-      !u.name.startsWith('Anirudh') &&
-      (u.company || 'Ambizcon Health - India') !== selectedCompanyFilter
-    )
-      return false;
+    if (selectedCompanyFilter !== 'All') {
+      const uCompany = u.company || 'Ambizcon Health - India';
+      const isGlobalUser =
+        u.company === 'India & Australia' ||
+        u.role === 'Super Admin' ||
+        u.name.toLowerCase().includes('anirudh') ||
+        u.name.toLowerCase().includes('mathan');
+
+      if (!isGlobalUser && uCompany !== selectedCompanyFilter) {
+        return false;
+      }
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
@@ -271,6 +354,11 @@ export function UserManagementTable() {
             </Button>
           </Link>
 
+          <Button onClick={() => setIsAddTeamModalOpen(true)} size="sm" variant="outline" className="gap-1.5 text-xs border-brand-500/40 text-brand-600 dark:text-brand-400 font-bold">
+            <FolderPlus className="h-4 w-4" />
+            Add New Team
+          </Button>
+
           <Button onClick={() => setIsAddModalOpen(true)} size="sm" className="gap-1.5 ambizcon-gradient text-white shadow-glow">
             <UserPlus className="h-4 w-4" />
             Add New Member
@@ -278,8 +366,113 @@ export function UserManagementTable() {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 glass-card">
+      {/* Interactive Tab Switcher: User Directory vs Role Approvals */}
+      <div className="flex items-center gap-2 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab('directory')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+            activeTab === 'directory'
+              ? 'bg-brand-600 text-white shadow-md shadow-brand-500/20'
+              : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-foreground'
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          User Directory ({users.length} Members)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('approvals')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+            activeTab === 'approvals'
+              ? 'bg-brand-600 text-white shadow-md shadow-brand-500/20'
+              : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-foreground'
+          }`}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          Role Approvals & Sign-offs
+        </button>
+      </div>
+
+      {activeTab === 'directory' ? (
+        <>
+          {/* Teams Overview & Member Headcount Card Grid */}
+          <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-brand-500" />
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                  Workspace Teams & Member Headcount ({teamsList.length} Teams)
+                </h3>
+              </div>
+              <Button
+                type="button"
+                onClick={() => setIsAddTeamModalOpen(true)}
+                size="sm"
+                variant="outline"
+                className="text-[11px] font-bold py-1 px-2.5 h-7 border-brand-500/40 text-brand-600 dark:text-brand-400 gap-1"
+              >
+                <Plus className="h-3 w-3" /> Add Team
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {teamsList.map((teamName) => {
+                const count = teamCounts[teamName] || 0;
+                const isSelected = selectedTeamFilter === teamName;
+                const teamUsers = users.filter((u) => u.team === teamName);
+
+                return (
+                  <div
+                    key={teamName}
+                    onClick={() => setSelectedTeamFilter(isSelected ? 'All' : (teamName as any))}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer space-y-2 group ${
+                      isSelected
+                        ? 'border-brand-500 bg-brand-500/10 ring-2 ring-brand-500/30 shadow-xs'
+                        : 'border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 hover:border-brand-500/50 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs text-foreground truncate">{teamName}</span>
+                      <Badge
+                        variant={isSelected ? 'default' : 'outline'}
+                        className="text-[10px] font-mono px-1.5 py-0 font-bold"
+                      >
+                        {count} {count === 1 ? 'member' : 'members'}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-zinc-200/40 dark:border-zinc-800/40">
+                      <span className="text-[10px]">
+                        {isSelected ? '✓ Filtered' : 'Click to filter'}
+                      </span>
+                      <div className="flex -space-x-1.5 overflow-hidden">
+                        {teamUsers.slice(0, 3).map((tu) => (
+                          <Avatar key={tu._id} src={tu.avatar} name={tu.name} size="sm" className="border border-background h-5 w-5 text-[9px]" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Quick Card: Add New Team */}
+              <div
+                onClick={() => setIsAddTeamModalOpen(true)}
+                className="p-3 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50/30 dark:bg-zinc-900/20 hover:border-brand-500/60 hover:bg-brand-500/5 transition-all cursor-pointer flex flex-col items-center justify-center text-center space-y-1 group"
+              >
+                <div className="h-7 w-7 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Plus className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-bold text-foreground">+ Add New Team</span>
+                <span className="text-[10px] text-muted-foreground">Create custom squad</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 glass-card">
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
           <input
@@ -299,18 +492,20 @@ export function UserManagementTable() {
           >
             <option value="All">All Companies / Branches</option>
             <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India</option>
-            <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia</option>
+            <option value="Ambizcon">🇦🇺 Ambizcon</option>
           </select>
 
           <select
             value={selectedTeamFilter}
             onChange={(e) => setSelectedTeamFilter(e.target.value as TeamName | 'All')}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
           >
-            <option value="All">All Workspace Teams</option>
-            <option value="Creative">Creative Team</option>
-            <option value="Marketing">Marketing Team</option>
-            <option value="Development">Development Team</option>
+            <option value="All">All Workspace Teams ({users.length} members)</option>
+            {teamsList.map((t) => (
+              <option key={t} value={t}>
+                {t} Team ({teamCounts[t] || 0} {teamCounts[t] === 1 ? 'member' : 'members'})
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -347,7 +542,7 @@ export function UserManagementTable() {
                       <Badge variant="outline" className="text-[10px] font-semibold whitespace-nowrap">
                         {u.company === 'India & Australia' || u.name.startsWith('Anirudh')
                           ? '🌐 India & Australia'
-                          : (u.company || 'Ambizcon Health - India') === 'Ambizcon - Australia'
+                          : (u.company || 'Ambizcon Health - India') === 'Ambizcon'
                           ? '🇦🇺 Australia'
                           : '🇮🇳 India'}
                       </Badge>
@@ -395,6 +590,65 @@ export function UserManagementTable() {
           </div>
         </Card>
       )}
+        </>
+      ) : (
+        /* Role Approvals & Security Governance Panel */
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-200/60 dark:border-zinc-800/60 pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-foreground flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                  Role Approval Queue & Access Controls
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Super Admin sign-off for role elevation, team lead promotions, and workspace security management.
+                </p>
+              </div>
+              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
+                Security Enforced
+              </Badge>
+            </div>
+
+            {/* Role Change Matrix */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Workspace Member Access Matrix & Role Sign-offs
+              </h4>
+              <div className="space-y-2">
+                {users.map((u) => (
+                  <div
+                    key={u._id}
+                    className="flex flex-wrap items-center justify-between p-3 rounded-xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-zinc-900/40 text-xs gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar src={u.avatar} name={u.name} size="sm" />
+                      <div>
+                        <span className="font-bold text-foreground block">{u.name}</span>
+                        <span className="text-[10px] text-muted-foreground">{u.email} · {u.team} Team</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground font-medium">Elevate / Update Role:</span>
+                      <select
+                        value={u.role}
+                        onChange={(e) => handleRoleChange(u._id, e.target.value as UserRole)}
+                        className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1 text-xs font-bold focus-ring"
+                      >
+                        <option value="Team Member">Team Member</option>
+                        <option value="Team Lead">Team Lead</option>
+                        <option value="Super Admin">Super Admin</option>
+                        <option value="Reception Staff">Reception Staff</option>
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Individual Member Details Modal */}
       {editingUser && (
@@ -436,7 +690,7 @@ export function UserManagementTable() {
                 className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
               >
                 <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Chennai HQ)</option>
-                <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ)</option>
+                <option value="Ambizcon">🇦🇺 Ambizcon (Brisbane HQ)</option>
               </select>
             </div>
 
@@ -448,9 +702,11 @@ export function UserManagementTable() {
                   onChange={(e) => setEditTeam(e.target.value as TeamName)}
                   className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
                 >
-                  <option value="Creative">Creative Team</option>
-                  <option value="Marketing">Marketing Team</option>
-                  <option value="Development">Development Team</option>
+                  {teamsList.map((t) => (
+                    <option key={t} value={t}>
+                      {t} Team ({teamCounts[t] || 0} {teamCounts[t] === 1 ? 'member' : 'members'})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -546,7 +802,7 @@ export function UserManagementTable() {
               className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
             >
               <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Chennai HQ)</option>
-              <option value="Ambizcon - Australia">🇦🇺 Ambizcon - Australia (Brisbane HQ)</option>
+              <option value="Ambizcon">🇦🇺 Ambizcon (Brisbane HQ)</option>
             </select>
           </div>
 
@@ -564,15 +820,33 @@ export function UserManagementTable() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-foreground">Assigned Team</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground">Assigned Team</label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddTeamModalOpen(true)}
+                  className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-0.5"
+                >
+                  <Plus className="h-3 w-3" /> Add Team
+                </button>
+              </div>
               <select
                 value={newTeam}
-                onChange={(e) => setNewTeam(e.target.value as TeamName)}
+                onChange={(e) => {
+                  if (e.target.value === '__add_new__') {
+                    setIsAddTeamModalOpen(true);
+                  } else {
+                    setNewTeam(e.target.value as TeamName);
+                  }
+                }}
                 className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
               >
-                <option value="Creative">Creative Team</option>
-                <option value="Marketing">Marketing Team</option>
-                <option value="Development">Development Team</option>
+                {teamsList.map((t) => (
+                  <option key={t} value={t}>
+                    {t} Team ({teamCounts[t] || 0} {teamCounts[t] === 1 ? 'member' : 'members'})
+                  </option>
+                ))}
+                <option value="__add_new__">+ Create New Team...</option>
               </select>
             </div>
 
@@ -633,6 +907,79 @@ export function UserManagementTable() {
             </Button>
             <Button type="submit" disabled={isSubmitting} className="ambizcon-gradient text-white shadow-glow">
               {isSubmitting ? 'Creating...' : 'Create Member'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* In-App Delete User Modal (Div layout - No native browser confirm) */}
+      <Modal
+        isOpen={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        title="Remove Workspace Member"
+        description="Are you sure you want to remove this user from the workspace roster?"
+        maxWidth="md"
+      >
+        <div className="space-y-4 pt-2">
+          <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-950 dark:text-rose-200 text-xs">
+            <span className="font-bold block text-rose-700 dark:text-rose-400">⚠️ Permanent Removal</span>
+            <span>Are you sure you want to delete workspace user "{userToDelete?.name}"?</span>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60">
+            <Button variant="outline" size="sm" onClick={() => setUserToDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleConfirmDeleteUser}
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Remove Member
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Create New Team Modal */}
+      <Modal
+        isOpen={isAddTeamModalOpen}
+        onClose={() => setIsAddTeamModalOpen(false)}
+        title="Add New Workspace Team"
+        description="Create a new team squad to organize employees, tasks, and permissions."
+        maxWidth="md"
+      >
+        <form onSubmit={handleCreateTeam} className="space-y-4 pt-2">
+          <div>
+            <label className="text-xs font-semibold text-foreground">Team Name *</label>
+            <input
+              type="text"
+              value={newTeamNameInput}
+              onChange={(e) => setNewTeamNameInput(e.target.value)}
+              placeholder="e.g. Operations, UI/UX Design, QA & Testing, Finance"
+              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-foreground">Team Description / Mission</label>
+            <textarea
+              value={newTeamDescInput}
+              onChange={(e) => setNewTeamDescInput(e.target.value)}
+              placeholder="Describe the responsibilities and focus of this squad..."
+              rows={3}
+              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60">
+            <Button type="button" variant="outline" onClick={() => setIsAddTeamModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" className="ambizcon-gradient text-white shadow-glow">
+              Save & Add Team
             </Button>
           </div>
         </form>

@@ -30,6 +30,8 @@ import { EducationRecord, ExperienceRecord } from '@/types';
 import { toast } from 'sonner';
 import { formatDayMonthOnly } from '@/features/users/UserManagementTable';
 
+import { updateUserProfileSectionAction } from '@/actions/userActions';
+
 export default function ProfilePage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const setCurrentUser = useAuthStore((s) => s.setCurrentUser);
@@ -167,12 +169,11 @@ export default function ProfilePage() {
     setExperience((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
 
-    const updatedUser = {
-      ...currentUser,
+    const nonSensitiveUpdates = {
       phone,
       emergencyContact,
       address,
@@ -181,13 +182,24 @@ export default function ProfilePage() {
       experience,
     };
 
-    setCurrentUser(updatedUser);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ambizcon_user_details_' + currentUser._id, JSON.stringify(updatedUser));
-      document.cookie = `taskflow_user=${encodeURIComponent(JSON.stringify(updatedUser))}; path=/; max-age=864000`;
+    try {
+      const dbUpdated = await updateUserProfileSectionAction(currentUser._id, nonSensitiveUpdates);
+      const updatedUser = {
+        ...currentUser,
+        ...(dbUpdated || nonSensitiveUpdates),
+      };
+
+      setCurrentUser(updatedUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ambizcon_user_details_' + currentUser._id, JSON.stringify(updatedUser));
+        document.cookie = `taskflow_user=${encodeURIComponent(JSON.stringify(updatedUser))}; path=/; max-age=864000`;
+      }
+      toast.success('Your non-sensitive profile details, education & experience saved to database!');
+    } catch (err) {
+      toast.error('Failed to save profile updates to database');
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
-    toast.success('Your profile details, education & professional experience saved successfully!');
   };
 
   if (!currentUser) {

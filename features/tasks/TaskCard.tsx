@@ -18,11 +18,15 @@ export function TaskCard({ task }: TaskCardProps) {
   const setSelectedTask = useTaskStore((s) => s.setSelectedTask);
   const setDetailModalOpen = useTaskStore((s) => s.setDetailModalOpen);
 
-  const isOverdue =
-    task.status !== 'Done' && new Date(task.dueDate).getTime() < Date.now();
+  if (!task) return null;
 
-  const getLabelStyle = (label: string) => {
-    const l = label.toLowerCase();
+  const isOverdue =
+    task.status !== 'Done' && task.dueDate
+      ? !isNaN(new Date(task.dueDate).getTime()) && new Date(task.dueDate).getTime() < Date.now()
+      : false;
+
+  const getLabelStyle = (label: any) => {
+    const l = typeof label === 'string' ? label.toLowerCase() : String(label || '').toLowerCase();
     if (l.includes('figma') || l.includes('ui/ux') || l.includes('design')) {
       return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
     }
@@ -61,6 +65,26 @@ export function TaskCard({ task }: TaskCardProps) {
             <Badge className={`${getPriorityBadgeColor(task.priority)} text-[10px] py-0 px-2 font-bold`}>
               {task.priority}
             </Badge>
+            {task.clientName && (
+              <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-bold border-brand-500/30 text-brand-500 bg-brand-500/10">
+                🏢 {task.clientName}
+              </Badge>
+            )}
+            {task.approvalStatus === 'pending_approval' && (
+              <Badge variant="warning" className="text-[9px] py-0 px-1.5 animate-pulse font-bold bg-amber-500/20 text-amber-600 border-amber-500/30">
+                PENDING APPROVAL
+              </Badge>
+            )}
+            {task.reviewStatus === 'pending_review' && (
+              <Badge className="text-[9px] py-0 px-1.5 font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">
+                🔍 Reviewer: {task.assignedReviewerName || 'Assigned'}
+              </Badge>
+            )}
+            {task.reviewStatus === 'changes_requested' && (
+              <Badge className="text-[9px] py-0 px-1.5 font-bold bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/40 animate-pulse">
+                ⚠️ REVISIONS REQUESTED
+              </Badge>
+            )}
             {task.incoming && (
               <Badge variant="warning" className="text-[10px] py-0 px-1.5 animate-pulse font-mono">
                 Incoming
@@ -71,6 +95,7 @@ export function TaskCard({ task }: TaskCardProps) {
             {task.team}
           </span>
         </div>
+
 
         {/* Task Title */}
         <h4 className="mt-2.5 text-sm font-bold tracking-tight text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-snug">
@@ -85,7 +110,7 @@ export function TaskCard({ task }: TaskCardProps) {
         )}
 
         {/* Labels Tag Bar (Figma, Wireframes, Mobile, etc.) */}
-        {task.labels && task.labels.length > 0 && (
+        {Array.isArray(task.labels) && task.labels.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {task.labels.slice(0, 3).map((label, index) => (
               <span
@@ -95,7 +120,7 @@ export function TaskCard({ task }: TaskCardProps) {
                 )}`}
               >
                 <Tag className="h-2.5 w-2.5 opacity-70" />
-                {label}
+                {typeof label === 'string' ? label : String(label || '')}
               </span>
             ))}
             {task.labels.length > 3 && (

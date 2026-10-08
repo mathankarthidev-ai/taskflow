@@ -5,23 +5,25 @@ import { Task, TaskPriority, TaskStatus, TeamName, User } from '@/types';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { TaskCard } from '../tasks/TaskCard';
+import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { updateTaskStatusAction, fetchTasksAction } from '@/actions/taskActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
-import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag } from 'lucide-react';
+import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 const KANBAN_COLUMNS: { title: string; status: TaskStatus; accent: string; bg: string }[] = [
+  { title: 'Backlog', status: 'Backlog', accent: 'bg-slate-500', bg: 'hover:border-slate-400/50' },
   { title: 'To Do', status: 'Todo', accent: 'bg-zinc-500', bg: 'hover:border-zinc-400/50' },
   { title: 'In Progress', status: 'In Progress', accent: 'bg-blue-500', bg: 'hover:border-blue-500/50' },
-  { title: 'Review', status: 'Review', accent: 'bg-purple-500', bg: 'hover:border-purple-500/50' },
+  { title: 'Review / Testing', status: 'Review', accent: 'bg-purple-500', bg: 'hover:border-purple-500/50' },
   { title: 'Support', status: 'Support', accent: 'bg-orange-500', bg: 'hover:border-orange-500/50' },
-  { title: 'Done', status: 'Done', accent: 'bg-emerald-500', bg: 'hover:border-emerald-500/50' },
+  { title: 'Completed', status: 'Done', accent: 'bg-emerald-500', bg: 'hover:border-emerald-500/50' },
 ];
 
-export function KanbanBoard() {
+function KanbanBoardContent() {
   const {
     tasks,
     setTasks,
@@ -41,7 +43,16 @@ export function KanbanBoard() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // New Tracking & TL Scope Dropdown States
+  const [creationTrackingFilter, setCreationTrackingFilter] = useState<'all' | 'created_by_me' | 'assigned_to_me'>('all');
+  const [tlMemberFilter, setTlMemberFilter] = useState<string>('team_all');
+
+  // Reviewer Selection Modal States
+  const [reviewTaskTarget, setReviewTaskTarget] = useState<Task | null>(null);
+  const [isReviewerModalOpen, setIsReviewerModalOpen] = useState(false);
+
   const isSuperAdmin = currentUser?.role === 'Super Admin';
+  const isTeamLead = currentUser?.role === 'Team Lead' || isSuperAdmin;
 
   useEffect(() => {
     async function loadData() {
@@ -56,31 +67,52 @@ export function KanbanBoard() {
     }
     loadData();
 
-    // Auto lock team selector for Team Members and Team Leads to their own team
-    if (currentUser && currentUser.role !== 'Super Admin') {
+    if (currentUser && !isSuperAdmin) {
       setSelectedTeam(currentUser.team);
     }
-  }, [setTasks, currentUser, setSelectedTeam]);
+  }, [setTasks, currentUser, setSelectedTeam, isSuperAdmin]);
 
-  // Filter tasks with strict role scoping
-  const filteredTasks = tasks.filter((t) => {
-    // Hide incoming tasks from normal Kanban board until assigned by lead
+  // Team Users Filter List
+  const teamMembersList = (users || []).filter((u) => u && (isSuperAdmin || u.team === currentUser?.team));
+
+  // Filter tasks with strict role scoping and tracking options
+  const filteredTasks = (tasks || []).filter((t) => {
+    if (!t) return false;
+
+    // Hide incoming requests from main Kanban
     if (t.incoming) return false;
 
-    // Team scoping: Non Super Admin can only see their own team tasks
+    // Team Scoping
     if (!isSuperAdmin && currentUser) {
       if (t.team !== currentUser.team) return false;
     } else if (selectedTeam !== 'All' && t.team !== selectedTeam) {
       return false;
     }
 
+    // Created By Me / Assigned To Me Tracking Filter
+    if (creationTrackingFilter === 'created_by_me') {
+      if (t.createdBy !== currentUser?._id && t.createdByUser?.email !== currentUser?.email) return false;
+    } else if (creationTrackingFilter === 'assigned_to_me') {
+      if (t.assignedTo !== currentUser?._id && t.assignedUser?.email !== currentUser?.email) return false;
+    }
+
+    // TL Specific Member Workload Filter Dropdown
+    if (tlMemberFilter === 'my_own') {
+      if (t.assignedTo !== currentUser?._id && t.createdBy !== currentUser?._id) return false;
+    } else if (tlMemberFilter !== 'team_all') {
+      if (t.assignedTo !== tlMemberFilter && t.createdBy !== tlMemberFilter) return false;
+    }
+
     if (selectedPriority !== 'All' && t.priority !== selectedPriority) return false;
     if (selectedAssignee !== 'All' && t.assignedTo !== selectedAssignee) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchesTitle = t.title.toLowerCase().includes(q);
-      const matchesDesc = t.description.toLowerCase().includes(q);
-      const matchesLabel = t.labels.some((l) => l.toLowerCase().includes(q));
+
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesTitle = (t.title || '').toLowerCase().includes(q);
+      const matchesDesc = (t.description || '').toLowerCase().includes(q);
+      const matchesLabel = Array.isArray(t.labels)
+        ? t.labels.some((l) => typeof l === 'string' && l.toLowerCase().includes(q))
+        : false;
       if (!matchesTitle && !matchesDesc && !matchesLabel) return false;
     }
     return true;
@@ -100,16 +132,36 @@ export function KanbanBoard() {
       const canMove =
         currentUser?.role === 'Super Admin' ||
         currentUser?.role === 'Team Lead' ||
-        task.assignedTo === currentUser?._id;
+        task.assignedTo === currentUser?._id ||
+        task.createdBy === currentUser?._id;
 
       if (!canMove) {
         toast.error('Permission Restricted: Only Team Lead, Admin, or assigned member can move task status.');
         return;
       }
 
+      if (targetStatus === 'Review') {
+        setReviewTaskTarget(task);
+        setIsReviewerModalOpen(true);
+        return;
+      }
+
+      // Record History item
+      const historyLog = task.history || [];
+      const newHistory = [
+        ...historyLog,
+        {
+          id: `hist_${Date.now()}`,
+          action: `Status moved from ${task.status} to ${targetStatus}`,
+          performedBy: currentUser?.name || 'User',
+          performedRole: currentUser?.role,
+          timestamp: new Date().toISOString(),
+        },
+      ];
+
       // Optimistic update
       const updatedTasks = tasks.map((t) =>
-        t._id === taskId ? { ...t, status: targetStatus, updatedAt: new Date().toISOString() } : t
+        t._id === taskId ? { ...t, status: targetStatus, history: newHistory, updatedAt: new Date().toISOString() } : t
       );
       setTasks(updatedTasks);
       toast.success(`Moved "${task.title}" to ${targetStatus}`);
@@ -119,9 +171,48 @@ export function KanbanBoard() {
     }
   };
 
+  const handleConfirmReviewer = async (reviewer: User) => {
+    if (!reviewTaskTarget) return;
+
+    const historyLog = reviewTaskTarget.history || [];
+    const newHistory = [
+      ...historyLog,
+      {
+        id: `hist_${Date.now()}`,
+        action: `Moved to Review & Assigned Reviewer: ${reviewer.name} (${reviewer.role})`,
+        performedBy: currentUser?.name || 'User',
+        performedRole: currentUser?.role,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const updatedTasks = tasks.map((t) =>
+      t._id === reviewTaskTarget._id
+        ? {
+            ...t,
+            status: 'Review' as const,
+            assignedReviewerId: reviewer._id,
+            assignedReviewerName: reviewer.name,
+            reviewStatus: 'pending_review' as const,
+            history: newHistory,
+            updatedAt: new Date().toISOString(),
+          }
+        : t
+    );
+
+    setTasks(updatedTasks);
+    toast.success(`Task submitted for review! Assigned Reviewer: ${reviewer.name}`);
+    await updateTaskStatusAction(reviewTaskTarget._id, 'Review');
+    setReviewTaskTarget(null);
+  };
+
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData('text/plain', taskId);
   };
+
+  // Tracking counts
+  const myCreatedCount = (tasks || []).filter((t) => t && !t.incoming && (t.createdBy === currentUser?._id || t.createdByUser?.email === currentUser?.email)).length;
+  const myAssignedCount = (tasks || []).filter((t) => t && !t.incoming && (t.assignedTo === currentUser?._id || t.assignedUser?.email === currentUser?.email)).length;
 
   return (
     <div className="space-y-6">
@@ -134,14 +225,14 @@ export function KanbanBoard() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                {isSuperAdmin ? 'Global Workspace Bizzy Board' : `${currentUser?.team} Team Bizzy Board`}
+                {isSuperAdmin ? 'Global Workspace Bizzy Board' : `${currentUser?.team || 'Workspace'} Team Bizzy Board`}
               </h1>
               <Badge variant="default" className="text-[10px] font-mono">
                 {filteredTasks.length} Active Cards
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Drag and drop cards across columns to update task status in real time.
+              Drag and drop cards across columns • Track creation history & team workload in real time.
             </p>
           </div>
         </div>
@@ -153,7 +244,7 @@ export function KanbanBoard() {
       </div>
 
       {/* Top Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 glass-panel">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 glass-panel space-y-2 sm:space-y-0">
         <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
           {/* Search Input */}
           <div className="relative flex-1 min-w-[200px] max-w-xs">
@@ -167,18 +258,55 @@ export function KanbanBoard() {
             />
           </div>
 
+          {/* Task Creation & History Tracking Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase text-muted-foreground hidden sm:inline">Track Mode:</span>
+            <select
+              value={creationTrackingFilter}
+              onChange={(e) => setCreationTrackingFilter(e.target.value as any)}
+              className="rounded-xl border border-brand-500/40 bg-brand-500/10 text-brand-600 dark:text-brand-300 font-bold px-3 py-1.5 text-xs focus-ring"
+            >
+              <option value="all">All Workspace Tasks ({tasks.length})</option>
+              <option value="created_by_me">Tasks Created By Me ({myCreatedCount})</option>
+              <option value="assigned_to_me">Tasks Assigned To Me ({myAssignedCount})</option>
+            </select>
+          </div>
+
+          {/* Team Lead (TL) Member Workload Filter Dropdown */}
+          {isTeamLead && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase text-muted-foreground hidden sm:inline">TL Workload View:</span>
+              <select
+                value={tlMemberFilter}
+                onChange={(e) => setTlMemberFilter(e.target.value)}
+                className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-3 py-1.5 text-xs focus-ring"
+              >
+                <option value="team_all">Whole Team Tasks</option>
+                <option value="my_own">My Personal Tasks</option>
+                <optgroup label="Filter By Team Member">
+                  {teamMembersList.map((m) => (
+                    <option key={m._id} value={m._id}>
+                      {m.name} ({m.role})
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+          )}
+
           {/* Team Filter */}
-          <select
-            value={isSuperAdmin ? selectedTeam : currentUser?.team || 'Creative'}
-            onChange={(e) => isSuperAdmin && setSelectedTeam(e.target.value as TeamName | 'All')}
-            disabled={!isSuperAdmin}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring disabled:opacity-80"
-          >
-            {isSuperAdmin && <option value="All">All Workspace Teams</option>}
-            <option value="Creative">Creative Team</option>
-            <option value="Marketing">Marketing Team</option>
-            <option value="Development">Development Team</option>
-          </select>
+          {isSuperAdmin && (
+            <select
+              value={selectedTeam}
+              onChange={(e) => setSelectedTeam(e.target.value as TeamName | 'All')}
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+            >
+              <option value="All">All Workspace Teams</option>
+              <option value="Creative">Creative Team</option>
+              <option value="Marketing">Marketing Team</option>
+              <option value="Development">Development Team</option>
+            </select>
+          )}
 
           {/* Priority Filter */}
           <select
@@ -187,29 +315,25 @@ export function KanbanBoard() {
             className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
           >
             <option value="All">All Priorities</option>
+            <option value="Urgent">Urgent 🔥</option>
             <option value="Critical">Critical</option>
             <option value="High">High</option>
             <option value="Medium">Medium</option>
             <option value="Low">Low</option>
           </select>
 
-          {/* Assignee Filter */}
-          <select
-            value={selectedAssignee}
-            onChange={(e) => setSelectedAssignee(e.target.value)}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
-          >
-            <option value="All">All Assignees</option>
-            {users.map((u) => (
-              <option key={u._id} value={u._id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-
           {/* Reset button */}
-          {(searchQuery || selectedTeam !== 'All' || selectedPriority !== 'All' || selectedAssignee !== 'All') && (
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1 text-xs">
+          {(searchQuery || creationTrackingFilter !== 'all' || tlMemberFilter !== 'team_all' || selectedPriority !== 'All') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                resetFilters();
+                setCreationTrackingFilter('all');
+                setTlMemberFilter('team_all');
+              }}
+              className="gap-1 text-xs"
+            >
               <RotateCcw className="h-3.5 w-3.5" />
               Reset
             </Button>
@@ -224,17 +348,29 @@ export function KanbanBoard() {
         </span>
         <button
           onClick={() => {
-            resetFilters();
-            if (currentUser) setSelectedAssignee(currentUser._id);
+            setCreationTrackingFilter('assigned_to_me');
           }}
           className={`rounded-full px-3 py-1 text-xs font-semibold border transition-all ${
-            selectedAssignee === currentUser?._id
+            creationTrackingFilter === 'assigned_to_me'
               ? 'border-primary bg-primary/10 text-primary'
               : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
           }`}
         >
           ⚡ Assigned to Me
         </button>
+        <button
+          onClick={() => {
+            setCreationTrackingFilter('created_by_me');
+          }}
+          className={`rounded-full px-3 py-1 text-xs font-semibold border transition-all ${
+            creationTrackingFilter === 'created_by_me'
+              ? 'border-brand-500 bg-brand-500/10 text-brand-400'
+              : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          📝 Created By Me ({myCreatedCount})
+        </button>
+
         {['Figma', 'UI/UX', 'Mobile', 'Wireframes', 'SEO', 'API'].map((labelTag) => (
           <button
             key={labelTag}
@@ -251,11 +387,11 @@ export function KanbanBoard() {
         ))}
       </div>
 
-      {/* Kanban Grid: Swipeable on mobile & tablet, 5-col grid on large desktop */}
+      {/* Kanban Grid: Swipeable on mobile & tablet, 6-col grid on large desktop */}
       {loading ? (
-        <div className="flex lg:grid lg:grid-cols-5 overflow-x-auto pb-4 gap-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="w-[285px] sm:w-[320px] lg:w-full shrink-0 lg:shrink space-y-3">
+        <div className="flex xl:grid xl:grid-cols-6 overflow-x-auto pb-4 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="w-[285px] sm:w-[320px] xl:w-full shrink-0 xl:shrink space-y-3">
               <Skeleton className="h-10 w-full rounded-xl" />
               <Skeleton className="h-36 w-full rounded-2xl" />
               <Skeleton className="h-36 w-full rounded-2xl" />
@@ -263,9 +399,11 @@ export function KanbanBoard() {
           ))}
         </div>
       ) : (
-        <div className="flex lg:grid lg:grid-cols-5 overflow-x-auto pb-4 gap-4 items-start snap-x snap-mandatory">
+        <div className="flex xl:grid xl:grid-cols-6 overflow-x-auto pb-4 gap-4 items-start snap-x snap-mandatory">
           {KANBAN_COLUMNS.map((column) => {
-            const columnTasks = filteredTasks.filter((t) => t.status === column.status);
+            const columnTasks = (filteredTasks || []).filter(
+              (t) => t && (t.status === column.status || (t.status || '').toLowerCase() === column.status.toLowerCase())
+            );
 
             return (
               <div
@@ -294,15 +432,18 @@ export function KanbanBoard() {
                       No tasks in {column.title}
                     </div>
                   ) : (
-                    columnTasks.map((task) => (
-                      <div
-                        key={task._id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, task._id)}
-                      >
-                        <TaskCard task={task} />
-                      </div>
-                    ))
+                    columnTasks.map((task) => {
+                      if (!task || !task._id) return null;
+                      return (
+                        <div
+                          key={task._id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, task._id)}
+                        >
+                          <TaskCard task={task} />
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -310,6 +451,71 @@ export function KanbanBoard() {
           })}
         </div>
       )}
+
+      {/* Reviewer Selection Modal */}
+      <ReviewerSelectModal
+        isOpen={isReviewerModalOpen}
+        onClose={() => setIsReviewerModalOpen(false)}
+        task={reviewTaskTarget}
+        users={users}
+        onConfirmReviewer={handleConfirmReviewer}
+      />
     </div>
+  );
+}
+
+class KanbanErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Bizzy Board Error Boundary caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 rounded-3xl border border-rose-500/30 bg-rose-500/5 text-center space-y-4">
+          <div className="h-12 w-12 rounded-2xl bg-rose-500/10 text-rose-500 mx-auto flex items-center justify-center font-bold text-xl">
+            ⚠️
+          </div>
+          <h3 className="text-base font-bold text-foreground">
+            Bizzy Board Refresh Needed
+          </h3>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            A temporary display error occurred while rendering task cards. Click below to refresh your board view.
+          </p>
+          <div className="pt-2 flex justify-center gap-3">
+            <Button
+              onClick={() => {
+                this.setState({ hasError: false });
+                window.location.reload();
+              }}
+              className="ambizcon-gradient text-white text-xs font-bold px-4 py-2"
+            >
+              Reload Bizzy Board
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function KanbanBoard() {
+  return (
+    <KanbanErrorBoundary>
+      <KanbanBoardContent />
+    </KanbanErrorBoundary>
   );
 }

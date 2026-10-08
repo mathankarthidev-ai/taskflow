@@ -2,7 +2,29 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Bell, Sun, Moon, LogOut, Check, ChevronDown, Menu, Cake, Sparkles, Building2, Globe, Camera, QrCode, User as UserIcon, ShieldCheck } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  Search,
+  Plus,
+  Bell,
+  Sun,
+  Moon,
+  LogOut,
+  Check,
+  ChevronDown,
+  Menu,
+  Cake,
+  Sparkles,
+  Building2,
+  Globe,
+  Camera,
+  QrCode,
+  User as UserIcon,
+  ShieldCheck,
+  RefreshCw,
+  CheckCheck,
+  HeartPulse,
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
@@ -11,8 +33,10 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useSearchStore } from '@/store/useSearchStore';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { SEED_USERS } from '@/lib/seed-data';
 import { QrScannerModal } from '@/components/attendance/QrScannerModal';
+import { toast } from 'sonner';
 
 interface HeaderProps {
   onMobileMenuToggle?: () => void;
@@ -79,6 +103,7 @@ const MONTH_WISE_BIRTHDAYS = [
 ];
 
 export function Header({ onMobileMenuToggle }: HeaderProps) {
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const currentUser = useAuthStore((s) => s.currentUser);
   const login = useAuthStore((s) => s.login);
@@ -92,12 +117,70 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   type ActiveMenu = 'company' | 'birthday' | 'notif' | 'persona' | null;
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // System Notifications State (Silent — No Audio Chime — Includes All 6 Core Types)
+  const notificationsList = useNotificationStore((s) => s.notifications);
+  const markAllReadStore = useNotificationStore((s) => s.markAllRead);
+  const markAsReadStore = useNotificationStore((s) => s.markAsRead);
+
+  const unreadCount = notificationsList.filter((n) => n.unread).length;
 
   const toggleMenu = (menu: ActiveMenu) => {
     setActiveMenu((prev) => (prev === menu ? null : menu));
   };
 
   const closeAllMenus = () => setActiveMenu(null);
+
+  // 1-Click Manual Workspace Refresh for All Users
+  const handleManualRefresh = () => {
+    setIsRefreshing(true);
+    router.refresh();
+    setTimeout(() => {
+      setIsRefreshing(false);
+      toast.success('Workspace refreshed & data synced!');
+    }, 600);
+  };
+
+  const handleMarkAllRead = () => {
+    markAllReadStore();
+    toast.info('All notifications marked as read');
+  };
+
+  const handleNotificationClick = (notif: any) => {
+    markAsReadStore(notif.id);
+    closeAllMenus();
+
+    const allTasks = useTaskStore.getState().tasks;
+
+    if (notif.taskId) {
+      const found = allTasks.find((t) => t._id === notif.taskId);
+      if (found) {
+        useTaskStore.getState().setSelectedTask(found);
+        useTaskStore.getState().setDetailModalOpen(true);
+        toast.info(`Opening task: "${found.title}"`);
+        return;
+      }
+    }
+
+    const textToSearch = `${notif.title} ${notif.text}`.toLowerCase();
+    const matchedTask = allTasks.find((t) =>
+      textToSearch.includes(t.title.toLowerCase()) ||
+      t.title.split(' ').some((word) => word.length > 3 && textToSearch.includes(word.toLowerCase()))
+    );
+
+    if (matchedTask) {
+      useTaskStore.getState().setSelectedTask(matchedTask);
+      useTaskStore.getState().setDetailModalOpen(true);
+      toast.info(`Opening task: "${matchedTask.title}"`);
+    } else if (allTasks.length > 0) {
+      useTaskStore.getState().setSelectedTask(allTasks[0]);
+      useTaskStore.getState().setDetailModalOpen(true);
+      toast.info(`Opening task: "${allTasks[0].title}"`);
+    } else {
+      router.push(notif.link || '/kanban');
+    }
+  };
 
   // Close open dropdowns when clicking outside or pressing Escape
   useEffect(() => {
@@ -123,15 +206,15 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const isSuperAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
   const isReception = currentUser.role === 'Reception Staff';
   const isAustralia = isSuperAdmin
-    ? selectedCompany === 'Ambizcon - Australia'
-    : currentUser.company === 'Ambizcon - Australia';
+    ? selectedCompany === 'Ambizcon'
+    : currentUser.company === 'Ambizcon';
 
   // Automatically sync company store to member's assigned branch
   useEffect(() => {
     if (!currentUser) return;
     if (!isSuperAdmin) {
-      if (currentUser.company === 'Ambizcon - Australia') {
-        setSelectedCompany('Ambizcon - Australia');
+      if (currentUser.company === 'Ambizcon') {
+        setSelectedCompany('Ambizcon');
       } else {
         setSelectedCompany('Ambizcon Health - India');
       }
@@ -165,7 +248,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           </kbd>
         </button>
 
-        {/* Company Branch Switcher: Option for Ambizcon Health - India is strictly for Admin */}
+        {/* Company Branch Switcher: Admin Only */}
         {isSuperAdmin ? (
           <div className="relative header-dropdown-menu">
             <button
@@ -173,7 +256,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               className="flex h-10 items-center gap-1.5 sm:gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 sm:px-3 text-xs font-bold transition-all text-foreground shadow-sm shrink-0"
               title="Switch Workspace Company Branch (Admin Only)"
             >
-              {selectedCompany === 'Ambizcon - Australia' ? (
+              {selectedCompany === 'Ambizcon' ? (
                 <div className="h-5 w-5 rounded-md bg-white p-0.5 border border-amber-500/30 flex items-center justify-center shrink-0">
                   <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
                 </div>
@@ -181,10 +264,10 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 <img src="/ambizcon-logo.png" alt="IND" className="h-5 w-5 rounded-md object-cover border border-emerald-500/30 shrink-0" />
               )}
               <span className="hidden md:inline-flex items-center gap-1.5">
-                {selectedCompany === 'Ambizcon - Australia' ? '🇦🇺 Ambizcon - Australia' : '🇮🇳 Ambizcon Health - India'}
+                {selectedCompany === 'Ambizcon' ? '🇦🇺 Ambizcon' : '🇮🇳 Ambizcon Health - India'}
               </span>
               <span className="md:hidden">
-                {selectedCompany === 'Ambizcon - Australia' ? '🇦🇺 AUS' : '🇮🇳 IND'}
+                {selectedCompany === 'Ambizcon' ? '🇦🇺 AUS' : '🇮🇳 IND'}
               </span>
               <span className="hidden lg:inline-flex px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase tracking-wider">
                 Admin
@@ -231,11 +314,11 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
                 <button
                   onClick={() => {
-                    setSelectedCompany('Ambizcon - Australia');
+                    setSelectedCompany('Ambizcon');
                     closeAllMenus();
                   }}
                   className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-colors mt-1.5 ${
-                    selectedCompany === 'Ambizcon - Australia'
+                    selectedCompany === 'Ambizcon'
                       ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/30'
                       : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground'
                   }`}
@@ -245,11 +328,11 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                       <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
                     </div>
                     <div className="text-left">
-                      <span className="block font-bold text-foreground">Ambizcon - Australia</span>
+                      <span className="block font-bold text-foreground">Ambizcon</span>
                       <span className="text-[10px] text-muted-foreground block">Brisbane HQ • 8:30 AM – 5:00 PM AEST</span>
                     </div>
                   </div>
-                  {selectedCompany === 'Ambizcon - Australia' && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                  {selectedCompany === 'Ambizcon' && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
                 </button>
               </div>
             )}
@@ -257,13 +340,13 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         ) : isAustralia ? (
           <div
             className="flex h-10 items-center gap-1.5 sm:gap-2 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/70 dark:bg-zinc-900/70 px-2.5 sm:px-3 text-xs font-semibold text-foreground shadow-sm select-none"
-            title="Assigned Branch: Ambizcon - Australia"
+            title="Assigned Branch: Ambizcon"
           >
             <div className="h-5 w-5 rounded-md bg-white p-0.5 border border-zinc-300 dark:border-zinc-700 flex items-center justify-center shrink-0">
               <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
             </div>
             <span className="hidden md:inline-flex items-center gap-1.5">
-              🇦🇺 Ambizcon - Australia
+              🇦🇺 Ambizcon
             </span>
             <span className="md:hidden">
               🇦🇺 AUS
@@ -285,28 +368,27 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         )}
       </div>
 
-      {/* Middle / Center: Attendance QR Scan Button (Prominent & Mobile Responsive) */}
+      {/* Middle / Center: Attendance QR Scan Button */}
       {!isReception && (
-        <div className="flex-1 flex justify-center items-center px-1 sm:px-3">
+        <div className="flex-1 flex justify-center items-center px-1 sm:px-3 mx-auto max-w-[280px]">
           <Button
             onClick={() => {
               closeAllMenus();
               setIsQrScannerOpen(true);
             }}
             size="sm"
-            className="ambizcon-gradient text-white font-extrabold text-xs gap-1.5 shadow-glow hover:opacity-95 px-3 sm:px-4 py-2 rounded-xl border border-white/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
+            className="ambizcon-gradient text-white font-extrabold text-[11px] sm:text-xs gap-1.5 shadow-glow hover:opacity-95 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-white/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
             title="Scan Office Kiosk QR Code to Clock In / Out"
           >
             <Camera className="h-4 w-4 animate-pulse shrink-0" />
-            <span className="hidden sm:inline">📷 Scan Office QR</span>
-            <span className="sm:hidden text-[11px]">Scan QR</span>
+            <span className="inline">📷 Scan Office QR</span>
           </Button>
         </div>
       )}
 
       {/* Right: Actions & User Dropdowns */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Create Task Button (Hidden for Reception Staff) */}
+        {/* Create Task Button */}
         {!isReception && (
           <Button
             onClick={() => {
@@ -320,6 +402,16 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             <span>New Task</span>
           </Button>
         )}
+
+        {/* 1-Click Manual Refresh Button for All Users */}
+        <button
+          onClick={handleManualRefresh}
+          disabled={isRefreshing}
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 text-muted-foreground hover:bg-accent hover:text-foreground transition-all active:scale-95"
+          title="1-Click Refresh Workspace & Sync Data"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-emerald-500' : ''}`} />
+        </button>
 
         {/* Team Birthdays Dropdown */}
         <div className="relative header-dropdown-menu">
@@ -374,45 +466,92 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
         </button>
 
-        {/* Notifications Dropdown */}
+        {/* Quick Health & Ergonomics Check Trigger */}
+        <button
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('ambizcon_trigger_health_check'));
+            }
+          }}
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-colors relative group"
+          title="👨‍💻 Quick Health Check (Hourly Workspace Wellness)"
+        >
+          <HeartPulse className="h-4 w-4 animate-pulse" />
+          <span className="absolute -top-1 -right-1 flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+        </button>
+
+        {/* Notifications Dropdown (Silent - No Audio Chime - Live Numeric Count Badge) */}
         <div className="relative header-dropdown-menu">
           <button
             onClick={() => toggleMenu('notif')}
             className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            title="System Notifications"
           >
             <Bell className="h-4 w-4" />
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-emerald-600 text-white font-mono text-[9px] font-extrabold flex items-center justify-center border border-background shadow-sm">
+                {unreadCount}
+              </span>
+            )}
           </button>
 
           {activeMenu === 'notif' && (
             <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 shadow-xl glass-panel z-50 animate-fade">
               <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="text-xs font-semibold">Notifications</span>
-                <Badge variant="default" className="text-[10px] bg-emerald-600 text-white">2 New</Badge>
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Bell className="h-3.5 w-3.5 text-emerald-500" />
+                  System Notifications
+                </span>
+                <div className="flex items-center gap-1">
+                  {unreadCount > 0 ? (
+                    <Badge variant="default" className="text-[10px] bg-emerald-600 text-white font-mono font-bold">
+                      {unreadCount} New
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] font-mono">All Read</Badge>
+                  )}
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[10px] text-muted-foreground hover:text-foreground ml-1 p-0.5 rounded hover:bg-accent"
+                      title="Mark all as read"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="space-y-3 pt-3">
-                <div className="flex items-start gap-2.5 text-xs">
-                  <div className="h-2 w-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-foreground font-semibold">Task Assigned to You</p>
-                    <p className="text-muted-foreground text-[11px]">Deva assigned "Redesign SaaS Dashboard".</p>
-                    <span className="text-[10px] text-zinc-400">10m ago</span>
+
+              <div className="space-y-2.5 pt-3 max-h-72 overflow-y-auto pr-1">
+                {notificationsList.map((notif) => (
+                  <div
+                    key={notif.id}
+                    onClick={() => handleNotificationClick(notif)}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all hover:scale-[1.01] ${
+                      notif.unread
+                        ? 'border-emerald-500/40 bg-emerald-500/10 font-medium hover:border-emerald-500/70'
+                        : 'border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <div className={`h-2 w-2 rounded-full ${notif.color} mt-1.5 shrink-0`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-foreground text-xs">{notif.title}</p>
+                        <span className="text-[10px] text-zinc-400 font-mono">{notif.time}</span>
+                      </div>
+                      <p className="text-muted-foreground text-[11px] mt-0.5 leading-snug">{notif.text}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start gap-2.5 text-xs">
-                  <div className="h-2 w-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-foreground font-semibold">Cross-Team Request</p>
-                    <p className="text-muted-foreground text-[11px]">Aravind raised a task for Development.</p>
-                    <span className="text-[10px] text-zinc-400">1h ago</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* User Account Menu (Persona Switcher restricted to Super Admin ONLY) */}
+        {/* User Account Menu */}
         <div className="relative header-dropdown-menu">
           <button
             onClick={() => toggleMenu('persona')}
@@ -465,7 +604,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                             <div className="flex items-center gap-1.5">
                               <span className="truncate">{persona.name}</span>
                               <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">
-                                {persona.company === 'India & Australia' ? '🌐 IND & AUS' : persona.company === 'Ambizcon - Australia' ? '🇦🇺 AUS' : '🇮🇳 IND'}
+                                {persona.company === 'India & Australia' ? '🌐 IND & AUS' : persona.company === 'Ambizcon' ? '🇦🇺 AUS' : '🇮🇳 IND'}
                               </Badge>
                             </div>
                             <span className="text-[10px] text-zinc-400">{persona.role} • {persona.team}</span>

@@ -18,6 +18,8 @@ import {
   DollarSign,
   User,
   LogOut,
+  Bell,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -68,8 +70,8 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
 
   const isSuperAdmin = currentUser.role === 'Super Admin';
   const isAustralia = isSuperAdmin
-    ? selectedCompany === 'Ambizcon - Australia'
-    : currentUser.company === 'Ambizcon - Australia';
+    ? selectedCompany === 'Ambizcon'
+    : currentUser.company === 'Ambizcon';
   const isTeamLead = currentUser.role === 'Team Lead' || isSuperAdmin;
   const isReception = currentUser.role === 'Reception Staff';
 
@@ -81,6 +83,8 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     : [
         { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
         { label: 'Bizzy Board', href: '/kanban', icon: KanbanSquare },
+        { label: 'Reminders', href: '/reminders', icon: Bell, badge: 'Alerts' },
+        { label: 'Team Chat', href: '/chat', icon: MessageSquare, badge: 'Chat' },
         {
           label: 'Incoming Queue',
           href: '/incoming',
@@ -93,16 +97,9 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
         { label: 'Reports', href: '/reports', icon: FileSpreadsheet },
         { label: 'Analytics', href: '/analytics', icon: BarChart3, badge: 'Insights' },
         {
-          label: 'User Directory',
+          label: 'User Directory & Roles',
           href: '/users',
           icon: Users,
-          badge: isSuperAdmin ? 'Admin' : undefined,
-          restricted: !isSuperAdmin,
-        },
-        {
-          label: 'Role Approvals',
-          href: '/users#approvals',
-          icon: UserCheck,
           badge: isSuperAdmin ? 'Admin' : undefined,
           restricted: !isSuperAdmin,
         },
@@ -136,7 +133,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           )}>
             <img
               src={isAustralia ? "/ambizcon-australia-icon.png" : "/ambizcon-logo.png"}
-              alt={isAustralia ? "AMBIZCON Australia Logo" : "AMBIZCON Health Logo"}
+              alt={isAustralia ? "AMBIZCON Logo" : "AMBIZCON Health Logo"}
               className={cn("h-full w-full", isAustralia ? "object-contain" : "object-cover")}
             />
           </div>
@@ -144,7 +141,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             {isAustralia ? (
               <>
                 <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
-                  AMBIZCON<span className="text-amber-500 dark:text-amber-400 font-bold ml-1">Australia</span>
+                  AMBIZCON
                 </span>
                 <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
                   Brisbane HQ • Global

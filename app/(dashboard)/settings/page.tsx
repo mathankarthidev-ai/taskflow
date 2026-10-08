@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Sun, Moon, Laptop, Globe, Bell, Shield, Save, Lock, CheckCircle2 } from 'lucide-react';
+import { Sun, Moon, Laptop, Globe, Bell, Shield, Save, Lock, CheckCircle2, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
@@ -50,6 +50,31 @@ export default function SettingsPage() {
     setCurrentPw('');
     setNewPw('');
     setConfirmPw('');
+  };
+
+  const [isClearing, setIsClearing] = useState(false);
+
+  const handleClearDemoData = async () => {
+    if (!confirm('Are you sure you want to clear all demo and test data? This will reset all tasks, dummy leave requests, and claims to a clean slate.')) {
+      return;
+    }
+    setIsClearing(true);
+    try {
+      const res = await fetch('/api/seed', { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Clean slate ready! All demo tasks, leaves, claims, and time entries cleared.');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } else {
+        toast.error('Failed to clear data');
+      }
+    } catch (err) {
+      toast.error('Error clearing demo data');
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   const handleSave = () => {
@@ -249,6 +274,37 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Workspace Data Management (Clean Slate) */}
+      {(currentUser.role === 'Super Admin' || currentUser.role === 'Team Lead') && (
+        <Card className="p-6 border-rose-500/20 bg-rose-500/5">
+          <CardHeader className="px-0 pt-0 pb-4">
+            <CardTitle className="text-sm font-bold flex items-center gap-2 text-rose-600 dark:text-rose-400">
+              <Trash2 className="h-4 w-4" />
+              Workspace Clean Slate & Demo Data
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Purge all seeded demo tasks, test leave requests, and dummy reimbursement claims to maintain a 100% clean production environment. Real Ambizcon users, teams, and medical clients are preserved.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 pb-0 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-foreground">Wipe All Demo & Test Data</p>
+              <p className="text-[11px] text-muted-foreground">Empties all mock tasks, attendance test logs, leaves, and claims</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearDemoData}
+              disabled={isClearing}
+              className="gap-2 border-rose-500/40 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
+            >
+              {isClearing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              {isClearing ? 'Clearing...' : 'Clear Demo Data'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex justify-end">
         <Button onClick={handleSave} className="gap-2">

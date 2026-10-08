@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { attendanceDb, AttendanceRecord } from '@/lib/attendance-db';
 import { supabase } from '@/lib/supabase';
 import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
+import { SEED_USERS } from '@/lib/seed-data';
 
 export async function POST(req: Request) {
   try {
@@ -10,23 +11,56 @@ export async function POST(req: Request) {
     const userName = body.userName || 'Anirudh K.';
     const userTeam = body.userTeam || 'Development';
     const userEmail = body.userEmail || '';
-    const company = body.company || 'Ambizcon Health - India';
+    const companyInput = body.company || 'Ambizcon Health - India';
     const workMode = body.workMode || 'Work From Office';
     const ipAddress = body.ipAddress || '192.168.1.104';
     const location = body.location || 'Anna Nagar, Chennai';
 
-    // 1. Prevent duplicate active session in in-memory store
-    const active = attendanceDb.getActiveByUser(userId);
-    if (active) {
+    const normEmail = (userEmail || '').toLowerCase().trim();
+    const seedUser = SEED_USERS.find(
+      (u) =>
+        (normEmail && u.email.toLowerCase() === normEmail) ||
+        u.name.toLowerCase() === userName.toLowerCase()
+    );
+    const isSuperAdminUser = seedUser?.role === 'Super Admin' || seedUser?.role === 'Admin';
+    const registeredCompany = seedUser?.company;
+
+    let company = companyInput;
+    if (!isSuperAdminUser && registeredCompany && registeredCompany !== 'India & Australia') {
+      company = registeredCompany;
+    }
+
+    // 1. Prevent duplicate active session: Check Supabase Cloud as Single Source of Truth
+    let supaActiveRecord: any = null;
+    try {
+      const { data: supaActive } = await supabase
+        .from('attendance')
+        .select('*')
+        .or(`user_id.eq.${userId},user_name.ilike.%${userName}%,user_email.eq.${userEmail || 'none'}`)
+        .eq('status', 'working')
+        .order('created_at', { ascending: false });
+
+      if (supaActive && supaActive.length > 0) {
+        supaActiveRecord = supaActive[0];
+      }
+    } catch (checkErr) {
+      console.warn('Supabase active check warning:', checkErr);
+    }
+
+    if (supaActiveRecord) {
       return NextResponse.json(
         {
           success: false,
           code: 'ATTENDANCE_ALREADY_ACTIVE',
-          message: 'You are already clocked in.',
+          message: `${userName} already has an active shift in progress (${supaActiveRecord.clock_in || supaActiveRecord.created_at}). Please clock out before starting a new shift.`,
+          attendance: supaActiveRecord,
         },
         { status: 409 }
       );
     }
+
+    // Supabase confirms NO active shift exists: Clear any stale in-memory working shift residue
+    attendanceDb.clearUserWorking(userId, userName, userEmail);
 
     // 2. Format Server Timestamps accurately with IST and AEST timezones
     const nowIso = new Date().toISOString();

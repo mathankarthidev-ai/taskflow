@@ -295,6 +295,78 @@ export async function updateUser(
   return null;
 }
 
+export async function updateUserProfile(
+  userId: string,
+  profileData: {
+    name?: string;
+    avatar?: string;
+    phone?: string;
+    emergencyContact?: string;
+    address?: string;
+    bloodGroup?: string;
+    birthday?: string;
+    dob?: string;
+    workMode?: WorkMode;
+    education?: any[];
+    experience?: any[];
+    skills?: string[];
+  }
+): Promise<User | null> {
+  const db = await connectDB();
+
+  // Non-sensitive fields only (Strict Whitelist)
+  const allowedUpdates: Record<string, any> = {};
+  if (profileData.name !== undefined) allowedUpdates.name = profileData.name;
+  if (profileData.avatar !== undefined) allowedUpdates.avatar = profileData.avatar;
+  if (profileData.phone !== undefined) allowedUpdates.phone = profileData.phone;
+  if (profileData.emergencyContact !== undefined) allowedUpdates.emergencyContact = profileData.emergencyContact;
+  if (profileData.address !== undefined) allowedUpdates.address = profileData.address;
+  if (profileData.bloodGroup !== undefined) allowedUpdates.bloodGroup = profileData.bloodGroup;
+  if (profileData.birthday !== undefined) allowedUpdates.birthday = profileData.birthday;
+  if (profileData.dob !== undefined) allowedUpdates.dob = profileData.dob;
+  if (profileData.workMode !== undefined) allowedUpdates.workMode = profileData.workMode;
+  if (profileData.education !== undefined) allowedUpdates.education = profileData.education;
+  if (profileData.experience !== undefined) allowedUpdates.experience = profileData.experience;
+  if (profileData.skills !== undefined) allowedUpdates.skills = profileData.skills;
+
+  if (db) {
+    try {
+      const doc = await UserModel.findByIdAndUpdate(userId, allowedUpdates, { new: true }).lean();
+      if (doc) {
+        return {
+          _id: doc._id.toString(),
+          name: doc.name,
+          email: doc.email,
+          role: doc.role,
+          team: doc.team,
+          company: (doc as any).company,
+          avatar: doc.avatar,
+          birthday: (doc as any).birthday,
+          dob: (doc as any).dob,
+          workMode: (doc as any).workMode,
+          phone: (doc as any).phone,
+          emergencyContact: (doc as any).emergencyContact,
+          address: (doc as any).address,
+          bloodGroup: (doc as any).bloodGroup,
+          education: (doc as any).education,
+          experience: (doc as any).experience,
+          skills: (doc as any).skills,
+          createdAt: doc.createdAt?.toISOString(),
+        };
+      }
+    } catch (e) {
+      console.error('Error updating user profile in DB:', e);
+    }
+  }
+
+  const u = mockStore.users.find((user) => user._id === userId);
+  if (u) {
+    Object.assign(u, allowedUpdates);
+    return { ...u };
+  }
+  return null;
+}
+
 export async function deleteUser(userId: string): Promise<boolean> {
   const db = await connectDB();
 

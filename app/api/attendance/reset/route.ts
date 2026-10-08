@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
+import { supabase } from '@/lib/supabase';
 
 export async function POST() {
   try {
-    const records = attendanceDb.resetAll();
+    attendanceDb.resetAll();
+    const { error } = await supabase.from('attendance').delete().neq('id', 'non_existent_id');
+    if (error) {
+      console.error('Supabase wipe warning:', error);
+    }
     return NextResponse.json({
       success: true,
-      message: 'Attendance data reset: 10 days x 3 sessions per roster member restored.',
-      totalRecords: records.length,
+      message: 'All clock-in and clock-out database records have been completely wiped.',
+      totalRecords: 0,
     });
   } catch (error) {
     return NextResponse.json(

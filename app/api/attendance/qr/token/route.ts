@@ -14,7 +14,7 @@ export async function GET(req: Request) {
 
     const payload = {
       tokenId,
-      branch: isAus ? 'Ambizcon - Australia' : 'Ambizcon Health - India',
+      branch: isAus ? 'Ambizcon' : 'Ambizcon Health - India',
       authorizedIp: isAus ? '103.246.40.112' : '192.168.1.104',
       location: isAus ? 'Queen Street, Brisbane CBD, Australia' : 'Anna Nagar, Chennai',
       issuedAt: now,
