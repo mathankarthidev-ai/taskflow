@@ -67,6 +67,7 @@ export class DataStore {
         priority: t.priority,
         team: t.team,
         clientName: (t as any).clientName || 'Apollo Hospitals',
+        doctorName: (t as any).doctorName || 'Dr. Umed Specialist',
         clientApproved: true,
         approvalToken: `token_client_appr_${i + 1}`,
         approvalExpiresAt: new Date(Date.now() + 30 * 24 * 3600000).toISOString(),

@@ -8,6 +8,10 @@ import { Comment as CommentModel } from '@/models/Comment';
 import { SEED_USERS, SEED_TEAMS, SEED_TASKS_INITIAL, SEED_CLIENTS_FULL } from '@/lib/seed-data';
 import { mockStore } from '@/lib/mock-store';
 
+export async function GET() {
+  return POST();
+}
+
 export async function POST() {
   // Always reset in-memory mock store
   mockStore.reset();

@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ambizcon Login Page Preview</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @keyframes spin-cw {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes spin-ccw {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.08); }
+    }
+    @keyframes float-gentle {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
+    }
+
+    .rotate-dial-cw {
+      animation: spin-cw var(--rotate-speed, 40s) linear infinite;
+    }
+    .rotate-dial-ccw {
+      animation: spin-ccw var(--rotate-speed-reverse, 65s) linear infinite;
+    }
+    .counter-rotate-badge {
+      animation: spin-ccw var(--rotate-speed, 40s) linear infinite;
+    }
+    .pulse-glow-ambient {
+      animation: pulse-glow 6s ease-in-out infinite;
+    }
+    .float-card {
+      animation: float-gentle 5s ease-in-out infinite;
+    }
+
+    /* Radial ticks styling */
+    .tick-line {
+      stroke: rgba(255, 255, 255, 0.22);
+      stroke-width: 1.5;
+    }
+    .tick-line-major {
+      stroke: rgba(255, 255, 255, 0.45);
+      stroke-width: 2.5;
+    }
+    .tick-line-accent {
+      stroke: #369989;
+      stroke-width: 2.5;
+    }
+  </style>
+</head>
+<body class="bg-[#022731] text-white font-sans antialiased min-h-screen flex flex-col justify-between selection:bg-[#2a8c82] selection:text-white relative overflow-x-hidden">
+
+  <!-- Interactive Demo Controls Header (Allows user to play with speed and theme) -->
+  <header class="w-full bg-[#03323e]/90 backdrop-blur-md border-b border-teal-500/20 px-6 py-3 flex flex-wrap items-center justify-between gap-4 z-50">
+    <div class="flex items-center gap-3">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-semibold">
+        <span class="w-2 h-2 rounded-full bg-teal-400 animate-ping"></span>
+        Interactive Design Preview
+      </span>
+      <span class="text-xs text-teal-200/80 font-medium hidden sm:inline">
+        Ambizcon Brand Theme • Rotating Radial Wheel Experience
+      </span>
+    </div>
+
+    <!-- Live Controls -->
+    <div class="flex items-center gap-3 text-xs">
+      <div class="flex items-center gap-1.5 bg-black/30 px-2.5 py-1 rounded-lg border border-teal-500/30">
+        <span class="text-teal-200">Rotation:</span>
+        <button id="btnSpeedSlow" onclick="setSpeed(75)" class="px-2 py-0.5 rounded hover:bg-teal-600/40 text-teal-300 transition">Slow</button>
+        <button id="btnSpeedNormal" onclick="setSpeed(35)" class="px-2 py-0.5 rounded bg-teal-600 text-white font-bold transition">Normal</button>
+        <button id="btnSpeedFast" onclick="setSpeed(15)" class="px-2 py-0.5 rounded hover:bg-teal-600/40 text-teal-300 transition">Fast</button>
+        <button id="btnPause" onclick="togglePause()" class="px-2 py-0.5 rounded hover:bg-red-500/30 text-red-300 transition">Pause</button>
+      </div>
+
+      <div class="flex items-center gap-1.5 bg-black/30 px-2.5 py-1 rounded-lg border border-teal-500/30">
+        <span class="text-teal-200">Branch:</span>
+        <button id="branchHealth" onclick="setBranch('health')" class="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold transition">Health India</button>
+        <button id="branchAus" onclick="setBranch('australia')" class="px-2 py-0.5 rounded hover:bg-amber-600/40 text-amber-300 transition">Australia HQ</button>
+      </div>
+
+      <button onclick="autofillLogin()" class="px-3 py-1 bg-gradient-to-r from-[#2a8c82] to-[#086075] hover:opacity-90 text-white font-semibold rounded-lg shadow transition">
+        Autofill Demo Credentials
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Background Container with Ambient Glows & Arcs -->
+  <main class="relative flex-1 flex items-center justify-center p-4 lg:p-10 overflow-hidden">
+
+    <!-- Ambient Gradients (Ambizcon Teal & Sage theme) -->
+    <div class="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full bg-gradient-to-br from-[#086075]/40 via-[#2a8c82]/25 to-transparent blur-[120px] pointer-events-none pulse-glow-ambient"></div>
+    <div class="absolute -bottom-32 left-1/3 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-[#369989]/20 via-[#043f4e]/30 to-transparent blur-[140px] pointer-events-none"></div>
+    <div class="absolute top-1/4 right-10 w-[500px] h-[500px] rounded-full bg-gradient-to-bl from-[#7a985e]/15 via-[#086075]/20 to-transparent blur-[130px] pointer-events-none"></div>
+
+    <!-- Giant subtle geometric background curves matching reference layout -->
+    <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-10" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="28%" cy="50%" r="580" fill="none" stroke="#2a8c82" stroke-width="60" stroke-dasharray="140 30" />
+      <circle cx="28%" cy="50%" r="760" fill="none" stroke="#6bc1c7" stroke-width="40" stroke-opacity="0.4" />
+      <circle cx="28%" cy="50%" r="950" fill="none" stroke="#ffffff" stroke-width="8" stroke-dasharray="20 40" />
+    </svg>
+
+    <!-- Main Two-Column Stage (Left: Rotating Orbital Radar, Right: Elevated Login Card) -->
+    <div class="relative z-10 w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+
+      <!-- LEFT COLUMN: Rotating Orbital Wheel & Ambizcon Showcase (Cols 1-7) -->
+      <div class="lg:col-span-7 flex flex-col items-center justify-center relative min-h-[580px] lg:min-h-[660px]">
+
+        <!-- The Big Rotating Wheel Stage -->
+        <div id="dialContainer" class="relative w-[480px] h-[480px] sm:w-[540px] sm:h-[540px] lg:w-[580px] lg:h-[580px] flex items-center justify-center">
+
+          <!-- Glow disc behind the wheel -->
+          <div class="absolute inset-8 rounded-full bg-gradient-to-br from-[#086075]/40 via-[#2a8c82]/30 to-[#042831]/50 blur-2xl"></div>
+
+          <!-- Layer 1: Clockwise Rotating SVG Radar with Radial Rays & Ticks -->
+          <div id="dialOuter" class="absolute inset-0 rotate-dial-cw pointer-events-none">
+            <svg class="w-full h-full" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Outer Track Rings -->
+              <circle cx="300" cy="300" r="280" stroke="rgba(42, 140, 130, 0.25)" stroke-width="1.5" />
+              <circle cx="300" cy="300" r="260" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1" stroke-dasharray="6 6" />
+              <circle cx="300" cy="300" r="235" stroke="rgba(107, 193, 199, 0.3)" stroke-width="2" />
+              <circle cx="300" cy="300" r="160" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1" />
+
+              <!-- Radial Ticks (Generated around 360 degrees) -->
+              <!-- 0 deg -->
+              <line x1="300" y1="20" x2="300" y2="48" class="tick-line-accent" />
+              <line x1="300" y1="552" x2="300" y2="580" class="tick-line-accent" />
+              <!-- 90 deg -->
+              <line x1="20" y1="300" x2="48" y2="300" class="tick-line-accent" />
+              <line x1="552" y1="300" x2="580" y2="300" class="tick-line-accent" />
+
+              <!-- 30 deg intervals (Major) -->
+              <line x1="440" y1="57" x2="426" y2="81" class="tick-line-major" />
+              <line x1="543" y1="160" x2="519" y2="174" class="tick-line-major" />
+              <line x1="543" y1="440" x2="519" y2="426" class="tick-line-major" />
+              <line x1="440" y1="543" x2="426" y2="519" class="tick-line-major" />
+              <line x1="160" y1="543" x2="174" y2="519" class="tick-line-major" />
+              <line x1="57" y1="440" x2="81" y2="426" class="tick-line-major" />
+              <line x1="57" y1="160" x2="81" y2="174" class="tick-line-major" />
+              <line x1="160" y1="57" x2="174" y2="81" class="tick-line-major" />
+
+              <!-- 45 deg intervals -->
+              <line x1="497" y1="102" x2="480" y2="120" class="tick-line" />
+              <line x1="497" y1="497" x2="480" y2="480" class="tick-line" />
+              <line x1="102" y1="497" x2="120" y2="480" class="tick-line" />
+              <line x1="102" y1="102" x2="120" y2="120" class="tick-line" />
+
+              <!-- Fine ticks around top-right quadrant -->
+              <line x1="349" y1="24" x2="345" y2="38" class="tick-line" />
+              <line x1="396" y1="37" x2="389" y2="50" class="tick-line" />
+              <line x1="480" y1="73" x2="469" y2="84" class="tick-line" />
+              <line x1="518" y1="117" x2="504" y2="126" class="tick-line" />
+              <line x1="550" y1="205" x2="536" y2="209" class="tick-line" />
+              <line x1="556" y1="252" x2="542" y2="253" class="tick-line" />
+
+              <!-- Fine ticks around bottom-right quadrant -->
+              <line x1="556" y1="348" x2="542" y2="347" class="tick-line" />
+              <line x1="550" y1="395" x2="536" y2="391" class="tick-line" />
+              <line x1="480" y1="527" x2="469" y2="516" class="tick-line" />
+              <line x1="396" y1="563" x2="389" y2="550" class="tick-line" />
+              <line x1="349" y1="576" x2="345" y2="562" class="tick-line" />
+
+              <!-- Fine ticks around left side -->
+              <line x1="251" y1="24" x2="255" y2="38" class="tick-line" />
+              <line x1="204" y1="37" x2="211" y2="50" class="tick-line" />
+              <line x1="120" y1="73" x2="131" y2="84" class="tick-line" />
+              <line x1="82" y1="117" x2="96" y2="126" class="tick-line" />
+              <line x1="50" y1="205" x2="64" y2="209" class="tick-line" />
+              <line x1="44" y1="252" x2="58" y2="253" class="tick-line" />
+              <line x1="44" y1="348" x2="58" y2="347" class="tick-line" />
+              <line x1="50" y1="395" x2="64" y2="391" class="tick-line" />
+              <line x1="120" y1="527" x2="131" y2="516" class="tick-line" />
+              <line x1="204" y1="563" x2="211" y2="550" class="tick-line" />
+              <line x1="251" y1="576" x2="255" y2="562" class="tick-line" />
+
+              <!-- Light sweeps/beams like a sonar radar -->
+              <path d="M 300 300 L 560 200 A 280 280 0 0 0 450 60 Z" fill="url(#beamGradient)" opacity="0.35" />
+              <defs>
+                <linearGradient id="beamGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#2a8c82" stop-opacity="0.8" />
+                  <stop offset="70%" stop-color="#086075" stop-opacity="0.2" />
+                  <stop offset="100%" stop-color="#086075" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+
+          <!-- Layer 2: Counter-Clockwise Secondary Accent Ring -->
+          <div id="dialInner" class="absolute inset-16 rotate-dial-ccw pointer-events-none">
+            <svg class="w-full h-full" viewBox="0 0 400 400" fill="none">
+              <circle cx="200" cy="200" r="185" stroke="#7a985e" stroke-width="2" stroke-dasharray="8 12" opacity="0.4" />
+              <circle cx="200" cy="200" r="170" stroke="#369989" stroke-width="1.5" stroke-dasharray="60 40 10 40" opacity="0.5" />
+              <circle cx="200" cy="15" r="4" fill="#6bc1c7" filter="drop-shadow(0 0 6px #6bc1c7)" />
+              <circle cx="385" cy="200" r="5" fill="#2a8c82" filter="drop-shadow(0 0 6px #2a8c82)" />
+              <circle cx="15" cy="200" r="4" fill="#8b9e59" filter="drop-shadow(0 0 6px #8b9e59)" />
+            </svg>
+          </div>
+
+          <!-- Layer 3: Orbiting Badge Pills (Rotates WITH the wheel, while each icon counter-rotates so it stays upright!) -->
+          <div id="orbitalBadgesLayer" class="absolute inset-0 rotate-dial-cw pointer-events-auto">
+
+            <!-- BADGE 1: Security & Compliance (Top - 0 deg / y: 25px) -->
+            <div class="absolute top-4 left-1/2 -translate-x-1/2 -translate-y-1/2">
+              <div class="counter-rotate-badge group">
+                <div class="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/30 shadow-lg shadow-teal-950/50 hover:bg-white/20 hover:scale-110 hover:border-teal-400 transition cursor-pointer">
+                  <!-- Shield Icon -->
+                  <svg class="w-6 h-6 text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- BADGE 2: Due Notifications & Alerts (Top-Right ~ 45 deg) -->
+            <div class="absolute top-[18%] right-[12%] -translate-y-1/2">
+              <div class="counter-rotate-badge">
+                <div class="flex items-center justify-center w-11 h-11 md:w-13 md:h-13 rounded-2xl bg-white/10 backdrop-blur-md border border-white/25 shadow-lg hover:scale-110 hover:border-amber-400 transition cursor-pointer">
+                  <!-- Bell / Alert Icon -->
+                  <svg class="w-5 h-5 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- BADGE 3: Database & Medical Records (Right - 90 deg) -->
+            <div class="absolute top-1/2 right-4 -translate-y-1/2 translate-x-1/2">
+              <div class="counter-rotate-badge">
+                <div class="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/30 shadow-lg hover:scale-110 hover:border-cyan-400 transition cursor-pointer">
+                  <!-- Database Icon -->
+                  <svg class="w-6 h-6 text-cyan-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- BADGE 4: Healthcare Operations / Vitals (Bottom-Right ~ 135 deg) -->
+            <div class="absolute bottom-[18%] right-[12%] translate-y-1/2">
+              <div class="counter-rotate-badge">
+                <div class="flex items-center justify-center w-11 h-11 md:w-13 md:h-13 rounded-2xl bg-white/10 backdrop-blur-md border border-white/25 shadow-lg hover:scale-110 hover:border-emerald-400 transition cursor-pointer">
+                  <!-- Activity / Stethoscope Icon -->
+                  <svg class="w-5 h-5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- BADGE 5: Digital Platform & Code (Bottom - 180 deg) -->
+            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 translate-y-1/2">
+              <div class="counter-rotate-badge">
+                <div class="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/30 shadow-lg hover:scale-110 hover:border-teal-300 transition cursor-pointer">
+                  <!-- Laptop / Code Icon -->
+                  <svg class="w-6 h-6 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- BADGE 6: Cloud & Network Integrations (Bottom-Left ~ 225 deg) -->
+            <div class="absolute bottom-[18%] left-[12%] translate-y-1/2">
+              <div class="counter-rotate-badge">
+                <div class="flex items-center justify-center w-11 h-11 md:w-13 md:h-13 rounded-2xl bg-white/10 backdrop-blur-md border border-white/25 shadow-lg hover:scale-110 hover:border-blue-400 transition cursor-pointer">
+                  <!-- Wifi / Cloud Icon -->
+                  <svg class="w-5 h-5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- BADGE 7: Access Control & Vault (Left - 270 deg) -->
+            <div class="absolute top-1/2 left-4 -translate-y-1/2 -translate-x-1/2">
+              <div class="counter-rotate-badge">
+                <div class="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/30 shadow-lg hover:scale-110 hover:border-teal-300 transition cursor-pointer">
+                  <!-- Lock Icon -->
+                  <svg class="w-6 h-6 text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- BADGE 8: Automations & Recurrence (Top-Left ~ 315 deg) -->
+            <div class="absolute top-[18%] left-[12%] -translate-y-1/2">
+              <div class="counter-rotate-badge">
+                <div class="flex items-center justify-center w-11 h-11 md:w-13 md:h-13 rounded-2xl bg-white/10 backdrop-blur-md border border-white/25 shadow-lg hover:scale-110 hover:border-emerald-300 transition cursor-pointer">
+                  <!-- Refresh / Sync Icon -->
+                  <svg class="w-5 h-5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /orbitalBadgesLayer -->
+
+          <!-- CENTER OF THE ROTATING WHEEL (Hub with Brand & Headline) -->
+          <div class="relative z-20 flex flex-col items-center justify-center text-center p-6 max-w-[280px] sm:max-w-[320px] pointer-events-auto">
+
+            <!-- Ambizcon Logo Emblem (Centered inside the wheel) -->
+            <div class="relative mb-3 group">
+              <div class="absolute -inset-2 bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-500 rounded-2xl blur-md opacity-60 group-hover:opacity-100 transition duration-500"></div>
+              <div class="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-[#042831]/90 backdrop-blur-xl border border-teal-400/40 p-2.5 flex items-center justify-center shadow-2xl">
+                <img id="centerLogoImg" src="ambizcon-logo.png" alt="Ambizcon" class="w-full h-full object-contain rounded-xl" />
+              </div>
+            </div>
+
+            <!-- Brand Name & Badging -->
+            <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-300 text-[11px] font-semibold tracking-wider uppercase mb-1.5">
+              <span id="centerBranchBadge">Ambizcon Health</span>
+            </div>
+
+            <!-- Slogan & Subtitle from Reference Image -->
+            <p class="text-xs text-teal-200/90 font-medium tracking-wide">
+              A complete solution for
+            </p>
+            <h2 id="centerHeadline" class="text-base sm:text-lg font-extrabold text-white tracking-tight leading-snug drop-shadow-md">
+              Healthcare & Digital Operations
+            </h2>
+
+          </div><!-- /Center Hub -->
+
+        </div><!-- /dialContainer -->
+
+        <!-- Bottom Description Floating Glassmorphism Card (Matching Reference Layout) -->
+        <div class="mt-4 w-full max-w-lg bg-white/10 dark:bg-black/30 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-xl flex items-start gap-3.5 float-card">
+          <div class="w-11 h-11 rounded-xl bg-[#086075] border border-teal-400/40 p-1 flex-shrink-0 flex items-center justify-center shadow">
+            <img id="cardLogoImg" src="ambizcon-logo.png" alt="Ambizcon" class="w-full h-full object-contain rounded-lg" />
+          </div>
+          <div class="space-y-1 text-xs">
+            <p class="text-white/95 font-semibold leading-relaxed">
+              <span class="text-teal-300 font-bold">Ambizcon TaskFlow</span> is a unified operations suite providing comprehensive task tracking, attendance monitoring, and doctor scheduling in an efficient, time-saving workflow.
+            </p>
+            <p class="text-teal-100/70 text-[11px] leading-relaxed">
+              The system imports requests from multiple clinic touchpoints, tracks doctor schedules, automated due reminders, and team velocity based on customizable workflows.
+            </p>
+          </div>
+        </div>
+
+      </div><!-- /LEFT COLUMN -->
+
+      <!-- RIGHT COLUMN: Elevated Login Card (Cols 8-12) -->
+      <div class="lg:col-span-5 flex justify-center">
+
+        <div class="w-full max-w-md bg-white text-zinc-900 rounded-3xl p-8 sm:p-10 shadow-2xl border border-white/40 relative z-20 backdrop-blur-xl">
+
+          <!-- Card Header (Matching Reference Image "Welcome") -->
+          <div class="space-y-1.5 mb-8">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-zinc-900 tracking-tight">
+              Welcome
+            </h1>
+            <p class="text-xs sm:text-sm text-zinc-500 font-medium">
+              Sign in with your authorized @ambizcon.com credentials
+            </p>
+          </div>
+
+          <!-- Branch Switcher Radio Tabs -->
+          <div class="mb-6 p-1 bg-zinc-100 rounded-xl flex items-center border border-zinc-200 text-xs font-semibold">
+            <button type="button" id="tabBranchHealth" onclick="setBranch('health')" class="flex-1 py-2 rounded-lg bg-white shadow-sm text-teal-800 font-bold transition text-center">
+              Health (India)
+            </button>
+            <button type="button" id="tabBranchAus" onclick="setBranch('australia')" class="flex-1 py-2 rounded-lg text-zinc-500 hover:text-zinc-800 transition text-center">
+              Ambizcon (Australia)
+            </button>
+          </div>
+
+          <!-- Sign-In Form -->
+          <form id="loginForm" onsubmit="handleFormSubmit(event)" class="space-y-5">
+
+            <!-- User Name Input (Matching Reference with right-aligned avatar icon) -->
+            <div class="space-y-1.5">
+              <div class="relative flex items-center">
+                <input
+                  type="email"
+                  id="emailInput"
+                  required
+                  placeholder="User Name (e.g. employee@ambizcon.com)"
+                  class="w-full bg-zinc-100/90 hover:bg-zinc-100 focus:bg-white text-zinc-800 placeholder-zinc-400 text-sm rounded-xl px-4 py-3.5 pr-11 border border-zinc-200 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                />
+                <div class="absolute right-3.5 text-zinc-400 pointer-events-none">
+                  <!-- User Avatar Icon -->
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- Password Input (Matching Reference with right-aligned eye icon) -->
+            <div class="space-y-1.5">
+              <div class="relative flex items-center">
+                <input
+                  type="password"
+                  id="passwordInput"
+                  required
+                  placeholder="Password"
+                  class="w-full bg-zinc-100/90 hover:bg-zinc-100 focus:bg-white text-zinc-800 placeholder-zinc-400 text-sm rounded-xl px-4 py-3.5 pr-11 border border-zinc-200 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 outline-none transition"
+                />
+                <button
+                  type="button"
+                  onclick="togglePasswordVisibility()"
+                  class="absolute right-3.5 text-zinc-400 hover:text-zinc-600 focus:outline-none"
+                  title="Toggle visibility"
+                >
+                  <!-- Eye Icon -->
+                  <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Action Buttons: Reset & Sign In -> (Matching Reference Layout) -->
+            <div class="pt-4 flex items-center gap-4">
+              <!-- Reset Button (Pill outline) -->
+              <button
+                type="button"
+                onclick="resetForm()"
+                class="flex-1 py-3 px-6 rounded-full border border-zinc-300 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 font-semibold text-sm transition text-center shadow-sm"
+              >
+                Reset
+              </button>
+
+              <!-- Sign In Button (Pill with arrow icon in Ambizcon Teal/Emerald Gradient) -->
+              <button
+                type="submit"
+                id="btnSignIn"
+                class="flex-1 py-3 px-6 rounded-full bg-gradient-to-r from-[#086075] to-[#2a8c82] hover:from-[#065163] hover:to-[#22756d] text-white font-bold text-sm shadow-lg shadow-teal-900/25 transition flex items-center justify-center gap-2 group cursor-pointer"
+              >
+                <span>Sign In</span>
+                <!-- Right Arrow -->
+                <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Forgot Password Link (Right-aligned, matching reference image) -->
+            <div class="pt-2 text-right">
+              <a href="#" onclick="showForgotAlert(event)" class="text-xs font-semibold text-zinc-500 hover:text-teal-700 italic underline underline-offset-2 transition">
+                Forgot Password?
+              </a>
+            </div>
+
+            <!-- Live Status Alert Box (Feedback on click) -->
+            <div id="loginFeedback" class="hidden mt-4 p-3 rounded-xl text-xs font-medium border transition-all"></div>
+
+          </form>
+
+          <!-- Security Badge Footer in Card -->
+          <div class="mt-8 pt-4 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400">
+            <span class="flex items-center gap-1.5 text-emerald-600 font-medium">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              Enterprise 256-Bit SSL
+            </span>
+            <span>Version 2.4.0</span>
+          </div>
+
+        </div>
+
+      </div><!-- /RIGHT COLUMN -->
+
+    </div><!-- /Main Stage -->
+
+  </main>
+
+  <!-- Global Footer Copyright (Matching Reference Image bottom copyright line) -->
+  <footer class="w-full text-center py-3 text-[11px] text-teal-200/50 border-t border-teal-500/10">
+    © 2026 Ambizcon Pty Ltd & Ambizcon Health. All Rights Reserved. Confidential & Proprietary.
+  </footer>
+
+  <script>
+    let isPaused = false;
+    let currentSpeed = 35;
+
+    function setSpeed(seconds) {
+      currentSpeed = seconds;
+      isPaused = false;
+      document.documentElement.style.setProperty('--rotate-speed', seconds + 's');
+      document.documentElement.style.setProperty('--rotate-speed-reverse', (seconds * 1.6) + 's');
+      
+      const dialOuter = document.getElementById('dialOuter');
+      const dialInner = document.getElementById('dialInner');
+      const orbitalBadges = document.getElementById('orbitalBadgesLayer');
+      const badges = document.querySelectorAll('.counter-rotate-badge');
+
+      dialOuter.style.animationPlayState = 'running';
+      dialInner.style.animationPlayState = 'running';
+      orbitalBadges.style.animationPlayState = 'running';
+      badges.forEach(b => b.style.animationPlayState = 'running');
+
+      document.getElementById('btnPause').textContent = 'Pause';
+      document.getElementById('btnSpeedSlow').className = seconds === 75 ? 'px-2 py-0.5 rounded bg-teal-600 text-white font-bold transition' : 'px-2 py-0.5 rounded hover:bg-teal-600/40 text-teal-300 transition';
+      document.getElementById('btnSpeedNormal').className = seconds === 35 ? 'px-2 py-0.5 rounded bg-teal-600 text-white font-bold transition' : 'px-2 py-0.5 rounded hover:bg-teal-600/40 text-teal-300 transition';
+      document.getElementById('btnSpeedFast').className = seconds === 15 ? 'px-2 py-0.5 rounded bg-teal-600 text-white font-bold transition' : 'px-2 py-0.5 rounded hover:bg-teal-600/40 text-teal-300 transition';
+    }
+
+    function togglePause() {
+      isPaused = !isPaused;
+      const state = isPaused ? 'paused' : 'running';
+      document.getElementById('dialOuter').style.animationPlayState = state;
+      document.getElementById('dialInner').style.animationPlayState = state;
+      document.getElementById('orbitalBadgesLayer').style.animationPlayState = state;
+      document.querySelectorAll('.counter-rotate-badge').forEach(b => b.style.animationPlayState = state);
+      document.getElementById('btnPause').textContent = isPaused ? 'Resume' : 'Pause';
+    }
+
+    function setBranch(branch) {
+      const centerLogoImg = document.getElementById('centerLogoImg');
+      const cardLogoImg = document.getElementById('cardLogoImg');
+      const centerBranchBadge = document.getElementById('centerBranchBadge');
+      const tabHealth = document.getElementById('tabBranchHealth');
+      const tabAus = document.getElementById('tabBranchAus');
+
+      if (branch === 'australia') {
+        centerLogoImg.src = 'ambizcon-australia-icon.png';
+        cardLogoImg.src = 'ambizcon-australia-icon.png';
+        centerBranchBadge.textContent = 'Ambizcon Australia HQ';
+        tabAus.className = 'flex-1 py-2 rounded-lg bg-white shadow-sm text-amber-700 font-bold transition text-center';
+        tabHealth.className = 'flex-1 py-2 rounded-lg text-zinc-500 hover:text-zinc-800 transition text-center';
+      } else {
+        centerLogoImg.src = 'ambizcon-logo.png';
+        cardLogoImg.src = 'ambizcon-logo.png';
+        centerBranchBadge.textContent = 'Ambizcon Health';
+        tabHealth.className = 'flex-1 py-2 rounded-lg bg-white shadow-sm text-teal-800 font-bold transition text-center';
+        tabAus.className = 'flex-1 py-2 rounded-lg text-zinc-500 hover:text-zinc-800 transition text-center';
+      }
+    }
+
+    function autofillLogin() {
+      document.getElementById('emailInput').value = 'hariprasath@ambizcon.com';
+      document.getElementById('passwordInput').value = 'Ambizcon@2026';
+      const fb = document.getElementById('loginFeedback');
+      fb.className = 'mt-4 p-3 rounded-xl text-xs font-medium border bg-teal-50 text-teal-800 border-teal-200 block';
+      fb.textContent = 'Demo credentials filled: hariprasath@ambizcon.com / Ambizcon@2026';
+    }
+
+    function resetForm() {
+      document.getElementById('emailInput').value = '';
+      document.getElementById('passwordInput').value = '';
+      const fb = document.getElementById('loginFeedback');
+      fb.className = 'hidden';
+      fb.textContent = '';
+    }
+
+    function togglePasswordVisibility() {
+      const p = document.getElementById('passwordInput');
+      p.type = p.type === 'password' ? 'text' : 'password';
+    }
+
+    function showForgotAlert(e) {
+      e.preventDefault();
+      alert('Password Reset Instruction:\nPlease contact Ambizcon IT Helpdesk at support@ambizcon.com or reach out to your HR supervisor for credential recovery.');
+    }
+
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('emailInput').value.trim();
+      const password = document.getElementById('passwordInput').value;
+      const fb = document.getElementById('loginFeedback');
+
+      if (!email.toLowerCase().endsWith('@ambizcon.com')) {
+        fb.className = 'mt-4 p-3 rounded-xl text-xs font-semibold border bg-red-50 text-red-700 border-red-200 block';
+        fb.textContent = 'Access Restricted: Only authorized @ambizcon.com accounts are permitted.';
+        return;
+      }
+
+      if (password !== 'Ambizcon@2026') {
+        fb.className = 'mt-4 p-3 rounded-xl text-xs font-semibold border bg-amber-50 text-amber-800 border-amber-200 block';
+        fb.textContent = 'Incorrect Password. Please use company password Ambizcon@2026.';
+        return;
+      }
+
+      fb.className = 'mt-4 p-3 rounded-xl text-xs font-semibold border bg-emerald-50 text-emerald-800 border-emerald-300 block';
+      fb.textContent = 'Authentication Successful! Ready to transition to Bizzy Board Dashboard.';
+    }
+
+    // Initialize with default 35s speed
+    setSpeed(35);
+  </script>
+</body>
+</html>

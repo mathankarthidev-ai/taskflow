@@ -237,10 +237,35 @@ function KanbanBoardContent() {
           </div>
         </div>
 
-        <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 shadow-glow">
-          <Plus className="h-4 w-4" />
-          Create Task
-        </Button>
+        <div className="flex items-center gap-2">
+          {filteredTasks.length === 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  await fetch('/api/seed', { method: 'POST' });
+                  const fetchedTasks = await fetchTasksAction();
+                  setTasks(fetchedTasks);
+                  toast.success('Populated 18 Ambizcon tasks across all 6 columns!');
+                } catch (e) {
+                  toast.error('Failed to populate tasks');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="gap-1.5 border-teal-500/40 text-teal-600 dark:text-teal-400 hover:bg-teal-500/10"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Populate Tasks
+            </Button>
+          )}
+          <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 shadow-glow">
+            <Plus className="h-4 w-4" />
+            Create Task
+          </Button>
+        </div>
       </div>
 
       {/* Top Filter Bar */}
