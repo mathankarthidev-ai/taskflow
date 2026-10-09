@@ -53,6 +53,13 @@ export default function TeamChatPage() {
   const [showLinkField, setShowLinkField] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; url: string; size?: string; type?: string } | null>(null);
 
+  // Submission lock & window instance ID to prevent double paste
+  const [isSending, setIsSending] = useState(false);
+  const isSendingRef = useRef(false);
+  const windowInstanceIdRef = useRef<string>(
+    typeof window !== 'undefined' ? `win_${Math.random().toString(36).slice(2, 9)}` : 'srv'
+  );
+
   // Direct DM Modal State
   const [isNewDmModalOpen, setIsNewDmModalOpen] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -81,12 +88,29 @@ export default function TeamChatPage() {
   // Real-time synchronization & cross-tab events listener
   useEffect(() => {
     const handleRemoteMessage = (e: any) => {
-      const { channelId, message } = e.detail || {};
+      const { channelId, message, originWindowId } = e.detail || {};
+
+      // Check 1: If event originated from this exact window instance, ignore it!
+      // (handleSendMessage already added it locally)
+      if (originWindowId && originWindowId === windowInstanceIdRef.current) {
+        return;
+      }
+
       if (channelId === activeChannelId && message) {
-        // Only append if message is from another user/tab to prevent double paste
+        // Check 2: Only append if message is from another user/tab to prevent double paste
         if (message.senderId !== currentUser?._id) {
           setMessages((prev) => {
             if (prev.some((m) => m.id === message.id)) return prev;
+            // Check 3: Drop identical text from same sender within 2000ms
+            const last = prev[prev.length - 1];
+            if (
+              last &&
+              last.senderId === message.senderId &&
+              last.text === message.text &&
+              Math.abs(new Date(message.createdAt).getTime() - new Date(last.createdAt).getTime()) < 2000
+            ) {
+              return prev;
+            }
             return [...prev, message];
           });
           playNotificationChime();
@@ -144,48 +168,80 @@ export default function TeamChatPage() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageText.trim() && !attachedFile && !linkInput.trim()) {
+
+    // Check 1: Guard against rapid double click or multiple submit events
+    if (isSendingRef.current) return;
+
+    const textToSend = messageText.trim();
+    const fileToSend = attachedFile;
+    const linkToSend = linkInput.trim();
+
+    if (!textToSend && !fileToSend && !linkToSend) {
       toast.error('Please enter a message, link, or attach a file');
       return;
     }
 
-    const created = sendChatMessage(
-      activeChannelId,
-      {
-        _id: currentUser._id,
-        name: currentUser.name,
-        role: currentUser.role,
-        team: currentUser.team,
-        avatar: currentUser.avatar,
-      },
-      messageText,
-      attachedFile || undefined,
-      linkInput || undefined
-    );
-
-    // Audio chime sound on send
-    playNotificationChime();
-
-    // Notify all via In-App Notification Store
-    useNotificationStore.getState().addNotification({
-      type: 'chat_message',
-      category: activeChannel?.name || 'Group Chat',
-      title: `💬 New Message in ${activeChannel?.name || 'Group Chat'}`,
-      text: `${currentUser.name}: ${messageText.trim() || (attachedFile ? `Attached: ${attachedFile.name}` : 'Shared a link')}`,
-      color: 'bg-teal-500',
-      link: '/chat',
-    });
-
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === created.id)) return prev;
-      return [...prev, created];
-    });
+    // Check 2: Immediately lock submission and clear form inputs so no second submit can grab the text
+    isSendingRef.current = true;
+    setIsSending(true);
     setMessageText('');
     setLinkInput('');
     setShowLinkField(false);
     setAttachedFile(null);
-    setChannels(getStoredChannels());
-    toast.success(`Message broadcasted to ${activeChannel?.name || 'group'}`, { icon: '🔔' });
+
+    try {
+      const created = sendChatMessage(
+        activeChannelId,
+        {
+          _id: currentUser._id,
+          name: currentUser.name,
+          role: currentUser.role,
+          team: currentUser.team,
+          avatar: currentUser.avatar,
+        },
+        textToSend,
+        fileToSend || undefined,
+        linkToSend || undefined,
+        windowInstanceIdRef.current
+      );
+
+      // Audio chime sound on send
+      playNotificationChime();
+
+      // Notify all via In-App Notification Store
+      useNotificationStore.getState().addNotification({
+        type: 'chat_message',
+        category: activeChannel?.name || 'Group Chat',
+        title: `💬 New Message in ${activeChannel?.name || 'Group Chat'}`,
+        text: `${currentUser.name}: ${textToSend || (fileToSend ? `Attached: ${fileToSend.name}` : 'Shared a link')}`,
+        color: 'bg-teal-500',
+        link: '/chat',
+      });
+
+      // Check 3: Add to messages state with deduplication by ID and recent identical content
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === created.id)) return prev;
+        const last = prev[prev.length - 1];
+        if (
+          last &&
+          last.senderId === created.senderId &&
+          last.text === created.text &&
+          Math.abs(new Date(created.createdAt).getTime() - new Date(last.createdAt).getTime()) < 2000
+        ) {
+          return prev;
+        }
+        return [...prev, created];
+      });
+
+      setChannels(getStoredChannels());
+      toast.success(`Message broadcasted to ${activeChannel?.name || 'group'}`, { icon: '🔔' });
+    } finally {
+      // Cooldown debounce window (400ms) before unlocking send button
+      setTimeout(() => {
+        isSendingRef.current = false;
+        setIsSending(false);
+      }, 400);
+    }
   };
 
   // Admin delete message action
@@ -406,7 +462,22 @@ export default function TeamChatPage() {
         {/* Message Feed */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {(() => {
-            const uniqueMessages = Array.from(new Map(messages.map((m) => [m.id, m])).values());
+            const seenIds = new Set<string>();
+            const uniqueMessages: ChatMessage[] = [];
+            for (const m of messages) {
+              if (!m || seenIds.has(m.id)) continue;
+              seenIds.add(m.id);
+              const prev = uniqueMessages[uniqueMessages.length - 1];
+              if (
+                prev &&
+                prev.senderId === m.senderId &&
+                prev.text === m.text &&
+                Math.abs(new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime()) < 2000
+              ) {
+                continue;
+              }
+              uniqueMessages.push(m);
+            }
             return uniqueMessages.length > 0 ? (
               uniqueMessages.map((msg) => {
                 const isMe = msg.senderId === currentUser._id;
@@ -567,8 +638,12 @@ export default function TeamChatPage() {
               className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3.5 py-2.5 text-xs font-medium focus-ring"
             />
 
-            <Button type="submit" className="bg-[#086075] hover:bg-[#086075]/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl gap-1.5 shadow-sm">
-              <Send className="h-3.5 w-3.5" /> Send
+            <Button
+              type="submit"
+              disabled={isSending || (!messageText.trim() && !attachedFile && !linkInput.trim())}
+              className="bg-[#086075] hover:bg-[#086075]/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl gap-1.5 shadow-sm disabled:opacity-50"
+            >
+              <Send className="h-3.5 w-3.5" /> {isSending ? 'Sending...' : 'Send'}
             </Button>
           </div>
         </form>

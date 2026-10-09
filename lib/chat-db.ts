@@ -82,9 +82,26 @@ export function getStoredMessages(channelId: string): ChatMessage[] {
       return INITIAL_MESSAGES[channelId] || [];
     }
     const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
-    const list = allMsgs[channelId] || INITIAL_MESSAGES[channelId] || [];
-    // Deduplicate by ID to prevent any duplicate rendering
-    return Array.from(new Map(list.map((m: ChatMessage) => [m.id, m])).values());
+    const list: ChatMessage[] = allMsgs[channelId] || INITIAL_MESSAGES[channelId] || [];
+
+    // Deduplicate by ID and strip rapid accidental duplicates (same sender & identical text within 2000ms)
+    const seenIds = new Set<string>();
+    const deduplicated: ChatMessage[] = [];
+    for (const m of list) {
+      if (!m || seenIds.has(m.id)) continue;
+      seenIds.add(m.id);
+      const prev = deduplicated[deduplicated.length - 1];
+      if (
+        prev &&
+        prev.senderId === m.senderId &&
+        prev.text === m.text &&
+        Math.abs(new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime()) < 2000
+      ) {
+        continue;
+      }
+      deduplicated.push(m);
+    }
+    return deduplicated;
   } catch (err) {
     return INITIAL_MESSAGES[channelId] || [];
   }
@@ -95,27 +112,44 @@ export function sendChatMessage(
   sender: { _id: string; name: string; role: UserRole; team: TeamName; avatar?: string },
   text: string,
   fileAttachment?: { name: string; url: string; size?: string; type?: string },
-  linkUrl?: string
+  linkUrl?: string,
+  originWindowId?: string
 ): ChatMessage {
-  const newMsg: ChatMessage = {
-    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    channelId,
-    senderId: sender._id,
-    senderName: sender.name,
-    senderRole: sender.role,
-    senderTeam: sender.team,
-    senderAvatar: sender.avatar,
-    text: text.trim(),
-    fileAttachment,
-    linkUrl: linkUrl?.trim() || undefined,
-    createdAt: new Date().toISOString(),
-  };
+  const trimmedText = text.trim();
 
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(MESSAGES_KEY);
       const allMsgs: Record<string, ChatMessage[]> = raw ? JSON.parse(raw) : { ...INITIAL_MESSAGES };
-      const currentList = allMsgs[channelId] || INITIAL_MESSAGES[channelId] || [];
+      const currentList: ChatMessage[] = allMsgs[channelId] || INITIAL_MESSAGES[channelId] || [];
+
+      // Check for rapid double submit (same sender, same text, same channel within last 2000ms)
+      const lastMsg = currentList[currentList.length - 1];
+      if (
+        lastMsg &&
+        lastMsg.senderId === sender._id &&
+        lastMsg.text === trimmedText &&
+        (!fileAttachment || lastMsg.fileAttachment?.name === fileAttachment.name) &&
+        Date.now() - new Date(lastMsg.createdAt).getTime() < 2000
+      ) {
+        // Return existing message without duplicating
+        return lastMsg;
+      }
+
+      const newMsg: ChatMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        channelId,
+        senderId: sender._id,
+        senderName: sender.name,
+        senderRole: sender.role,
+        senderTeam: sender.team,
+        senderAvatar: sender.avatar,
+        text: trimmedText,
+        fileAttachment,
+        linkUrl: linkUrl?.trim() || undefined,
+        createdAt: new Date().toISOString(),
+      };
+
       const updatedList = [...currentList, newMsg];
       allMsgs[channelId] = updatedList;
       localStorage.setItem(MESSAGES_KEY, JSON.stringify(allMsgs));
@@ -126,25 +160,39 @@ export function sendChatMessage(
         c.id === channelId
           ? {
               ...c,
-              lastMessage: text.slice(0, 40) || (fileAttachment ? `Attachment: ${fileAttachment.name}` : 'File/Link Shared'),
+              lastMessage: trimmedText.slice(0, 40) || (fileAttachment ? `Attachment: ${fileAttachment.name}` : 'File/Link Shared'),
               lastMessageTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             }
           : c
       );
       localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
 
-      // Dispatch window event for cross-component / live-tab sync
+      // Dispatch window event with originWindowId for cross-component / live-tab sync
       window.dispatchEvent(
         new CustomEvent('taskflow_chat_message_sent', {
-          detail: { channelId, message: newMsg },
+          detail: { channelId, message: newMsg, originWindowId },
         })
       );
+
+      return newMsg;
     } catch (err) {
       console.error('Failed to save message', err);
     }
   }
 
-  return newMsg;
+  return {
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    channelId,
+    senderId: sender._id,
+    senderName: sender.name,
+    senderRole: sender.role,
+    senderTeam: sender.team,
+    senderAvatar: sender.avatar,
+    text: trimmedText,
+    fileAttachment,
+    linkUrl: linkUrl?.trim() || undefined,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 export function deleteChatMessage(channelId: string, messageId: string): boolean {

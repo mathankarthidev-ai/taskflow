@@ -19,6 +19,7 @@ export async function submitReimbursementAction(input: {
   date: string;
   description: string;
   receiptName?: string;
+  receiptUrl?: string;
   items?: ExpenseItem[];
   isDraft?: boolean;
 }): Promise<ReimbursementClaim> {
@@ -41,7 +42,7 @@ export async function submitReimbursementAction(input: {
     date: input.date,
     description: input.description,
     receiptName: input.receiptName || 'receipt_document.pdf',
-    receiptUrl: '#',
+    receiptUrl: input.receiptUrl || input.items?.[0]?.receiptUrl || '',
     items: input.items || [],
     comments: [],
     tlStatus: null,

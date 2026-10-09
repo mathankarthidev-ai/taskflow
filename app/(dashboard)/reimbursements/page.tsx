@@ -44,9 +44,16 @@ import {
   SlidersHorizontal,
   Settings,
   Calendar,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Minimize2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { getReceiptImageUrl } from '@/lib/receipt-helper';
 
 const DEFAULT_CATEGORIES = [
   'Client Lunch',
@@ -87,7 +94,15 @@ export default function ReimbursementsPage() {
   // Submit Claim Modal & Multi-Item Expense Form
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [items, setItems] = useState<
-    { category: string; customCategoryName?: string; amount: string; date: string; description: string; receiptName: string }[]
+    {
+      category: string;
+      customCategoryName?: string;
+      amount: string;
+      date: string;
+      description: string;
+      receiptName: string;
+      receiptUrl?: string;
+    }[]
   >([
     {
       category: 'Client Lunch',
@@ -96,14 +111,26 @@ export default function ReimbursementsPage() {
       date: new Date().toISOString().split('T')[0],
       description: '',
       receiptName: '',
+      receiptUrl: '',
     },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Detail & Comments Modal
+  // Detail & Comments Modal & Inline Receipt Zoom Viewer
   const [selectedClaimDetail, setSelectedClaimDetail] = useState<ReimbursementClaim | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [isAddingComment, setIsAddingComment] = useState(false);
+  const [imageZoom, setImageZoom] = useState<number>(1);
+  const [imageRotation, setImageRotation] = useState<number>(0);
+  const [expandedReceiptIdx, setExpandedReceiptIdx] = useState<number | null>(0);
+
+  const handleOpenClaimDetails = (claim: ReimbursementClaim) => {
+    setSelectedClaimDetail(claim);
+    // Expand the first item's receipt immediately right there inside the modal
+    setExpandedReceiptIdx(0);
+    setImageZoom(1);
+    setImageRotation(0);
+  };
 
   // Rejection Reason Modal
   const [rejectionModalClaimId, setRejectionModalClaimId] = useState<string | null>(null);
@@ -157,6 +184,7 @@ export default function ReimbursementsPage() {
         date: new Date().toISOString().split('T')[0],
         description: '',
         receiptName: '',
+        receiptUrl: '',
       },
     ]);
   };
@@ -178,10 +206,16 @@ export default function ReimbursementsPage() {
   const handleFileUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const updated = [...items];
-      updated[index].receiptName = file.name;
-      setItems(updated);
-      toast.success(`Attached file: ${file.name}`);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const updated = [...items];
+        updated[index].receiptName = file.name;
+        updated[index].receiptUrl = result;
+        setItems(updated);
+        toast.success(`Attached file: ${file.name}`);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -226,6 +260,7 @@ export default function ReimbursementsPage() {
           ? `${items[0].description} (+${items.length - 1} more items)`
           : items[0].description;
       const primaryReceipt = items[0].receiptName.trim() || 'expense_receipt.pdf';
+      const primaryReceiptUrl = items[0].receiptUrl || '';
 
       const formattedItems: ExpenseItem[] = items.map((it, idx) => {
         const catName =
@@ -240,6 +275,7 @@ export default function ReimbursementsPage() {
           date: it.date,
           description: it.description,
           receiptName: it.receiptName.trim() || 'expense_receipt.pdf',
+          receiptUrl: it.receiptUrl || '',
         };
       });
 
@@ -254,6 +290,7 @@ export default function ReimbursementsPage() {
         date: items[0].date,
         description: primaryDesc,
         receiptName: primaryReceipt,
+        receiptUrl: primaryReceiptUrl,
         items: formattedItems,
         isDraft,
       });
@@ -275,6 +312,7 @@ export default function ReimbursementsPage() {
           date: new Date().toISOString().split('T')[0],
           description: '',
           receiptName: '',
+          receiptUrl: '',
         },
       ]);
     } catch (err) {
@@ -286,11 +324,16 @@ export default function ReimbursementsPage() {
 
   // Status Action Handlers (Admin Approval Only)
   const handleApproveAdmin = async (id: string) => {
+    // Reset zoom and reduce receipt size to normal as requested
+    setImageZoom(1);
+    setImageRotation(0);
+    setExpandedReceiptIdx(null);
+
     const updated = await approveClaimAdminAction(id);
     if (updated) {
       setClaims(claims.map((c) => (c._id === id ? updated : c)));
       if (selectedClaimDetail?._id === id) setSelectedClaimDetail(updated);
-      toast.success(`Claim approved by Admin! Ready for finance payout.`);
+      toast.success(`Claim approved by Admin! Receipt reduced to normal.`);
     }
   };
 
@@ -315,11 +358,16 @@ export default function ReimbursementsPage() {
       return;
     }
 
+    // Reset zoom and reduce receipt size to normal as requested
+    setImageZoom(1);
+    setImageRotation(0);
+    setExpandedReceiptIdx(null);
+
     const updated = await rejectClaimAction(rejectionModalClaimId, 'admin', rejectionReasonInput.trim());
     if (updated) {
       setClaims(claims.map((c) => (c._id === rejectionModalClaimId ? updated : c)));
       if (selectedClaimDetail?._id === rejectionModalClaimId) setSelectedClaimDetail(updated);
-      toast.error(`Claim rejected by Admin with documented reason.`);
+      toast.error(`Claim rejected by Admin with documented reason. Receipt reduced to normal.`);
       setRejectionModalClaimId(null);
     }
   };
@@ -751,7 +799,7 @@ export default function ReimbursementsPage() {
                   {/* Inspect Button */}
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setSelectedClaimDetail(claim)}
+                      onClick={() => handleOpenClaimDetails(claim)}
                       className="inline-flex items-center gap-1.5 text-xs text-brand-600 dark:text-brand-400 font-semibold border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 rounded-xl hover:bg-brand-500/20 transition-all"
                     >
                       <Eye className="h-3.5 w-3.5" />
@@ -1016,35 +1064,124 @@ export default function ReimbursementsPage() {
         </form>
       </Modal>
 
-      {/* Claim Detail & Comments Modal */}
+      {/* Claim Detail & Comments Modal with Inline Receipt Viewer */}
       {selectedClaimDetail && (
         <Modal
           isOpen={Boolean(selectedClaimDetail)}
-          onClose={() => setSelectedClaimDetail(null)}
+          onClose={() => {
+            setSelectedClaimDetail(null);
+            setExpandedReceiptIdx(null);
+            setImageZoom(1);
+            setImageRotation(0);
+          }}
           title={`Claim ${selectedClaimDetail.claimNo} Details & Audit Log`}
-          description="View itemized breakdown, receipt file metadata, and add comments to the claim discussion thread."
-          maxWidth="2xl"
+          description="Inspect itemized breakdown, receipt document inline with interactive zoom controls, and discussion thread."
+          maxWidth="3xl"
         >
-          <div className="space-y-5 pt-2">
+          <div className="space-y-4 pt-1">
+            {/* Claimant & Amount Header Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center gap-3">
                 <Avatar src={selectedClaimDetail.userAvatar} name={selectedClaimDetail.userName} size="md" />
                 <div>
-                  <span className="font-bold text-sm text-foreground block">{selectedClaimDetail.userName}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-foreground block">{selectedClaimDetail.userName}</span>
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {selectedClaimDetail.claimNo}
+                    </Badge>
+                  </div>
                   <span className="text-xs text-muted-foreground">
                     {selectedClaimDetail.userTeam} • {selectedClaimDetail.company || 'Ambizcon'}
                   </span>
                 </div>
               </div>
 
-              <div className="text-right">
-                <span className="text-xs text-muted-foreground font-semibold block">Total Claim Amount</span>
-                <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                  ₹{selectedClaimDetail.amount.toLocaleString('en-IN')}
-                </span>
+              <div className="flex items-center gap-4">
+                <div>
+                  {selectedClaimDetail.status === 'Approved' ? (
+                    <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-extrabold text-xs">
+                      ✓ APPROVED BY ADMIN
+                    </Badge>
+                  ) : selectedClaimDetail.status === 'Rejected' ? (
+                    <Badge className="bg-rose-500/20 text-rose-600 border-rose-500/30 font-extrabold text-xs">
+                      ✗ REJECTED
+                    </Badge>
+                  ) : selectedClaimDetail.status === 'Paid' ? (
+                    <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold text-xs">
+                      PAID OUT
+                    </Badge>
+                  ) : selectedClaimDetail.status === 'Draft' ? (
+                    <Badge className="bg-zinc-500/20 text-zinc-600 dark:text-zinc-400 border-zinc-500/30 font-bold text-xs">
+                      DRAFT
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 font-bold text-xs">
+                      ... PENDING APPROVAL
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="text-right border-l border-zinc-200 dark:border-zinc-800 pl-4">
+                  <span className="text-[11px] text-muted-foreground font-semibold block">Total Claim Amount</span>
+                  <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                    ₹{selectedClaimDetail.amount.toLocaleString('en-IN')}
+                  </span>
+                </div>
               </div>
             </div>
 
+            {/* Quick Admin Decision Banner (Reduce size to normal after approve or reject) */}
+            {isSuperAdmin &&
+              (selectedClaimDetail.status === 'Pending Approval' ||
+                (selectedClaimDetail.status as string) === 'Pending TL' ||
+                (selectedClaimDetail.status as string) === 'Pending CEO') && (
+                <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Shield className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <div>
+                      <span className="font-bold text-foreground block">Admin Approval Decision</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Inspect the expanded receipt below. Decision reduces preview size to normal.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-rose-500/40 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-xs h-8"
+                      onClick={() => {
+                        // Immediately reduce size to normal
+                        setImageZoom(1);
+                        setImageRotation(0);
+                        setExpandedReceiptIdx(null);
+                        handleOpenRejectModal(selectedClaimDetail._id);
+                      }}
+                    >
+                      <XCircle className="h-3.5 w-3.5 mr-1 text-rose-500" />
+                      Reject Claim
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 shadow-sm font-semibold"
+                      onClick={async () => {
+                        // Immediately reduce size to normal
+                        setImageZoom(1);
+                        setImageRotation(0);
+                        setExpandedReceiptIdx(null);
+                        await handleApproveAdmin(selectedClaimDetail._id);
+                      }}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                      Approve Claim
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+            {/* Documented Rejection Reason if any */}
             {selectedClaimDetail.rejectionReason && (
               <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300 text-xs">
                 <span className="font-extrabold block">Rejection Reason Documented:</span>
@@ -1052,9 +1189,18 @@ export default function ReimbursementsPage() {
               </div>
             )}
 
-            <div>
-              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Itemized Expenses</h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {/* Itemized Expenses & Inline Expandable Receipt Viewer */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  Itemized Expenses &amp; Receipt Attachments
+                </h4>
+                <span className="text-[11px] text-muted-foreground">
+                  Receipts expand inline — no pop-up windows
+                </span>
+              </div>
+
+              <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
                 {(selectedClaimDetail.items && selectedClaimDetail.items.length > 0
                   ? selectedClaimDetail.items
                   : [
@@ -1065,37 +1211,220 @@ export default function ReimbursementsPage() {
                         date: selectedClaimDetail.date,
                         description: selectedClaimDetail.description,
                         receiptName: selectedClaimDetail.receiptName,
+                        receiptUrl: selectedClaimDetail.receiptUrl,
                       },
                     ]
-                ).map((it, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-card text-xs"
-                  >
-                    <div>
-                      <span className="font-bold text-foreground block">{it.category}</span>
-                      <span className="text-[11px] text-muted-foreground">{it.description}</span>
-                      <span className="text-[10px] font-mono text-zinc-500 block">Date: {it.date}</span>
-                    </div>
+                ).map((it, idx) => {
+                  const isExpanded = expandedReceiptIdx === idx;
+                  const receiptSrc = getReceiptImageUrl(
+                    it.receiptName,
+                    it.receiptUrl || selectedClaimDetail.receiptUrl,
+                    {
+                      claimNo: selectedClaimDetail.claimNo,
+                      category: it.category,
+                      amount: it.amount,
+                      date: it.date,
+                      userName: selectedClaimDetail.userName,
+                      description: it.description,
+                    }
+                  );
 
-                    <div className="text-right">
-                      <span className="font-extrabold text-foreground block">₹{it.amount.toLocaleString('en-IN')}</span>
-                      <span className="text-[10px] text-brand-600 dark:text-brand-400 font-semibold">
-                        📄 {it.receiptName || 'receipt.pdf'}
-                      </span>
+                  return (
+                    <div
+                      key={idx}
+                      className={`rounded-2xl border transition-all ${
+                        isExpanded
+                          ? 'border-brand-500/50 bg-brand-500/[0.02] shadow-sm'
+                          : 'border-zinc-200 dark:border-zinc-800 bg-card hover:border-zinc-300 dark:hover:border-zinc-700'
+                      } p-3.5`}
+                    >
+                      {/* Compact Item Header Row */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex-1 min-w-[200px]">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-foreground">{it.category}</span>
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              Item #{idx + 1}
+                            </Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground mt-0.5 block">{it.description}</span>
+                          <span className="text-[10px] font-mono text-zinc-500 block mt-0.5">
+                            Date: {it.date}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <span className="font-extrabold text-sm text-foreground block">
+                              ₹{it.amount.toLocaleString('en-IN')}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 font-mono block">
+                              📄 {it.receiptName || 'demo.jpg'}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isExpanded) {
+                                setExpandedReceiptIdx(null);
+                                setImageZoom(1);
+                                setImageRotation(0);
+                              } else {
+                                setExpandedReceiptIdx(idx);
+                                setImageZoom(1);
+                                setImageRotation(0);
+                              }
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                              isExpanded
+                                ? 'bg-brand-500 text-white border-brand-500 shadow-sm'
+                                : 'bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/20 hover:bg-brand-500/20'
+                            }`}
+                          >
+                            {isExpanded ? (
+                              <>
+                                <ChevronUp className="h-3.5 w-3.5" />
+                                <span>Collapse Receipt</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="h-3.5 w-3.5" />
+                                <span>Expand Receipt</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expanded Receipt Viewer: Inline, with Zoom In/Out, Reset, Rotate */}
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-2.5 animate-in fade-in duration-200">
+                          {/* Zoom & Inspection Toolbar */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-100/90 dark:bg-zinc-900/90 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                              <Paperclip className="h-4 w-4 text-brand-500" />
+                              <span className="text-xs font-bold text-foreground">
+                                Receipt Document:
+                              </span>
+                              <span className="text-xs text-brand-600 dark:text-brand-400 font-mono truncate max-w-[160px]">
+                                {it.receiptName || 'demo.jpg'}
+                              </span>
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-background border border-zinc-200 dark:border-zinc-800 text-muted-foreground">
+                                Zoom: {Math.round(imageZoom * 100)}%
+                              </span>
+                            </div>
+
+                            {/* Zoom Controls */}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                title="Zoom Out (-)"
+                                onClick={() =>
+                                  setImageZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))
+                                }
+                                disabled={imageZoom <= 0.5}
+                                className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-foreground disabled:opacity-40 transition-colors flex items-center gap-1 text-xs"
+                              >
+                                <ZoomOut className="h-3.5 w-3.5" />
+                                <span className="text-[11px] hidden sm:inline">Zoom Out</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                title="Reset Zoom to 100% (Normal Size)"
+                                onClick={() => {
+                                  setImageZoom(1);
+                                  setImageRotation(0);
+                                }}
+                                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
+                                  imageZoom === 1 && imageRotation === 0
+                                    ? 'border-brand-500/40 bg-brand-500/10 text-brand-600 dark:text-brand-300'
+                                    : 'border-zinc-200 dark:border-zinc-700 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-foreground'
+                                }`}
+                              >
+                                100% (Normal)
+                              </button>
+
+                              <button
+                                type="button"
+                                title="Zoom In (+)"
+                                onClick={() =>
+                                  setImageZoom((z) => Math.min(3, Math.round((z + 0.25) * 100) / 100))
+                                }
+                                disabled={imageZoom >= 3}
+                                className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-foreground disabled:opacity-40 transition-colors flex items-center gap-1 text-xs"
+                              >
+                                <ZoomIn className="h-3.5 w-3.5" />
+                                <span className="text-[11px] hidden sm:inline">Zoom In</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                title="Rotate 90 degrees"
+                                onClick={() => setImageRotation((r) => (r + 90) % 360)}
+                                className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-foreground transition-colors flex items-center gap-1 text-xs"
+                              >
+                                <RotateCw className="h-3.5 w-3.5" />
+                                <span className="text-[11px] hidden sm:inline">Rotate</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                title="Reduce to normal size / Collapse"
+                                onClick={() => {
+                                  setImageZoom(1);
+                                  setImageRotation(0);
+                                  setExpandedReceiptIdx(null);
+                                }}
+                                className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background hover:bg-rose-500/10 hover:border-rose-500/30 text-muted-foreground hover:text-rose-600 transition-colors ml-1"
+                              >
+                                <Minimize2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Inline Viewport */}
+                          <div className="w-full min-h-[300px] max-h-[460px] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950/5 dark:bg-black/40 p-4 flex items-center justify-center relative select-none">
+                            <div
+                              className="transition-transform duration-200 ease-out origin-center flex items-center justify-center"
+                              style={{
+                                transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
+                              }}
+                            >
+                              <img
+                                src={receiptSrc}
+                                alt={`Receipt document for ${it.category}`}
+                                className="max-h-[400px] w-auto max-w-full rounded-lg shadow-lg object-contain bg-white pointer-events-none"
+                                loading="eager"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
+                            <span>
+                              🔍 Use <b>Zoom In (+)</b> and <b>Zoom Out (-)</b> to verify item amounts &amp; GSTIN
+                            </span>
+                            <span className="text-[10px] font-mono">
+                              Inline Viewer • No Pop-ups
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
+            {/* Audit Trail & Comments */}
             <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4">
               <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <MessageSquare className="h-4 w-4 text-brand-500" />
-                Audit Trail & Discussion Comments ({selectedClaimDetail.comments?.length || 0})
+                Audit Trail &amp; Discussion Comments ({selectedClaimDetail.comments?.length || 0})
               </h4>
 
-              <div className="space-y-2 max-h-40 overflow-y-auto pr-1 mb-3">
+              <div className="space-y-2 max-h-36 overflow-y-auto pr-1 mb-3">
                 {!selectedClaimDetail.comments || selectedClaimDetail.comments.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic">No discussion comments logged yet.</p>
                 ) : (

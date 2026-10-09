@@ -6,13 +6,14 @@ import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { TaskCard } from '../tasks/TaskCard';
 import { TaskListView } from './TaskListView';
+import { TaskCalendarView } from './TaskCalendarView';
 import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { updateTaskStatusAction, fetchTasksAction, createTaskAction, deleteTaskAction } from '@/actions/taskActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
-import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield, List } from 'lucide-react';
+import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield, List, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
 const KANBAN_COLUMNS: { title: string; status: TaskStatus; accent: string; bg: string }[] = [
@@ -45,7 +46,7 @@ function KanbanBoardContent() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+  const [viewMode, setViewMode] = useState<'board' | 'list' | 'calendar'>('board');
   const [quickTitle, setQuickTitle] = useState('');
 
   // New Tracking & TL Scope Dropdown States
@@ -277,6 +278,31 @@ function KanbanBoardContent() {
     await updateTaskStatusAction(taskId, newStatus);
   };
 
+  const handleCreateTaskForDate = async (dateStr: string, title: string) => {
+    const targetTeam = selectedTeam !== 'All' ? selectedTeam : (currentUser?.team || 'Development');
+    const newTaskData = {
+      title,
+      description: `Task scheduled for ${dateStr}`,
+      priority: 'Medium' as const,
+      status: 'Todo' as const,
+      team: targetTeam,
+      assignedTo: currentUser?._id,
+      createdBy: currentUser?._id || 'usr_1',
+      dueDate: `${dateStr}T17:00:00.000Z`,
+      labels: [],
+      clientName: 'Ambizcon Health',
+    };
+    try {
+      const created = await createTaskAction(newTaskData as any);
+      if (created) {
+        setTasks([created, ...tasks]);
+        toast.success(`Task "${title}" created for ${dateStr}!`);
+      }
+    } catch {
+      toast.error('Failed to create task');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Bizzy Board Header Card */}
@@ -301,7 +327,7 @@ function KanbanBoardContent() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Board / List switch option */}
+          {/* Board / List / Calendar switch option */}
           <div className="inline-flex items-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 shadow-inner">
             <button
               type="button"
@@ -326,6 +352,18 @@ function KanbanBoardContent() {
             >
               <List className="h-3.5 w-3.5" />
               List
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewMode === 'calendar'
+                  ? 'bg-background text-foreground shadow-sm font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              Calendar
             </button>
           </div>
 
@@ -537,6 +575,16 @@ function KanbanBoardContent() {
             setSelectedTask(t);
             setDetailModalOpen(true);
           }}
+        />
+      ) : viewMode === 'calendar' ? (
+        <TaskCalendarView
+          tasks={filteredTasks}
+          onStatusChange={handleStatusChange}
+          onOpenModal={(t) => {
+            setSelectedTask(t);
+            setDetailModalOpen(true);
+          }}
+          onCreateTaskForDate={handleCreateTaskForDate}
         />
       ) : (
         <div className="flex xl:grid xl:grid-cols-6 overflow-x-auto pb-4 gap-4 items-start snap-x snap-mandatory">
