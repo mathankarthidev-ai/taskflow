@@ -5,13 +5,14 @@ import { Task, TaskPriority, TaskStatus, TeamName, User } from '@/types';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { TaskCard } from '../tasks/TaskCard';
+import { TaskListView } from './TaskListView';
 import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { updateTaskStatusAction, fetchTasksAction } from '@/actions/taskActions';
+import { updateTaskStatusAction, fetchTasksAction, createTaskAction, deleteTaskAction } from '@/actions/taskActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
-import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield } from 'lucide-react';
+import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield, List } from 'lucide-react';
 import { toast } from 'sonner';
 
 const KANBAN_COLUMNS: { title: string; status: TaskStatus; accent: string; bg: string }[] = [
@@ -37,11 +38,15 @@ function KanbanBoardContent() {
     setSelectedAssignee,
     resetFilters,
     setCreateModalOpen,
+    setSelectedTask,
+    setDetailModalOpen,
   } = useTaskStore();
 
   const currentUser = useAuthStore((s) => s.currentUser);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+  const [quickTitle, setQuickTitle] = useState('');
 
   // New Tracking & TL Scope Dropdown States
   const [creationTrackingFilter, setCreationTrackingFilter] = useState<'all' | 'created_by_me' | 'assigned_to_me'>('all');
@@ -224,6 +229,54 @@ function KanbanBoardContent() {
   const myCreatedCount = (tasks || []).filter((t) => t && !t.incoming && (t.createdBy === currentUser?._id || t.createdByUser?.email === currentUser?.email)).length;
   const myAssignedCount = (tasks || []).filter((t) => t && !t.incoming && (t.assignedTo === currentUser?._id || t.assignedUser?.email === currentUser?.email)).length;
 
+  const handleQuickAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickTitle.trim()) return;
+
+    const targetTeam = selectedTeam !== 'All' ? selectedTeam : (currentUser?.team || 'Development');
+    const newTaskData = {
+      title: quickTitle.trim(),
+      description: '',
+      priority: 'Medium' as const,
+      status: 'Todo' as const,
+      team: targetTeam,
+      assignedTo: currentUser?._id,
+      createdBy: currentUser?._id || 'usr_1',
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString(),
+      labels: [],
+      clientName: 'Ambizcon Health',
+    };
+
+    const titleToUse = quickTitle.trim();
+    setQuickTitle('');
+    try {
+      const created = await createTaskAction(newTaskData as any);
+      if (created) {
+        setTasks([created, ...tasks]);
+        toast.success(`Task "${titleToUse}" created in To Do!`);
+      }
+    } catch {
+      toast.error('Failed to create task');
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string, title?: string) => {
+    try {
+      setTasks(tasks.filter((t) => t._id !== taskId));
+      await deleteTaskAction(taskId);
+      toast.success(title ? `Deleted "${title}"` : 'Task deleted');
+    } catch {
+      toast.error('Failed to delete task');
+    }
+  };
+
+  const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+    const updated = tasks.map((t) => (t._id === taskId ? { ...t, status: newStatus } : t));
+    setTasks(updated);
+    toast.success(`Updated status to ${newStatus}`);
+    await updateTaskStatusAction(taskId, newStatus);
+  };
+
   return (
     <div className="space-y-6">
       {/* Bizzy Board Header Card */}
@@ -247,7 +300,49 @@ function KanbanBoardContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Board / List switch option */}
+          <div className="inline-flex items-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setViewMode('board')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewMode === 'board'
+                  ? 'bg-background text-foreground shadow-sm font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <KanbanSquare className="h-3.5 w-3.5" />
+              Board
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewMode === 'list'
+                  ? 'bg-background text-foreground shadow-sm font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              List
+            </button>
+          </div>
+
+          {/* Quick Task Form: [New task...] [Add] */}
+          <form onSubmit={handleQuickAdd} className="flex items-center gap-1.5">
+            <input
+              type="text"
+              placeholder="New task..."
+              value={quickTitle}
+              onChange={(e) => setQuickTitle(e.target.value)}
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring placeholder:text-muted-foreground w-36 sm:w-48"
+            />
+            <Button type="submit" size="sm" className="font-bold text-xs px-3">
+              Add
+            </Button>
+          </form>
+
           {filteredTasks.length === 0 && (
             <Button
               variant="outline"
@@ -422,7 +517,7 @@ function KanbanBoardContent() {
         ))}
       </div>
 
-      {/* Kanban Grid: Swipeable on mobile & tablet, 6-col grid on large desktop */}
+      {/* Main View: List or Board */}
       {loading ? (
         <div className="flex xl:grid xl:grid-cols-6 overflow-x-auto pb-4 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -433,6 +528,16 @@ function KanbanBoardContent() {
             </div>
           ))}
         </div>
+      ) : viewMode === 'list' ? (
+        <TaskListView
+          tasks={filteredTasks}
+          onStatusChange={handleStatusChange}
+          onDelete={handleDeleteTask}
+          onOpenModal={(t) => {
+            setSelectedTask(t);
+            setDetailModalOpen(true);
+          }}
+        />
       ) : (
         <div className="flex xl:grid xl:grid-cols-6 overflow-x-auto pb-4 gap-4 items-start snap-x snap-mandatory">
           {KANBAN_COLUMNS.map((column) => {
@@ -475,7 +580,7 @@ function KanbanBoardContent() {
                           draggable
                           onDragStart={(e) => handleDragStart(e, task._id)}
                         >
-                          <TaskCard task={task} />
+                          <TaskCard task={task} onDelete={handleDeleteTask} />
                         </div>
                       );
                     })

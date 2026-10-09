@@ -83,13 +83,14 @@ export default function TeamChatPage() {
     const handleRemoteMessage = (e: any) => {
       const { channelId, message } = e.detail || {};
       if (channelId === activeChannelId && message) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === message.id)) return prev;
-          return [...prev, message];
-        });
-      }
-      if (message && message.senderId !== currentUser?._id) {
-        playNotificationChime();
+        // Only append if message is from another user/tab to prevent double paste
+        if (message.senderId !== currentUser?._id) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === message.id)) return prev;
+            return [...prev, message];
+          });
+          playNotificationChime();
+        }
       }
       setChannels(getStoredChannels());
     };
@@ -175,7 +176,10 @@ export default function TeamChatPage() {
       link: '/chat',
     });
 
-    setMessages((prev) => [...prev, created]);
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === created.id)) return prev;
+      return [...prev, created];
+    });
     setMessageText('');
     setLinkInput('');
     setShowLinkField(false);
@@ -401,9 +405,11 @@ export default function TeamChatPage() {
 
         {/* Message Feed */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length > 0 ? (
-            messages.map((msg) => {
-              const isMe = msg.senderId === currentUser._id;
+          {(() => {
+            const uniqueMessages = Array.from(new Map(messages.map((m) => [m.id, m])).values());
+            return uniqueMessages.length > 0 ? (
+              uniqueMessages.map((msg) => {
+                const isMe = msg.senderId === currentUser._id;
               return (
                 <div key={msg.id} className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} group`}>
                   <Avatar name={msg.senderName} src={msg.senderAvatar} size="md" className="shrink-0" />
@@ -498,8 +504,9 @@ export default function TeamChatPage() {
               <p className="font-bold text-sm text-foreground">No messages yet in this group</p>
               <p className="text-xs max-w-sm">Start the conversation by sharing updates, attaching documents (&lt; 5MB limit), or pasting links below. Group messages trigger audio & notification alerts for all members.</p>
             </div>
-          )}
-          <div ref={messagesEndRef} />
+          );
+        })()}
+        <div ref={messagesEndRef} />
         </div>
 
         {/* Message Input Controls Bar */}

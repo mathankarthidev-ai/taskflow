@@ -82,7 +82,9 @@ export function getStoredMessages(channelId: string): ChatMessage[] {
       return INITIAL_MESSAGES[channelId] || [];
     }
     const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
-    return allMsgs[channelId] || INITIAL_MESSAGES[channelId] || [];
+    const list = allMsgs[channelId] || INITIAL_MESSAGES[channelId] || [];
+    // Deduplicate by ID to prevent any duplicate rendering
+    return Array.from(new Map(list.map((m: ChatMessage) => [m.id, m])).values());
   } catch (err) {
     return INITIAL_MESSAGES[channelId] || [];
   }
