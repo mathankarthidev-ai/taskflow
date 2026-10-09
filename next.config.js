@@ -20,6 +20,10 @@ const nextConfig = {
   experimental: {
     // serverActions is enabled by default in Next 15
   },
+  webpack: (config) => {
+    config.resolve.symlinks = false;
+    return config;
+  },
 };
 
 module.exports = nextConfig;

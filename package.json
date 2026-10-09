@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node dev-runner.js dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node dev-runner.js start",
     "lint": "next lint",
     "seed": "node -e \"console.log('Use /api/seed route or run seed action')\""
   },
