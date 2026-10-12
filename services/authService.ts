@@ -1,7 +1,7 @@
 import { User, UserRole, TeamName, CompanyBranch, WorkMode } from '@/types';
-import { connectDB } from '@/lib/db';
-import { User as UserModel } from '@/models/User';
+import { supabase } from '@/lib/supabase';
 import { mockStore } from '@/lib/mock-store';
+import { resolveEffectiveCompany } from '@/lib/company-filter';
 
 const EMAIL_ALIASES: Record<string, string> = {
   'krithikashri@ambizcon.com': 'kiruthikashri@ambizcon.com',
@@ -10,136 +10,142 @@ const EMAIL_ALIASES: Record<string, string> = {
   'mathi.p@ambizcon.com': 'mathi@ambizcon.com',
 };
 
+function mapRowToUser(row: any): User {
+  const resolvedCompany = resolveEffectiveCompany({
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    company: row.company,
+  });
+
+  return {
+    _id: String(row.id),
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    team: row.team,
+    company: resolvedCompany,
+    avatar: row.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(row.name || 'User')}`,
+    birthday: row.birthday,
+    dob: row.dob,
+    workMode: row.work_mode || 'Work From Office',
+    skills: Array.isArray(row.skills) ? row.skills : [],
+    permissionCount: row.permission_count || 0,
+    hasResetPassword: Boolean(row.has_reset_password),
+    phone: row.phone,
+    emergencyContact: row.emergency_contact,
+    address: row.address,
+    bankAccount: row.bank_account,
+    taxId: row.tax_id,
+    bloodGroup: row.blood_group,
+    education: Array.isArray(row.education) ? row.education : [],
+    experience: Array.isArray(row.experience) ? row.experience : [],
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
 export async function getUserByEmail(email: string): Promise<User | null> {
   const normEmail = email.toLowerCase().trim();
   const alias = EMAIL_ALIASES[normEmail];
   const queryEmails = alias ? [normEmail, alias] : [normEmail];
 
-  const db = await connectDB();
+  try {
+    const { data: rows, error } = await supabase
+      .from('users')
+      .select('*')
+      .in('email', queryEmails)
+      .limit(1);
 
-  if (db) {
-    try {
-      let doc = await UserModel.findOne({ email: { $in: queryEmails } }).lean();
-      if (doc) {
-        // If doc had old alias in DB, update it to primary normEmail
-        if (
-          doc.email.toLowerCase() !== normEmail &&
-          (normEmail === 'kiruthikashri@ambizcon.com' || normEmail === 'mathi.p@ambizcon.com')
-        ) {
-          await UserModel.findByIdAndUpdate(doc._id, { email: normEmail });
-          doc.email = normEmail;
-        }
-        return {
-          _id: doc._id.toString(),
-          name: doc.name,
-          email: doc.email,
-          role: doc.role,
-          team: doc.team,
-          company: (doc as any).company || 'Ambizcon Health - India',
-          avatar: doc.avatar,
-          birthday: (doc as any).birthday,
-          dob: (doc as any).dob,
-          workMode: (doc as any).workMode || 'Work From Office',
-          permissionCount: (doc as any).permissionCount || 0,
-          phone: (doc as any).phone,
-          emergencyContact: (doc as any).emergencyContact,
-          address: (doc as any).address,
-          bankAccount: (doc as any).bankAccount,
-          taxId: (doc as any).taxId,
-          bloodGroup: (doc as any).bloodGroup,
-          createdAt: doc.createdAt?.toISOString(),
-        };
+    if (!error && rows && rows.length > 0) {
+      const row = rows[0];
+      if (
+        row.email.toLowerCase() !== normEmail &&
+        (normEmail === 'kiruthikashri@ambizcon.com' || normEmail === 'mathi.p@ambizcon.com')
+      ) {
+        await supabase.from('users').update({ email: normEmail }).eq('id', row.id);
+        row.email = normEmail;
       }
-    } catch (e) {
-      console.error('Error fetching user from DB:', e);
+      return mapRowToUser(row);
     }
+  } catch (e) {
+    console.error('Error fetching user from Supabase:', e);
   }
 
-  // Fallback to mock store (checks primary and alias)
-  let user = mockStore.users.find(
+  // Fallback to seed users & auto-upsert into Supabase
+  const seedUser = mockStore.users.find(
     (u) => u.email.toLowerCase() === normEmail || (alias && u.email.toLowerCase() === alias)
   );
 
-  // If found in mock store but DB didn't have it, auto-insert into DB
-  if (user && db) {
+  if (seedUser) {
     try {
-      const created = await UserModel.create({
-        name: user.name,
-        email: user.email.toLowerCase(),
-        role: user.role,
-        team: user.team,
-        company: user.company || 'Ambizcon Health - India',
-        avatar: user.avatar,
-        birthday: user.birthday,
-        dob: user.dob,
-        workMode: user.workMode || 'Work From Office',
-      });
-      user._id = created._id.toString();
-    } catch (e) {
-      // ignore duplicate
-    }
+      await supabase.from('users').upsert(
+        {
+          id: seedUser._id,
+          name: seedUser.name,
+          email: seedUser.email.toLowerCase(),
+          role: seedUser.role,
+          team: seedUser.team,
+          company: resolveEffectiveCompany(seedUser),
+          avatar: seedUser.avatar,
+          birthday: seedUser.birthday,
+          dob: seedUser.dob,
+          work_mode: seedUser.workMode || 'Work From Office',
+          skills: seedUser.skills || [],
+        },
+        { onConflict: 'email' }
+      );
+    } catch (_) {}
   }
 
-  return user || null;
+  return seedUser || null;
 }
 
 export async function getAllUsers(): Promise<User[]> {
-  const db = await connectDB();
+  try {
+    const { data: rows, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: true });
 
-  if (db) {
-    try {
-      const docs = await UserModel.find().sort({ createdAt: -1 }).lean();
-      if (docs.length > 0) {
-        const dbUsers: User[] = docs.map((doc) => ({
-          _id: doc._id.toString(),
-          name: doc.name,
-          email: doc.email,
-          role: doc.role,
-          team: doc.team,
-          company: (doc as any).company || 'Ambizcon Health - India',
-          avatar: doc.avatar,
-          birthday: (doc as any).birthday,
-          dob: (doc as any).dob,
-          workMode: (doc as any).workMode || 'Work From Office',
-          permissionCount: (doc as any).permissionCount || 0,
-          phone: (doc as any).phone,
-          emergencyContact: (doc as any).emergencyContact,
-          address: (doc as any).address,
-          bankAccount: (doc as any).bankAccount,
-          taxId: (doc as any).taxId,
-          bloodGroup: (doc as any).bloodGroup,
-          createdAt: doc.createdAt?.toISOString(),
-        }));
+    if (!error && rows && rows.length > 0) {
+      const dbUsers: User[] = rows.map(mapRowToUser);
 
-        // Merge any seed users that might not yet be in MongoDB (e.g. Adriana Ruju)
-        for (const seed of mockStore.users) {
-          const exists = dbUsers.some(
-            (u) =>
-              u.email.toLowerCase() === seed.email.toLowerCase() ||
-              (EMAIL_ALIASES[seed.email.toLowerCase()] &&
-                u.email.toLowerCase() === EMAIL_ALIASES[seed.email.toLowerCase()])
-          );
-          if (!exists) {
-            dbUsers.push(seed);
-            UserModel.create({
-              name: seed.name,
-              email: seed.email.toLowerCase(),
-              role: seed.role,
-              team: seed.team,
-              company: seed.company,
-              avatar: seed.avatar,
-              birthday: seed.birthday,
-              dob: seed.dob,
-              workMode: seed.workMode,
-            }).catch(() => {});
-          }
+      // Ensure all seed users exist in Supabase
+      for (const seed of mockStore.users) {
+        const exists = dbUsers.some(
+          (u) =>
+            u.email.toLowerCase() === seed.email.toLowerCase() ||
+            (EMAIL_ALIASES[seed.email.toLowerCase()] &&
+              u.email.toLowerCase() === EMAIL_ALIASES[seed.email.toLowerCase()])
+        );
+        if (!exists) {
+          dbUsers.push(seed);
+          supabase
+            .from('users')
+            .upsert(
+              {
+                id: seed._id,
+                name: seed.name,
+                email: seed.email.toLowerCase(),
+                role: seed.role,
+                team: seed.team,
+                company: seed.company,
+                avatar: seed.avatar,
+                birthday: seed.birthday,
+                dob: seed.dob,
+                work_mode: seed.workMode || 'Work From Office',
+                skills: seed.skills || [],
+              },
+              { onConflict: 'email' }
+            )
+            .then(() => {});
         }
-
-        return dbUsers;
       }
-    } catch (e) {
-      console.error('Error fetching users from DB:', e);
+
+      return dbUsers;
     }
+  } catch (e) {
+    console.error('Error fetching users from Supabase:', e);
   }
 
   return mockStore.users;
@@ -156,49 +162,18 @@ export async function createUser(input: {
   dob?: string;
   workMode?: WorkMode;
 }): Promise<User> {
-  const db = await connectDB();
+  const newId = `usr_${Date.now()}`;
   const avatar = input.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(input.name)}`;
   const company = input.company || 'Ambizcon Health - India';
   const birthday = input.birthday || '14 Oct';
   const dob = input.dob || '14 Oct';
   const workMode = input.workMode || 'Work From Office';
-
-  if (db) {
-    try {
-      const doc = await UserModel.create({
-        name: input.name,
-        email: input.email.toLowerCase(),
-        role: input.role,
-        team: input.team,
-        company,
-        avatar,
-        birthday,
-        dob,
-        workMode,
-      });
-
-      return {
-        _id: doc._id.toString(),
-        name: doc.name,
-        email: doc.email,
-        role: doc.role,
-        team: doc.team,
-        company: (doc as any).company || company,
-        avatar: doc.avatar,
-        birthday,
-        dob,
-        workMode,
-        createdAt: doc.createdAt.toISOString(),
-      };
-    } catch (e) {
-      console.error('Error creating user in DB:', e);
-    }
-  }
+  const nowIso = new Date().toISOString();
 
   const newUser: User = {
-    _id: `usr_${Date.now()}`,
+    _id: newId,
     name: input.name,
-    email: input.email.toLowerCase(),
+    email: input.email.toLowerCase().trim(),
     role: input.role,
     team: input.team,
     company,
@@ -206,32 +181,61 @@ export async function createUser(input: {
     birthday,
     dob,
     workMode,
-    createdAt: new Date().toISOString(),
+    createdAt: nowIso,
   };
+
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .upsert(
+        {
+          id: newId,
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role,
+          team: newUser.team,
+          company: newUser.company,
+          avatar: newUser.avatar,
+          birthday: newUser.birthday,
+          dob: newUser.dob,
+          work_mode: newUser.workMode,
+          created_at: nowIso,
+          updated_at: nowIso,
+        },
+        { onConflict: 'email' }
+      )
+      .select('*')
+      .single();
+
+    if (!error && data) {
+      const mapped = mapRowToUser(data);
+      mockStore.users.unshift(mapped);
+      return mapped;
+    }
+  } catch (e) {
+    console.error('Error creating user in Supabase:', e);
+  }
 
   mockStore.users.unshift(newUser);
   return newUser;
 }
 
 export async function updateUserRole(userId: string, role: UserRole): Promise<User | null> {
-  const db = await connectDB();
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ role, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select('*')
+      .single();
 
-  if (db) {
-    try {
-      const doc = await UserModel.findByIdAndUpdate(userId, { role }, { new: true }).lean();
-      if (doc) {
-        return {
-          _id: doc._id.toString(),
-          name: doc.name,
-          email: doc.email,
-          role: doc.role,
-          team: doc.team,
-          avatar: doc.avatar,
-        };
-      }
-    } catch (e) {
-      console.error('Error updating user role:', e);
+    if (!error && data) {
+      const u = mockStore.users.find((user) => user._id === userId);
+      if (u) u.role = role;
+      return mapRowToUser(data);
     }
+  } catch (e) {
+    console.error('Error updating user role in Supabase:', e);
   }
 
   const u = mockStore.users.find((user) => user._id === userId);
@@ -256,31 +260,37 @@ export async function updateUser(
     avatar?: string;
   }
 ): Promise<User | null> {
-  const db = await connectDB();
+  const dbUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.email !== undefined) dbUpdates.email = updates.email.toLowerCase().trim();
+  if (updates.role !== undefined) dbUpdates.role = updates.role;
+  if (updates.team !== undefined) dbUpdates.team = updates.team;
+  if (updates.company !== undefined) dbUpdates.company = updates.company;
+  if (updates.birthday !== undefined) dbUpdates.birthday = updates.birthday;
+  if (updates.dob !== undefined) dbUpdates.dob = updates.dob;
+  if (updates.workMode !== undefined) dbUpdates.work_mode = updates.workMode;
+  if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
 
-  if (db) {
-    try {
-      const doc = await UserModel.findByIdAndUpdate(userId, updates, { new: true }).lean();
-      if (doc) {
-        return {
-          _id: doc._id.toString(),
-          name: doc.name,
-          email: doc.email,
-          role: doc.role,
-          team: doc.team,
-          company: (doc as any).company || updates.company || 'Ambizcon Health - India',
-          avatar: doc.avatar,
-          birthday: (doc as any).birthday || updates.birthday,
-          dob: (doc as any).dob || updates.dob,
-          createdAt: doc.createdAt?.toISOString(),
-        };
-      }
-    } catch (e) {
-      console.error('Error updating user in DB:', e);
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .update(dbUpdates)
+      .eq('id', userId)
+      .select('*')
+      .single();
+
+    if (!error && data) {
+      const u = mockStore.users.find((user) => user._id === userId);
+      if (u) Object.assign(u, updates);
+      return mapRowToUser(data);
     }
+  } catch (e) {
+    console.error('Error updating user in Supabase:', e);
   }
 
-  const u = mockStore.users.find((user) => user._id === userId || user.email.toLowerCase() === updates.email?.toLowerCase());
+  const u = mockStore.users.find(
+    (user) => user._id === userId || user.email.toLowerCase() === updates.email?.toLowerCase()
+  );
   if (u) {
     if (updates.name) u.name = updates.name;
     if (updates.email) u.email = updates.email.toLowerCase();
@@ -289,7 +299,8 @@ export async function updateUser(
     if (updates.company) u.company = updates.company;
     if (updates.birthday) u.birthday = updates.birthday;
     if (updates.dob) u.dob = updates.dob;
-    if (updates.workMode) (u as any).workMode = updates.workMode;
+    if (updates.workMode) u.workMode = updates.workMode;
+    if (updates.avatar) u.avatar = updates.avatar;
     return { ...u };
   }
   return null;
@@ -312,71 +323,55 @@ export async function updateUserProfile(
     skills?: string[];
   }
 ): Promise<User | null> {
-  const db = await connectDB();
+  const dbUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+  if (profileData.name !== undefined) dbUpdates.name = profileData.name;
+  if (profileData.avatar !== undefined) dbUpdates.avatar = profileData.avatar;
+  if (profileData.phone !== undefined) dbUpdates.phone = profileData.phone;
+  if (profileData.emergencyContact !== undefined) dbUpdates.emergency_contact = profileData.emergencyContact;
+  if (profileData.address !== undefined) dbUpdates.address = profileData.address;
+  if (profileData.bloodGroup !== undefined) dbUpdates.blood_group = profileData.bloodGroup;
+  if (profileData.birthday !== undefined) dbUpdates.birthday = profileData.birthday;
+  if (profileData.dob !== undefined) dbUpdates.dob = profileData.dob;
+  if (profileData.workMode !== undefined) dbUpdates.work_mode = profileData.workMode;
+  if (profileData.education !== undefined) dbUpdates.education = profileData.education;
+  if (profileData.experience !== undefined) dbUpdates.experience = profileData.experience;
+  if (profileData.skills !== undefined) dbUpdates.skills = profileData.skills;
 
-  // Non-sensitive fields only (Strict Whitelist)
-  const allowedUpdates: Record<string, any> = {};
-  if (profileData.name !== undefined) allowedUpdates.name = profileData.name;
-  if (profileData.avatar !== undefined) allowedUpdates.avatar = profileData.avatar;
-  if (profileData.phone !== undefined) allowedUpdates.phone = profileData.phone;
-  if (profileData.emergencyContact !== undefined) allowedUpdates.emergencyContact = profileData.emergencyContact;
-  if (profileData.address !== undefined) allowedUpdates.address = profileData.address;
-  if (profileData.bloodGroup !== undefined) allowedUpdates.bloodGroup = profileData.bloodGroup;
-  if (profileData.birthday !== undefined) allowedUpdates.birthday = profileData.birthday;
-  if (profileData.dob !== undefined) allowedUpdates.dob = profileData.dob;
-  if (profileData.workMode !== undefined) allowedUpdates.workMode = profileData.workMode;
-  if (profileData.education !== undefined) allowedUpdates.education = profileData.education;
-  if (profileData.experience !== undefined) allowedUpdates.experience = profileData.experience;
-  if (profileData.skills !== undefined) allowedUpdates.skills = profileData.skills;
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .update(dbUpdates)
+      .eq('id', userId)
+      .select('*')
+      .single();
 
-  if (db) {
-    try {
-      const doc = await UserModel.findByIdAndUpdate(userId, allowedUpdates, { new: true }).lean();
-      if (doc) {
-        return {
-          _id: doc._id.toString(),
-          name: doc.name,
-          email: doc.email,
-          role: doc.role,
-          team: doc.team,
-          company: (doc as any).company,
-          avatar: doc.avatar,
-          birthday: (doc as any).birthday,
-          dob: (doc as any).dob,
-          workMode: (doc as any).workMode,
-          phone: (doc as any).phone,
-          emergencyContact: (doc as any).emergencyContact,
-          address: (doc as any).address,
-          bloodGroup: (doc as any).bloodGroup,
-          education: (doc as any).education,
-          experience: (doc as any).experience,
-          skills: (doc as any).skills,
-          createdAt: doc.createdAt?.toISOString(),
-        };
-      }
-    } catch (e) {
-      console.error('Error updating user profile in DB:', e);
+    if (!error && data) {
+      const u = mockStore.users.find((user) => user._id === userId);
+      if (u) Object.assign(u, profileData);
+      return mapRowToUser(data);
     }
+  } catch (e) {
+    console.error('Error updating user profile in Supabase:', e);
   }
 
   const u = mockStore.users.find((user) => user._id === userId);
   if (u) {
-    Object.assign(u, allowedUpdates);
+    Object.assign(u, profileData);
     return { ...u };
   }
   return null;
 }
 
 export async function deleteUser(userId: string): Promise<boolean> {
-  const db = await connectDB();
-
-  if (db) {
-    try {
-      await UserModel.findByIdAndDelete(userId);
+  try {
+    const { error } = await supabase.from('users').delete().eq('id', userId);
+    if (!error) {
+      const index = mockStore.users.findIndex((u) => u._id === userId);
+      if (index !== -1) mockStore.users.splice(index, 1);
       return true;
-    } catch (e) {
-      console.error('Error deleting user in DB:', e);
     }
+  } catch (e) {
+    console.error('Error deleting user in Supabase:', e);
   }
 
   const index = mockStore.users.findIndex((u) => u._id === userId);

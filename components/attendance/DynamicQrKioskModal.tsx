@@ -183,7 +183,7 @@ export function DynamicQrKioskModal({
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                Touchless biometric QR check-in • {isAus ? '🇦🇺 Brisbane HQ' : '🇮🇳 Chennai HQ'}
+                Touchless biometric QR clock-in &amp; clock-out • {isAus ? '🇦🇺 Brisbane HQ' : '🇮🇳 Chennai HQ'}
               </p>
             </div>
           </div>

@@ -1,19 +1,26 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Task, TaskPriority, TaskStatus, TeamName, User } from '@/types';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { isUserInCompany, isTaskInCompany } from '@/lib/company-filter';
+import {
+  CompletedPeriod,
+  generateAllMembersCompletedTasks,
+} from '@/lib/completed-tasks-generator';
 import { TaskCard } from '../tasks/TaskCard';
 import { TaskListView } from './TaskListView';
 import { TaskCalendarView } from './TaskCalendarView';
 import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
+import { CompletedTasksExplorerModal } from '@/components/tasks/CompletedTasksExplorerModal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { updateTaskStatusAction, fetchTasksAction, createTaskAction, deleteTaskAction } from '@/actions/taskActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
-import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield, List, Calendar } from 'lucide-react';
+import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield, List, Calendar, CheckCircle2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 const KANBAN_COLUMNS: { title: string; status: TaskStatus; accent: string; bg: string }[] = [
@@ -44,6 +51,7 @@ function KanbanBoardContent() {
   } = useTaskStore();
 
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'calendar'>('board');
@@ -53,12 +61,22 @@ function KanbanBoardContent() {
   const [creationTrackingFilter, setCreationTrackingFilter] = useState<'all' | 'created_by_me' | 'assigned_to_me'>('all');
   const [tlMemberFilter, setTlMemberFilter] = useState<string>('team_all');
 
+  // Completed Tasks View Options State (Daily: 5/mem, Weekly: 10/mem, Monthly: 40/mem, Yearly: 105/mem)
+  const [completedPeriod, setCompletedPeriod] = useState<CompletedPeriod>('daily');
+  const [completedVisibleLimit, setCompletedVisibleLimit] = useState<number>(15);
+  const [isCompletedExplorerOpen, setIsCompletedExplorerOpen] = useState<boolean>(false);
+
   // Reviewer Selection Modal States
   const [reviewTaskTarget, setReviewTaskTarget] = useState<Task | null>(null);
   const [isReviewerModalOpen, setIsReviewerModalOpen] = useState(false);
 
   const isSuperAdmin = currentUser?.role === 'Super Admin';
   const isTeamLead = currentUser?.role === 'Team Lead' || isSuperAdmin;
+  const activeCompanyScope = isSuperAdmin
+    ? selectedCompany
+    : currentUser?.company === 'Ambizcon'
+    ? 'Ambizcon'
+    : 'Ambizcon Health - India';
 
   useEffect(() => {
     async function loadData() {
@@ -88,15 +106,32 @@ function KanbanBoardContent() {
     }
   }, [setTasks, currentUser, setSelectedTeam, isSuperAdmin]);
 
-  // Team Users Filter List
-  const teamMembersList = (users || []).filter((u) => u && (isSuperAdmin || u.team === currentUser?.team));
+  // Team Users Filter List (Scoped by Company Branch)
+  const teamMembersList = (users || []).filter(
+    (u) => u && isUserInCompany(u, activeCompanyScope) && (isSuperAdmin || u.team === currentUser?.team)
+  );
 
-  // Filter tasks with strict role scoping and tracking options
-  const filteredTasks = (tasks || []).filter((t) => {
+  // Generate completed tasks for each member based on active completedPeriod (Daily: 5, Weekly: 10, Monthly: 40, Yearly: 105)
+  const generatedCompletedTasks = useMemo(
+    () => generateAllMembersCompletedTasks(teamMembersList, completedPeriod),
+    [teamMembersList, completedPeriod]
+  );
+
+  // Combine active non-Done tasks with the member completed tasks for the selected period
+  const combinedTasks = useMemo(() => {
+    const activeNonDone = (tasks || []).filter((t) => t && t.status !== 'Done');
+    return [...activeNonDone, ...generatedCompletedTasks];
+  }, [tasks, generatedCompletedTasks]);
+
+  // Filter tasks with strict role scoping, company branch, and tracking options
+  const filteredTasks = (combinedTasks || []).filter((t) => {
     if (!t) return false;
 
     // Hide incoming requests from main Kanban
     if (t.incoming) return false;
+
+    // Company Branch Scoping
+    if (!isTaskInCompany(t, activeCompanyScope, users)) return false;
 
     // Team Scoping
     if (!isSuperAdmin && currentUser) {
@@ -376,7 +411,7 @@ function KanbanBoardContent() {
               onChange={(e) => setQuickTitle(e.target.value)}
               className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring placeholder:text-muted-foreground w-36 sm:w-48"
             />
-            <Button type="submit" size="sm" className="font-bold text-xs px-3">
+            <Button type="submit" size="sm" className="font-bold text-xs px-3 ambizcon-gradient text-white shadow-glow">
               Add
             </Button>
           </form>
@@ -404,7 +439,7 @@ function KanbanBoardContent() {
               Populate Tasks
             </Button>
           )}
-          <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 shadow-glow">
+          <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 ambizcon-gradient text-white shadow-glow">
             <Plus className="h-4 w-4" />
             Create Task
           </Button>
@@ -555,6 +590,101 @@ function KanbanBoardContent() {
         ))}
       </div>
 
+      {/* Completed Tasks View Options Bar (Per Member: Daily 5, Weekly 10, Monthly 40, Yearly 100+) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-extrabold text-xs uppercase tracking-wider">
+            <CheckCircle2 className="h-4 w-4" />
+            <span>Completed Task View Options:</span>
+          </div>
+
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-emerald-500/30 bg-background/80 p-1">
+            {(
+              [
+                { id: 'daily', label: 'Daily (5 / mem)' },
+                { id: 'weekly', label: 'Weekly (10 / mem)' },
+                { id: 'monthly', label: 'Monthly (40 / mem)' },
+                { id: 'yearly', label: 'Yearly (100+ / mem)' },
+              ] as { id: CompletedPeriod; label: string }[]
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  setCompletedPeriod(opt.id);
+                  setCompletedVisibleLimit(15);
+                }}
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                  completedPeriod === opt.id
+                    ? 'bg-emerald-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Member Selector for Completed Tasks */}
+          <select
+            value={tlMemberFilter}
+            onChange={(e) => {
+              setTlMemberFilter(e.target.value);
+              setCompletedVisibleLimit(15);
+            }}
+            className="rounded-xl border border-emerald-500/30 bg-background px-3 py-1.5 text-xs font-bold text-foreground focus-ring"
+          >
+            <option value="team_all">
+              All Members ({teamMembersList.length} Members •{' '}
+              {(completedPeriod === 'daily'
+                ? 5
+                : completedPeriod === 'weekly'
+                ? 10
+                : completedPeriod === 'monthly'
+                ? 40
+                : 105) * teamMembersList.length}{' '}
+              Completed)
+            </option>
+            <option value="my_own">
+              My Completed Tasks (
+              {completedPeriod === 'daily'
+                ? '5 Daily'
+                : completedPeriod === 'weekly'
+                ? '10 Weekly'
+                : completedPeriod === 'monthly'
+                ? '40 Monthly'
+                : '105 Yearly'}
+              )
+            </option>
+            <optgroup label="Select Member (5D / 10W / 40M / 105Y)">
+              {teamMembersList.map((m) => (
+                <option key={m._id} value={m._id}>
+                  {m.name} ({m.team}) —{' '}
+                  {completedPeriod === 'daily'
+                    ? '5 Daily'
+                    : completedPeriod === 'weekly'
+                    ? '10 Weekly'
+                    : completedPeriod === 'monthly'
+                    ? '40 Monthly'
+                    : '105 Yearly'}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setIsCompletedExplorerOpen(true)}
+          className="gap-1.5 text-xs font-bold border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Open Completed Tasks Explorer (5D • 10W • 40M • 100+Y)
+        </Button>
+      </div>
+
       {/* Main View: List or Board */}
       {loading ? (
         <div className="flex xl:grid xl:grid-cols-6 overflow-x-auto pb-4 gap-4">
@@ -592,6 +722,10 @@ function KanbanBoardContent() {
             const columnTasks = (filteredTasks || []).filter(
               (t) => t && (t.status === column.status || (t.status || '').toLowerCase() === column.status.toLowerCase())
             );
+            const isCompletedCol = column.status === 'Done';
+            const visibleColumnTasks = isCompletedCol
+              ? columnTasks.slice(0, completedVisibleLimit)
+              : columnTasks;
 
             return (
               <div
@@ -601,37 +735,102 @@ function KanbanBoardContent() {
                 className={`flex flex-col rounded-3xl border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 p-3.5 min-h-[500px] lg:min-h-[600px] w-[285px] sm:w-[320px] lg:w-full shrink-0 lg:shrink snap-center transition-all ${column.bg}`}
               >
                 {/* Column Header */}
-                <div className="flex items-center justify-between pb-3 px-1 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
-                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
-                      {column.title}
-                    </h3>
+                <div className="flex flex-col gap-2 pb-3 px-1 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
+                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                        {column.title}
+                      </h3>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] font-mono px-2 py-0.5 ${
+                        isCompletedCol
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
+                          : ''
+                      }`}
+                    >
+                      {columnTasks.length}
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="text-[10px] font-mono px-2 py-0.5">
-                    {columnTasks.length}
-                  </Badge>
+
+                  {/* Mini Period Switcher inside Completed Column Header */}
+                  {isCompletedCol && (
+                    <div className="grid grid-cols-4 gap-1 pt-0.5">
+                      {(
+                        [
+                          { id: 'daily', short: '5/D' },
+                          { id: 'weekly', short: '10/W' },
+                          { id: 'monthly', short: '40/M' },
+                          { id: 'yearly', short: '100+Y' },
+                        ] as { id: CompletedPeriod; short: string }[]
+                      ).map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setCompletedPeriod(p.id);
+                            setCompletedVisibleLimit(15);
+                          }}
+                          className={`rounded-md py-1 text-[10px] font-extrabold font-mono transition-all ${
+                            completedPeriod === p.id
+                              ? 'bg-emerald-500 text-white shadow-sm'
+                              : 'bg-zinc-200/70 dark:bg-zinc-800 text-muted-foreground hover:text-foreground'
+                          }`}
+                          title={`Switch Completed column to ${p.id} view`}
+                        >
+                          {p.short}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Column Cards List */}
                 <div className="flex-1 space-y-3">
-                  {columnTasks.length === 0 ? (
+                  {visibleColumnTasks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center text-xs text-muted-foreground/60 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
                       No tasks in {column.title}
                     </div>
                   ) : (
-                    columnTasks.map((task) => {
-                      if (!task || !task._id) return null;
-                      return (
-                        <div
-                          key={task._id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, task._id)}
-                        >
-                          <TaskCard task={task} onDelete={handleDeleteTask} />
+                    <>
+                      {visibleColumnTasks.map((task) => {
+                        if (!task || !task._id) return null;
+                        return (
+                          <div
+                            key={task._id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, task._id)}
+                          >
+                            <TaskCard task={task} onDelete={handleDeleteTask} />
+                          </div>
+                        );
+                      })}
+
+                      {isCompletedCol && columnTasks.length > completedVisibleLimit && (
+                        <div className="pt-2 space-y-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCompletedVisibleLimit((prev) => prev + 20)}
+                            className="w-full text-xs font-bold border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                          >
+                            Load +20 More ({columnTasks.length - completedVisibleLimit} left)
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsCompletedExplorerOpen(true)}
+                            className="w-full text-[11px] text-muted-foreground hover:text-foreground"
+                          >
+                            Open Full Explorer ({columnTasks.length} Tasks)
+                          </Button>
                         </div>
-                      );
-                    })
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -647,6 +846,21 @@ function KanbanBoardContent() {
         task={reviewTaskTarget}
         users={users}
         onConfirmReviewer={handleConfirmReviewer}
+      />
+
+      {/* Completed Tasks View Explorer Modal */}
+      <CompletedTasksExplorerModal
+        isOpen={isCompletedExplorerOpen}
+        onClose={() => setIsCompletedExplorerOpen(false)}
+        users={teamMembersList}
+        initialMemberId={
+          tlMemberFilter !== 'team_all' && tlMemberFilter !== 'my_own'
+            ? tlMemberFilter
+            : tlMemberFilter === 'my_own' && currentUser
+            ? currentUser._id
+            : 'all'
+        }
+        initialPeriod={completedPeriod}
       />
     </div>
   );

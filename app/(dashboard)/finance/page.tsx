@@ -24,10 +24,17 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { isUserInCompany } from '@/lib/company-filter';
 
 export default function FinancePage() {
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const isSuperAdmin = currentUser?.role === 'Super Admin';
+  const isAustralia = isSuperAdmin
+    ? selectedCompany === 'Ambizcon'
+    : currentUser?.company === 'Ambizcon';
+  const activeCompanyScope = isAustralia ? 'Ambizcon' : 'Ambizcon Health - India';
 
   // Dynamic Editable Financial Figures
   const [grossRevenue, setGrossRevenue] = useState(0);
@@ -114,7 +121,7 @@ export default function FinancePage() {
     { name: 'Kasthuri', email: 'kasthuri@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43223', bank: 'Axis Bank • XXXX-XXXX-8877', emergency: 'Mother: +91 98765 40404', taxId: 'KAST3456S', blood: 'A+', address: 'No. 52, Vector Way, Chennai' },
     { name: 'Ahamed', email: 'ahamed@ambizcon.com', role: 'Team Member', team: 'Creative', salary: 0, phone: '+91 98765 43224', bank: 'SBI Bank • XXXX-XXXX-3366', emergency: 'Brother: +91 98765 50505', taxId: 'AHAM7890T', blood: 'O+', address: 'No. 84, Brand Boulevard, Chennai' },
     { name: 'Adriana Ruju', email: 'adriana@ambizcon.com', role: 'Team Member', team: 'Marketing', salary: 0, phone: '+61 412 345 678', bank: 'Commonwealth Bank • XXXX-XXXX-4455', emergency: 'Spouse: +61 412 999 888', taxId: 'ADRI9012AU', blood: 'O+', address: 'Queen Street, Brisbane CBD, Australia' },
-  ];
+  ].filter((emp) => isUserInCompany(emp, activeCompanyScope));
 
   // Operational Expenses Roster
   const operationalExpenses = [
@@ -161,7 +168,7 @@ export default function FinancePage() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-[#086075]/15 via-[#2a8c82]/10 to-transparent p-6 glass-panel">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border ambizcon-hero-banner p-6 glass-panel">
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl ambizcon-gradient text-white shadow-glow">
             <DollarSign className="h-6 w-6" />
@@ -171,7 +178,11 @@ export default function FinancePage() {
               <h1 className="text-xl font-extrabold tracking-tight text-foreground">
                 Super Admin Finance & Claims Ledger
               </h1>
-              <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 text-[10px]">
+              <Badge className={`text-[10px] ${
+                isAustralia
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/30'
+                  : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
+              }`}>
                 Restricted Executive View
               </Badge>
             </div>

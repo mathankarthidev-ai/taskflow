@@ -15,10 +15,19 @@ import { getStoredClients, addClient } from '@/lib/client-db';
 import { Paperclip, Plus, Building2, UploadCloud, AlertCircle } from 'lucide-react';
 
 import { SEED_TASK_TYPES, SEED_PROJECTS } from '@/lib/seed-data';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { isUserInCompany } from '@/lib/company-filter';
 
 export function TaskCreateModal() {
   const { isCreateModalOpen, setCreateModalOpen, setTasks, tasks } = useTaskStore();
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const activeCompanyScope = isSuperAdmin
+    ? selectedCompany
+    : currentUser?.company === 'Ambizcon'
+    ? 'Ambizcon'
+    : 'Ambizcon Health - India';
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -440,7 +449,7 @@ export function TaskCreateModal() {
             >
               <option value="">-- Auto-assign / Unassigned --</option>
               {users
-                .filter((u) => u.team === targetTeam)
+                .filter((u) => u.team === targetTeam && isUserInCompany(u, activeCompanyScope))
                 .map((u) => (
                   <option key={u._id} value={u._id}>
                     {u.name} ({u.role})

@@ -13,6 +13,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const storedCompany = localStorage.getItem('ambizcon_selected_company') as any;
       if (storedCompany === 'Ambizcon Health - India' || storedCompany === 'Ambizcon') {
         useCompanyStore.getState().setSelectedCompany(storedCompany);
+      } else {
+        document.documentElement.setAttribute('data-company', 'ambizcon-health');
       }
 
       const storedEmail = localStorage.getItem('taskflow_user_email');

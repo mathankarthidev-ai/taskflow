@@ -84,7 +84,7 @@
   @apply bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-zinc-200/80 dark:border-zinc-800/80 shadow-sm rounded-xl;
 }
 
-/* Ambizcon Signature Gradient Header */
+/* Ambizcon Health Signature Gradient (Default - Preserved & Verified) */
 .ambizcon-gradient {
   background: linear-gradient(135deg, #086075 0%, #2a8c82 50%, #8b9e59 100%);
 }
@@ -95,7 +95,60 @@
   -webkit-text-fill-color: transparent;
 }
 
+/* Ambizcon Logo Signature Gradient (Electric Blue / Azure Cyan to Vibrant Orange / Sunset Amber) */
+[data-company="ambizcon"] .ambizcon-gradient,
+.ambizcon-gradient[data-company="ambizcon"],
+[data-company="ambizcon"].ambizcon-gradient {
+  background: linear-gradient(135deg, #0284C7 0%, #0369A1 32%, #EA580C 78%, #F7931E 100%) !important;
+}
+
+[data-company="ambizcon"] .ambizcon-gradient-text,
+.ambizcon-gradient-text[data-company="ambizcon"],
+[data-company="ambizcon"].ambizcon-gradient-text {
+  background: linear-gradient(135deg, #0284C7 0%, #EA580C 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* Dynamic Hero Header Banners across Dashboard Pages */
+.ambizcon-hero-banner {
+  background: linear-gradient(90deg, rgba(8, 96, 117, 0.15) 0%, rgba(42, 140, 130, 0.10) 50%, transparent 100%);
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+[data-company="ambizcon"] .ambizcon-hero-banner,
+.ambizcon-hero-banner[data-company="ambizcon"],
+[data-company="ambizcon"].ambizcon-hero-banner {
+  background: linear-gradient(90deg, rgba(2, 132, 199, 0.20) 0%, rgba(234, 88, 12, 0.14) 55%, transparent 100%) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+/* Ambizcon Dynamic Brand Glow & Scrollbars */
+[data-company="ambizcon"] .shadow-glow {
+  box-shadow: 0 0 20px -5px rgba(2, 132, 199, 0.45) !important;
+}
+
+[data-company="ambizcon"] ::-webkit-scrollbar-thumb {
+  background: rgba(2, 132, 199, 0.35);
+}
+[data-company="ambizcon"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(234, 88, 12, 0.55);
+}
+
+/* Ambizcon Primary Accent Tokens */
+[data-company="ambizcon"] {
+  --primary: 201 96% 39%; /* #0284C7 Electric Sky Blue */
+  --ring: 201 96% 39%;
+}
+
+.dark[data-company="ambizcon"],
+[data-company="ambizcon"] .dark {
+  --primary: 201 90% 52%;
+  --ring: 201 90% 52%;
+}
+
 /* Smooth Focus Rings */
 .focus-ring {
   @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background;
 }
+

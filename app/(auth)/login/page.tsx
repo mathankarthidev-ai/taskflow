@@ -22,7 +22,13 @@ import {
 import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const [selectedBranch, setSelectedBranch] = useState<CompanyBranch>('Ambizcon Health - India');
+  const [selectedBranch, setSelectedBranch] = useState<CompanyBranch>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('ambizcon_selected_company');
+      if (stored === 'Ambizcon') return 'Ambizcon';
+    }
+    return 'Ambizcon Health - India';
+  });
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -32,6 +38,20 @@ export default function LoginPage() {
   const setSelectedCompany = useCompanyStore((s) => s.setSelectedCompany);
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+
+  const isAustralia = selectedBranch === 'Ambizcon';
+
+  // Synchronize document attribute and storage when selected branch toggles
+  React.useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-company', isAustralia ? 'ambizcon' : 'ambizcon-health');
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('ambizcon_selected_company', selectedBranch);
+      } catch (e) {}
+    }
+  }, [selectedBranch, isAustralia]);
 
   const handleCustomLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +85,9 @@ export default function LoginPage() {
       }
 
       setSelectedCompany(branchToSet);
+      if (typeof document !== 'undefined') {
+        document.documentElement.setAttribute('data-company', branchToSet === 'Ambizcon' ? 'ambizcon' : 'ambizcon-health');
+      }
       toast.success(`Signed in to ${branchToSet}!`);
       router.push('/dashboard');
     } else {
@@ -73,17 +96,28 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center p-4 md:p-8 overflow-hidden bg-background text-foreground transition-colors selection:bg-brand-500 selection:text-white">
-      {/* AMBIZCON Gradient Mesh Backdrop */}
-      <div className="absolute top-0 left-1/4 h-[600px] w-[600px] rounded-full bg-gradient-to-tr from-[#086075]/20 via-[#2a8c82]/15 to-[#8b9e59]/10 blur-[120px] pointer-events-none animate-pulse" />
-      <div className="absolute bottom-0 right-1/4 h-[500px] w-[500px] rounded-full bg-gradient-to-br from-[#2a8c82]/15 via-[#086075]/15 to-transparent blur-[100px] pointer-events-none" />
+    <div className={`relative flex min-h-screen items-center justify-center p-4 md:p-8 overflow-hidden bg-background text-foreground transition-colors ${
+      isAustralia ? 'selection:bg-sky-500 selection:text-white' : 'selection:bg-brand-500 selection:text-white'
+    }`}>
+      {/* AMBIZCON Dynamic Gradient Mesh Backdrop */}
+      {isAustralia ? (
+        <>
+          <div className="absolute top-0 left-1/4 h-[600px] w-[600px] rounded-full bg-gradient-to-tr from-[#0284C7]/25 via-[#0369A1]/20 to-[#EA580C]/20 blur-[120px] pointer-events-none animate-pulse" />
+          <div className="absolute bottom-0 right-1/4 h-[500px] w-[500px] rounded-full bg-gradient-to-br from-[#EA580C]/20 via-[#F7931E]/15 to-transparent blur-[100px] pointer-events-none" />
+        </>
+      ) : (
+        <>
+          <div className="absolute top-0 left-1/4 h-[600px] w-[600px] rounded-full bg-gradient-to-tr from-[#086075]/20 via-[#2a8c82]/15 to-[#8b9e59]/10 blur-[120px] pointer-events-none animate-pulse" />
+          <div className="absolute bottom-0 right-1/4 h-[500px] w-[500px] rounded-full bg-gradient-to-br from-[#2a8c82]/15 via-[#086075]/15 to-transparent blur-[100px] pointer-events-none" />
+        </>
+      )}
 
       {/* Top Appearance Toggle (Light / Dark Mode Switcher) */}
       <div className="absolute top-6 right-6 z-20 flex items-center gap-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-1 shadow-sm backdrop-blur-xl">
         <button
           onClick={() => setTheme('light')}
           className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all ${
-            theme === 'light' ? 'bg-brand-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            theme === 'light' ? 'ambizcon-gradient text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
           title="Light Mode"
         >
@@ -93,7 +127,7 @@ export default function LoginPage() {
         <button
           onClick={() => setTheme('dark')}
           className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all ${
-            theme === 'dark' ? 'bg-brand-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            theme === 'dark' ? 'ambizcon-gradient text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
           title="Dark Mode"
         >
@@ -103,7 +137,7 @@ export default function LoginPage() {
         <button
           onClick={() => setTheme('system')}
           className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all ${
-            theme === 'system' ? 'bg-brand-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            theme === 'system' ? 'ambizcon-gradient text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
           title="System Default"
         >
@@ -159,7 +193,11 @@ export default function LoginPage() {
 
           <div className="flex items-center justify-between pb-6 border-b border-zinc-200/60 dark:border-zinc-800/60">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+                isAustralia
+                  ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+              }`}>
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div>
@@ -167,7 +205,11 @@ export default function LoginPage() {
                 <p className="text-[11px] text-muted-foreground">Authorized Employee Authentication</p>
               </div>
             </div>
-            <Badge variant="outline" className="text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/40 bg-emerald-500/10 font-mono">
+            <Badge variant="outline" className={`text-xs font-mono transition-colors ${
+              isAustralia
+                ? 'text-amber-600 dark:text-amber-400 border-amber-500/40 bg-amber-500/10'
+                : 'text-emerald-600 dark:text-emerald-400 border-emerald-500/40 bg-emerald-500/10'
+            }`}>
               @ambizcon.com
             </Badge>
           </div>
@@ -177,7 +219,7 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <Building2 className={`h-3.5 w-3.5 ${isAustralia ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400'}`} />
                   Select Company / Branch
                 </label>
                 <span className="text-[10px] font-medium text-muted-foreground">
@@ -188,7 +230,11 @@ export default function LoginPage() {
                 <select
                   value={selectedBranch}
                   onChange={(e) => setSelectedBranch(e.target.value as CompanyBranch)}
-                  className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all font-semibold"
+                  className={`w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 transition-all font-semibold ${
+                    isAustralia
+                      ? 'focus:ring-sky-500/50 focus:border-sky-500'
+                      : 'focus:ring-emerald-500/50 focus:border-emerald-500'
+                  }`}
                 >
                   <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Chennai HQ)</option>
                   <option value="Ambizcon">🇦🇺 Ambizcon (Brisbane HQ)</option>
@@ -198,7 +244,7 @@ export default function LoginPage() {
 
             <div>
               <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <Mail className={`h-3.5 w-3.5 ${isAustralia ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400'}`} />
                 Work Email (@ambizcon.com)
               </label>
               <div className="relative mt-1.5">
@@ -207,7 +253,11 @@ export default function LoginPage() {
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   placeholder="your ambizcon email"
-                  className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-muted-foreground/60"
+                  className={`w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 transition-all placeholder:text-muted-foreground/60 ${
+                    isAustralia
+                      ? 'focus:ring-sky-500/50 focus:border-sky-500'
+                      : 'focus:ring-emerald-500/50 focus:border-emerald-500'
+                  }`}
                   required
                 />
               </div>
@@ -215,7 +265,7 @@ export default function LoginPage() {
 
             <div>
               <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <Lock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <Lock className={`h-3.5 w-3.5 ${isAustralia ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400'}`} />
                 Password
               </label>
               <div className="relative mt-1.5">
@@ -224,7 +274,11 @@ export default function LoginPage() {
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
                   placeholder="Enter password"
-                  className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-muted-foreground/60"
+                  className={`w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background py-3 pl-4 pr-4 text-sm text-foreground focus:outline-none focus:ring-2 transition-all placeholder:text-muted-foreground/60 ${
+                    isAustralia
+                      ? 'focus:ring-sky-500/50 focus:border-sky-500'
+                      : 'focus:ring-emerald-500/50 focus:border-emerald-500'
+                  }`}
                   required
                 />
               </div>

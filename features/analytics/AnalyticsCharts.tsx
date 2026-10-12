@@ -21,8 +21,19 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { fetchAnalyticsAction } from '@/actions/analyticsActions';
 import { TeamName } from '@/types';
 import { CheckCircle2, Clock, AlertTriangle, BarChart3, TrendingUp } from 'lucide-react';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useCompanyStore } from '@/store/useCompanyStore';
 
 export function AnalyticsCharts() {
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const activeCompanyScope = isSuperAdmin
+    ? selectedCompany
+    : currentUser?.company === 'Ambizcon'
+    ? 'Ambizcon'
+    : 'Ambizcon Health - India';
+
   const [selectedTeam, setSelectedTeam] = useState<TeamName | 'All'>('All');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any>(null);
@@ -30,11 +41,11 @@ export function AnalyticsCharts() {
 
   useEffect(() => {
     setLoading(true);
-    fetchAnalyticsAction(selectedTeam === 'All' ? undefined : selectedTeam).then((res) => {
+    fetchAnalyticsAction(selectedTeam === 'All' ? undefined : selectedTeam, activeCompanyScope).then((res) => {
       setData(res);
       setLoading(false);
     });
-  }, [selectedTeam]);
+  }, [selectedTeam, activeCompanyScope]);
 
   if (loading || !data) {
     return (

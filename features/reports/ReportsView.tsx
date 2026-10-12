@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Task } from '@/types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Task, User } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { fetchTasksAction } from '@/actions/taskActions';
+import { fetchAllUsersAction } from '@/actions/userActions';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -17,55 +18,100 @@ import {
   Building2,
   Lock,
   ShieldCheck,
-  TrendingUp,
-  Award,
+  CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { isTaskInCompany, isUserInCompany } from '@/lib/company-filter';
+import {
+  CompletedPeriod,
+  generateAllMembersCompletedTasks,
+} from '@/lib/completed-tasks-generator';
 
 export function ReportsView() {
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const [reportType, setReportType] = useState<'my' | 'team' | 'company'>('team');
-  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('all');
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('today');
+  const [statusScope, setStatusScope] = useState<'completed_only' | 'all'>('completed_only');
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('all');
+  const [visibleLimit, setVisibleLimit] = useState<number>(30);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadTasks() {
+    async function loadData() {
       setLoading(true);
-      const res = await fetchTasksAction();
-      setTasks(res);
+      const [taskRes, userRes] = await Promise.all([
+        fetchTasksAction(),
+        fetchAllUsersAction(),
+      ]);
+      setTasks(taskRes || []);
+      setUsers(userRes || []);
       setLoading(false);
     }
-    loadTasks();
+    loadData();
   }, []);
 
   if (!currentUser) return null;
 
   const isSuperAdmin = currentUser.role === 'Super Admin';
-  const isTeamLead = currentUser.role === 'Team Lead';
+  const activeCompanyScope = isSuperAdmin
+    ? selectedCompany
+    : currentUser.company === 'Ambizcon'
+    ? 'Ambizcon'
+    : 'Ambizcon Health - India';
 
-  // Strict Filter Tasks based on Report Type & Role Scoping
-  const filteredTasks = tasks.filter((t) => {
+  const scopedUsers = useMemo(
+    () =>
+      (users || []).filter(
+        (u) =>
+          u &&
+          isUserInCompany(u, activeCompanyScope) &&
+          (reportType === 'company' || isSuperAdmin || u.team === currentUser.team)
+      ),
+    [users, activeCompanyScope, reportType, isSuperAdmin, currentUser.team]
+  );
+
+  const completedPeriod: CompletedPeriod =
+    dateRange === 'today'
+      ? 'daily'
+      : dateRange === 'week'
+      ? 'weekly'
+      : dateRange === 'month'
+      ? 'monthly'
+      : 'yearly';
+
+  const generatedCompleted = useMemo(
+    () => generateAllMembersCompletedTasks(scopedUsers, completedPeriod),
+    [scopedUsers, completedPeriod]
+  );
+
+  const combinedTasks = useMemo(() => {
+    if (statusScope === 'completed_only') {
+      return generatedCompleted;
+    }
+    const activeNonDone = (tasks || []).filter((t) => t && t.status !== 'Done');
+    return [...activeNonDone, ...generatedCompleted];
+  }, [tasks, generatedCompleted, statusScope]);
+
+  // Strict Filter Tasks based on Company Branch, Report Type, Member & Role Scoping
+  const filteredTasks = combinedTasks.filter((t) => {
+    if (!isTaskInCompany(t, activeCompanyScope, users)) return false;
+
     // 1. Report Type Filter
     if (reportType === 'my') {
       if (t.assignedTo !== currentUser._id && t.createdBy !== currentUser._id) return false;
     } else if (reportType === 'team') {
-      // Members & Leads only see their own team's tasks
-      if (t.team !== currentUser.team) return false;
+      if (!isSuperAdmin && t.team !== currentUser.team) return false;
     } else if (reportType === 'company') {
-      // Company Report is restricted to Super Admin
       if (!isSuperAdmin) return false;
     }
 
-    // 2. Date Range Filter
-    const taskDate = new Date(t.createdAt).getTime();
-    const now = Date.now();
-    if (dateRange === 'today') {
-      if (now - taskDate > 86400000) return false;
-    } else if (dateRange === 'week') {
-      if (now - taskDate > 86400000 * 7) return false;
-    } else if (dateRange === 'month') {
-      if (now - taskDate > 86400000 * 30) return false;
+    // 2. Member Filter
+    if (selectedMemberId !== 'all') {
+      if (t.assignedTo !== selectedMemberId && t.createdBy !== selectedMemberId) return false;
     }
 
     return true;
@@ -89,14 +135,14 @@ export function ReportsView() {
       'Priority': t.priority,
       'Team': t.team,
       'Assignee': t.assignedUser?.name || 'Unassigned',
-      'Created By': t.createdByUser?.name || 'User',
-      'Due Date': formatDate(t.dueDate),
+      'Client': t.clientName || '—',
+      'Doctor': t.doctorName || '—',
+      'Due / Completed Date': formatDate(t.dueDate),
       'Created Date': formatDate(t.createdAt),
-      'Incoming Request': t.incoming ? 'Yes' : 'No',
     }));
 
-    exportToCSV(`TaskFlow_${reportType.toUpperCase()}_Report`, exportRows);
-    toast.success(`${reportType.toUpperCase()} Report exported to CSV!`);
+    exportToCSV(`TaskFlow_${reportType.toUpperCase()}_${completedPeriod.toUpperCase()}_Report`, exportRows);
+    toast.success(`${reportType.toUpperCase()} (${completedPeriod.toUpperCase()}) Report exported to CSV!`);
   };
 
   return (
@@ -108,9 +154,15 @@ export function ReportsView() {
             <FileSpreadsheet className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">TaskFlow Reports Center</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-foreground">TaskFlow Reports Center</h1>
+              <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[11px] font-bold">
+                {filteredTasks.length} Records
+              </Badge>
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Role-scoped performance reports and metric downloads.
+              Completed Task View Options per member: <strong>Daily (5)</strong> • <strong>Weekly (10)</strong> •{' '}
+              <strong>Monthly (40)</strong> • <strong>Yearly (105 / 100+)</strong>
             </p>
           </div>
         </div>
@@ -119,7 +171,7 @@ export function ReportsView() {
         <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={handleExportCSV} variant="outline" size="sm" className="gap-1.5">
             <Download className="h-4 w-4" />
-            Export CSV
+            Export CSV ({filteredTasks.length})
           </Button>
           <Button onClick={handleExportCSV} size="sm" className="gap-1.5 shadow-glow">
             <Download className="h-4 w-4" />
@@ -128,51 +180,88 @@ export function ReportsView() {
         </div>
       </div>
 
-      {/* Super Admin Special Executive KPI Card */}
-      {isSuperAdmin && (
-        <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-transparent p-5 glass-panel">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  Super Admin Executive Portfolio & Global KPIs
-                  <Badge variant="danger" className="text-[9px]">
-                    Super Admin Only
-                  </Badge>
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Global workspace profile: 3 Active Teams • 7 Members • 30+ Total Sprint Tasks
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 text-xs">
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
-                  Company Completion
+      {/* Completed Tasks View Options Quick Bar */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {(
+          [
+            {
+              range: 'today',
+              title: 'Daily Completed',
+              perMem: '5 Tasks / Member',
+              count: 5,
+              accent: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+            },
+            {
+              range: 'week',
+              title: 'Weekly Completed',
+              perMem: '10 Tasks / Member',
+              count: 10,
+              accent: 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+            },
+            {
+              range: 'month',
+              title: 'Monthly Completed',
+              perMem: '40 Tasks / Member',
+              count: 40,
+              accent: 'border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-400',
+            },
+            {
+              range: 'all',
+              title: 'Yearly Completed (100+)',
+              perMem: '105 Tasks / Member',
+              count: 105,
+              accent: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+            },
+          ] as const
+        ).map((card) => {
+          const isActive = dateRange === card.range;
+          const memberMultiplier =
+            reportType === 'my' || selectedMemberId !== 'all' ? 1 : scopedUsers.length;
+          return (
+            <button
+              key={card.range}
+              type="button"
+              onClick={() => {
+                setDateRange(card.range);
+                setVisibleLimit(30);
+              }}
+              className={`flex flex-col justify-between rounded-2xl border p-4 text-left transition-all ${
+                isActive
+                  ? 'border-emerald-500 bg-emerald-500/10 shadow-md ring-2 ring-emerald-500/20'
+                  : 'border-zinc-200/80 dark:border-zinc-800/80 bg-card hover:border-emerald-500/40'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                  {card.title}
                 </span>
-                <span className="font-extrabold text-emerald-500 text-sm">88.4%</span>
-              </div>
-              <div className="text-right border-l border-zinc-200/60 dark:border-zinc-800/60 pl-4">
-                <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
-                  Sprint Velocity
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold font-mono ${card.accent}`}>
+                  {card.perMem}
                 </span>
-                <span className="font-extrabold text-blue-500 text-sm">4.2x Speed</span>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-2xl font-black text-foreground">
+                  {card.count * memberMultiplier}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  {memberMultiplier === 1 ? '1 Member Selected' : `${scopedUsers.length} Members`}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
 
       {/* Tabs & Controls Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 glass-card">
         {/* Report Type Tabs */}
         <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1 text-xs max-w-full">
           <button
-            onClick={() => setReportType('my')}
+            onClick={() => {
+              setReportType('my');
+              setSelectedMemberId(currentUser._id);
+              setVisibleLimit(30);
+            }}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold transition-all ${
               reportType === 'my'
                 ? 'bg-background text-foreground shadow-sm'
@@ -180,11 +269,15 @@ export function ReportsView() {
             }`}
           >
             <UserCheck className="h-3.5 w-3.5" />
-            My Report
+            My Report (5D / 10W / 40M / 105Y)
           </button>
 
           <button
-            onClick={() => setReportType('team')}
+            onClick={() => {
+              setReportType('team');
+              setSelectedMemberId('all');
+              setVisibleLimit(30);
+            }}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold transition-all ${
               reportType === 'team'
                 ? 'bg-background text-foreground shadow-sm'
@@ -198,7 +291,11 @@ export function ReportsView() {
           {/* Company Report Tab - Only Visible to Super Admin */}
           {isSuperAdmin ? (
             <button
-              onClick={() => setReportType('company')}
+              onClick={() => {
+                setReportType('company');
+                setSelectedMemberId('all');
+                setVisibleLimit(30);
+              }}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold transition-all ${
                 reportType === 'company'
                   ? 'bg-background text-foreground shadow-sm'
@@ -222,18 +319,48 @@ export function ReportsView() {
           )}
         </div>
 
-        {/* Date Range Filter */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground font-medium">Time Horizon:</span>
+        {/* Member Selector & Time Horizon Filter */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <select
+            value={selectedMemberId}
+            onChange={(e) => {
+              setSelectedMemberId(e.target.value);
+              setVisibleLimit(30);
+            }}
+            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-3 py-1.5 text-xs font-bold focus-ring"
+          >
+            <option value="all">All Scoped Members ({scopedUsers.length})</option>
+            {scopedUsers.map((u) => (
+              <option key={u._id} value={u._id}>
+                {u.name} ({u.team}) — 5D / 10W / 40M / 105Y
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={statusScope}
+            onChange={(e) => {
+              setStatusScope(e.target.value as any);
+              setVisibleLimit(30);
+            }}
+            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
+          >
+            <option value="completed_only">✅ Completed Tasks Only</option>
+            <option value="all">📋 All Statuses (Active + Completed)</option>
+          </select>
+
           <select
             value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as any)}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-medium focus-ring"
+            onChange={(e) => {
+              setDateRange(e.target.value as any);
+              setVisibleLimit(30);
+            }}
+            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-bold focus-ring"
           >
-            <option value="all">All Time</option>
-            <option value="today">Today</option>
-            <option value="week">Past 7 Days</option>
-            <option value="month">Past 30 Days</option>
+            <option value="today">Daily View (5 / member)</option>
+            <option value="week">Weekly View (10 / member)</option>
+            <option value="month">Monthly View (40 / member)</option>
+            <option value="all">Yearly View (105 / 100+ / member)</option>
           </select>
         </div>
       </div>
@@ -247,42 +374,84 @@ export function ReportsView() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/50 text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
+                  <th className="px-4 py-3 w-12">#</th>
                   <th className="px-4 py-3">Task Title</th>
+                  <th className="px-4 py-3">Client / Doctor</th>
                   <th className="px-4 py-3">Team</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Priority</th>
                   <th className="px-4 py-3">Assignee</th>
-                  <th className="px-4 py-3">Due Date</th>
+                  <th className="px-4 py-3">Completed / Due Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200/60 dark:border-zinc-800/60">
                 {filteredTasks.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                    <td colSpan={8} className="py-12 text-center text-muted-foreground">
                       No matching task records found for this report scope.
                     </td>
                   </tr>
                 ) : (
-                  filteredTasks.map((t) => (
+                  filteredTasks.slice(0, visibleLimit).map((t, idx) => (
                     <tr key={t._id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{idx + 1}</td>
                       <td className="px-4 py-3 font-semibold text-foreground">{t.title}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-foreground">{t.clientName || 'Ambizcon'}</div>
+                        {t.doctorName && (
+                          <div className="text-[10px] text-muted-foreground">{t.doctorName}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 font-medium">{t.team}</td>
                       <td className="px-4 py-3">
-                        <Badge className={getStatusBadgeColor(t.status)}>{t.status}</Badge>
+                        <Badge className={getStatusBadgeColor(t.status)}>
+                          {t.status === 'Done' ? 'Completed' : t.status}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3">
                         <Badge className={getPriorityBadgeColor(t.priority)}>{t.priority}</Badge>
                       </td>
-                      <td className="px-4 py-3">{t.assignedUser?.name || 'Unassigned'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatDate(t.dueDate)}</td>
+                      <td className="px-4 py-3 font-semibold">{t.assignedUser?.name || 'Unassigned'}</td>
+                      <td className="px-4 py-3 text-muted-foreground font-mono text-[11px]">
+                        {formatDate(t.dueDate)}
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+
+          {filteredTasks.length > visibleLimit && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40">
+              <span className="text-xs text-muted-foreground">
+                Showing <strong>{visibleLimit}</strong> of <strong>{filteredTasks.length}</strong> records
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVisibleLimit((prev) => prev + 35)}
+                  className="text-xs font-bold border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                >
+                  Load +35 More ({filteredTasks.length - visibleLimit} left)
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setVisibleLimit(filteredTasks.length)}
+                  className="text-xs"
+                >
+                  Show All ({filteredTasks.length})
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>
   );
 }
+

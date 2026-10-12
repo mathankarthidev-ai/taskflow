@@ -2,11 +2,15 @@
 
 import React, { useState } from 'react';
 import { Task, TaskStatus } from '@/types';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { formatDate, getPriorityBadgeColor } from '@/lib/utils';
-import { ChevronDown, X, ExternalLink, Calendar, Building2, User, Tag, AlertCircle } from 'lucide-react';
+import { ChevronDown, X, ExternalLink, Calendar, Building2, User, Tag, AlertCircle, Edit3, Lock } from 'lucide-react';
+import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
+import { TaskEditModal } from '@/components/tasks/TaskEditModal';
+import { toast } from 'sonner';
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -26,6 +30,9 @@ const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
 
 export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: TaskListViewProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [visibleLimit, setVisibleLimit] = useState<number>(30);
+  const currentUser = useAuthStore((s) => s.currentUser);
 
   const toggleExpand = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -64,12 +71,14 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
-            {tasks.map((task) => {
+            {tasks.slice(0, visibleLimit).map((task) => {
               const isExpanded = expandedIds.has(task._id);
               const isOverdue =
                 task.status !== 'Done' && task.dueDate
                   ? !isNaN(new Date(task.dueDate).getTime()) && new Date(task.dueDate).getTime() < Date.now()
                   : false;
+              const canEdit = canEditTaskOrReminder(task, currentUser);
+              const creatorName = getTaskCreatorName(task);
 
               return (
                 <React.Fragment key={task._id}>
@@ -171,6 +180,26 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
                         </button>
                         <button
                           type="button"
+                          onClick={() => {
+                            if (canEdit) {
+                              setEditingTask(task);
+                            } else {
+                              toast.error('Permission Restricted', {
+                                description: `Only Admin or creator (${creatorName}) can edit this task.`,
+                              });
+                            }
+                          }}
+                          className={`p-1 rounded transition ${
+                            canEdit
+                              ? 'text-muted-foreground hover:text-brand-500 hover:bg-brand-500/10'
+                              : 'text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10'
+                          }`}
+                          title={canEdit ? 'Edit task' : `Created by ${creatorName} (Admin or creator only)`}
+                        >
+                          {canEdit ? <Edit3 className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5 text-amber-500/70" />}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => onDelete(task._id, task.title)}
                           className="p-1 rounded text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition"
                           title="Delete task"
@@ -245,6 +274,42 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
           </tbody>
         </table>
       </div>
+
+      {tasks.length > visibleLimit && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40">
+          <span className="text-xs text-muted-foreground font-medium">
+            Showing <strong className="text-foreground">{visibleLimit}</strong> of{' '}
+            <strong className="text-foreground">{tasks.length}</strong> tasks
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setVisibleLimit((prev) => prev + 30)}
+              className="text-xs font-bold border-brand-500/40 text-brand-600 dark:text-brand-400 hover:bg-brand-500/10"
+            >
+              Show +30 More ({tasks.length - visibleLimit} remaining)
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setVisibleLimit(tasks.length)}
+              className="text-xs"
+            >
+              Show All ({tasks.length})
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Task Modal */}
+      <TaskEditModal
+        task={editingTask}
+        isOpen={Boolean(editingTask)}
+        onClose={() => setEditingTask(null)}
+      />
     </div>
   );
 }

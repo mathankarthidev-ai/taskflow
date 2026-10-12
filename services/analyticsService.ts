@@ -1,8 +1,12 @@
 import { getTasks } from './taskService';
 import { AnalyticsSummary, TeamName } from '@/types';
+import { isTaskInCompany } from '@/lib/company-filter';
 
-export async function getAnalyticsData(teamFilter?: TeamName) {
-  const tasks = await getTasks(teamFilter ? { team: teamFilter } : {});
+export async function getAnalyticsData(teamFilter?: TeamName, companyFilter?: string) {
+  const rawTasks = await getTasks(teamFilter ? { team: teamFilter } : {});
+  const tasks = companyFilter
+    ? rawTasks.filter((t) => isTaskInCompany(t, companyFilter))
+    : rawTasks;
   const now = new Date();
 
   // Summary counts

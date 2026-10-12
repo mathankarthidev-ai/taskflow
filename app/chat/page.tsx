@@ -12,6 +12,11 @@ import {
   clearChannelMessages,
   clearAllStoredMessages,
   createDirectChannel,
+  getChatBroadcastChannel,
+  getNewChatMessageCount,
+  isUserReceiverForChatMessage,
+  markChannelMessagesAsRead,
+  syncMessagesFromServer,
 } from '@/lib/chat-db';
 import { playNotificationChime } from '@/lib/audio-chime';
 import { fetchAllUsersAction } from '@/actions/userActions';
@@ -19,6 +24,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import Link from 'next/link';
 import {
   MessageSquare,
   Send,
@@ -37,6 +43,9 @@ import {
   Trash2,
   Volume2,
   AlertTriangle,
+  Bell,
+  ArrowLeft,
+  Home,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -46,6 +55,8 @@ export default function TeamChatPage() {
   const [activeChannelId, setActiveChannelId] = useState<string>('channel_all');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [unreadByChannel, setUnreadByChannel] = useState<Record<string, number>>({});
+  const [totalUnreadChat, setTotalUnreadChat] = useState<number>(0);
 
   // Form State
   const [messageText, setMessageText] = useState('');
@@ -68,16 +79,30 @@ export default function TeamChatPage() {
 
   const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
 
+  const refreshUnreadCounts = () => {
+    if (!currentUser) return;
+    const res = getNewChatMessageCount(
+      currentUser.team,
+      currentUser.role,
+      currentUser._id,
+      currentUser.name
+    );
+    setUnreadByChannel(res.byChannel);
+    setTotalUnreadChat(res.total);
+  };
+
   useEffect(() => {
     fetchAllUsersAction().then(setUsers);
     const loadedChannels = getStoredChannels();
     setChannels(loadedChannels);
-  }, []);
+    refreshUnreadCounts();
+  }, [currentUser]);
 
   useEffect(() => {
     if (activeChannelId) {
       const msgs = getStoredMessages(activeChannelId);
       setMessages(msgs);
+      refreshUnreadCounts();
     }
   }, [activeChannelId]);
 
@@ -85,23 +110,19 @@ export default function TeamChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Real-time synchronization & cross-tab events listener
+  // Real-time synchronization & cross-tab / cross-session events listener
   useEffect(() => {
-    const handleRemoteMessage = (e: any) => {
-      const { channelId, message, originWindowId } = e.detail || {};
-
-      // Check 1: If event originated from this exact window instance, ignore it!
-      // (handleSendMessage already added it locally)
+    const appendIncomingMessage = (channelId: string, message: ChatMessage, originWindowId?: string) => {
       if (originWindowId && originWindowId === windowInstanceIdRef.current) {
         return;
       }
 
+      const isReceiver = isUserReceiverForChatMessage(message, channelId, currentUser);
+
       if (channelId === activeChannelId && message) {
-        // Check 2: Only append if message is from another user/tab to prevent double paste
-        if (message.senderId !== currentUser?._id) {
+        if (message.senderId !== currentUser?._id && message.senderName !== currentUser?.name) {
           setMessages((prev) => {
             if (prev.some((m) => m.id === message.id)) return prev;
-            // Check 3: Drop identical text from same sender within 2000ms
             const last = prev[prev.length - 1];
             if (
               last &&
@@ -113,10 +134,22 @@ export default function TeamChatPage() {
             }
             return [...prev, message];
           });
-          playNotificationChime();
         }
       }
+
+      // Only play notification sound for RECEIVERS (in Direct/Member, Team, or All-in-One) — NEVER for the sender!
+      if (isReceiver) {
+        playNotificationChime();
+      }
+
       setChannels(getStoredChannels());
+      refreshUnreadCounts();
+    };
+
+    const handleRemoteMessage = (e: any) => {
+      const { channelId, message, originWindowId } = e.detail || {};
+      if (!message) return;
+      appendIncomingMessage(channelId, message, originWindowId);
     };
 
     const handleDeletedMessage = (e: any) => {
@@ -125,15 +158,52 @@ export default function TeamChatPage() {
         setMessages((prev) => prev.filter((m) => m.id !== messageId));
       }
       setChannels(getStoredChannels());
+      refreshUnreadCounts();
     };
+
+    const bc = getChatBroadcastChannel();
+    const handleBroadcast = (ev: MessageEvent) => {
+      if (ev.data?.type === 'CHAT_MESSAGE_SENT' && ev.data?.message) {
+        appendIncomingMessage(ev.data.channelId, ev.data.message, ev.data.originWindowId);
+      }
+    };
+    if (bc) {
+      bc.addEventListener('message', handleBroadcast);
+    }
+
+    const pollChatServer = async () => {
+      const { newMessages } = await syncMessagesFromServer();
+      if (newMessages.length > 0) {
+        setMessages(getStoredMessages(activeChannelId));
+        setChannels(getStoredChannels());
+        refreshUnreadCounts();
+        // Play sound only if currentUser is a receiver for at least one newly synced message
+        const hasIncomingForReceiver = newMessages.some((item) =>
+          isUserReceiverForChatMessage(item.message, item.channelId, currentUser)
+        );
+        if (hasIncomingForReceiver) {
+          playNotificationChime();
+        }
+      }
+    };
+    pollChatServer();
+    const pollTimer = setInterval(pollChatServer, 3500);
 
     window.addEventListener('taskflow_chat_message_sent', handleRemoteMessage);
     window.addEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+    window.addEventListener('taskflow_chat_unread_updated', refreshUnreadCounts);
+    window.addEventListener('storage', refreshUnreadCounts);
     return () => {
       window.removeEventListener('taskflow_chat_message_sent', handleRemoteMessage);
       window.removeEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+      window.removeEventListener('taskflow_chat_unread_updated', refreshUnreadCounts);
+      window.removeEventListener('storage', refreshUnreadCounts);
+      if (bc) {
+        bc.removeEventListener('message', handleBroadcast);
+      }
+      clearInterval(pollTimer);
     };
-  }, [activeChannelId, currentUser?._id]);
+  }, [activeChannelId, currentUser?._id, currentUser?.name, currentUser?.team, currentUser?.role]);
 
   if (!currentUser) return null;
 
@@ -205,17 +275,28 @@ export default function TeamChatPage() {
         windowInstanceIdRef.current
       );
 
-      // Audio chime sound on send
-      playNotificationChime();
+      // NOTE: Do NOT play sound or show broadcast toast to the sender!
+      // Only receivers (Member, Team, or All-in-One) receive the notification & sound.
+      const isAllInOne = activeChannelId === 'channel_all';
 
-      // Notify all via In-App Notification Store
+      // Store notification for RECEIVERS (filtered out for sender in Header & Sidebar)
       useNotificationStore.getState().addNotification({
         type: 'chat_message',
-        category: activeChannel?.name || 'Group Chat',
-        title: `💬 New Message in ${activeChannel?.name || 'Group Chat'}`,
-        text: `${currentUser.name}: ${textToSend || (fileToSend ? `Attached: ${fileToSend.name}` : 'Shared a link')}`,
+        category: isAllInOne ? 'All-in-One Chat (All Teams)' : (activeChannel?.name || 'Group Chat'),
+        title: isAllInOne
+          ? `💬 ${currentUser.name} (${currentUser.role}) in All-in-One Chat`
+          : `💬 New Message in ${activeChannel?.name || 'Group Chat'}`,
+        text: `${currentUser.name}: "${
+          textToSend || (fileToSend ? `Attached: ${fileToSend.name}` : 'Shared a link')
+        }"`,
         color: 'bg-teal-500',
         link: '/chat',
+        channelId: activeChannelId,
+        messageId: created.id,
+        targetTeam: activeChannel?.team,
+        senderName: currentUser.name,
+        senderRole: currentUser.role,
+        targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
       });
 
       // Check 3: Add to messages state with deduplication by ID and recent identical content
@@ -234,7 +315,8 @@ export default function TeamChatPage() {
       });
 
       setChannels(getStoredChannels());
-      toast.success(`Message broadcasted to ${activeChannel?.name || 'group'}`, { icon: '🔔' });
+      refreshUnreadCounts();
+      window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
     } finally {
       // Cooldown debounce window (400ms) before unlocking send button
       setTimeout(() => {
@@ -250,6 +332,7 @@ export default function TeamChatPage() {
     if (success) {
       setMessages((prev) => prev.filter((m) => m.id !== msgId));
       setChannels(getStoredChannels());
+      refreshUnreadCounts();
       toast.success('Message deleted from group');
     }
   };
@@ -300,7 +383,37 @@ export default function TeamChatPage() {
   );
 
   return (
-    <div className="h-[calc(100vh-5rem)] flex flex-col md:flex-row gap-4 p-4 max-w-7xl mx-auto">
+    <div className="h-[calc(100vh-1.5rem)] flex flex-col gap-3 p-3 sm:p-4 max-w-7xl mx-auto">
+      {/* Top Quick Navigation Bar with Back to Home Button */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card px-4 py-2.5 shadow-sm shrink-0">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 rounded-xl border border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 px-3.5 py-1.5 text-xs font-extrabold text-brand-600 dark:text-brand-300 transition-all shadow-sm"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <Home className="h-3.5 w-3.5" />
+            Back to Home
+          </Link>
+          <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-brand-500" />
+            <span className="text-xs sm:text-sm font-extrabold text-foreground tracking-tight">
+              Ambizcon All-in-One &amp; Team Chat Workspace
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Avatar name={currentUser.name} src={currentUser.avatar} size="sm" />
+          <span className="text-xs font-bold text-foreground">{currentUser.name}</span>
+          <Badge variant="outline" className="text-[10px]">
+            {currentUser.role}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4">
       {/* Left Sidebar - Groups & Channels */}
       <div className="w-full md:w-80 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card flex flex-col shrink-0 overflow-hidden shadow-sm">
         {/* Sidebar Header */}
@@ -328,25 +441,34 @@ export default function TeamChatPage() {
               Company All-in-One Group
             </span>
             <div className="space-y-1">
-              {allGroupChannel.map((ch) => (
-                <button
-                  key={ch.id}
-                  onClick={() => setActiveChannelId(ch.id)}
-                  className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
-                    activeChannelId === ch.id
-                      ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
-                      : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <Globe className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{ch.name}</span>
-                  </div>
-                  <Badge variant={activeChannelId === ch.id ? 'secondary' : 'default'} className="text-[9px]">
-                    All Roles
-                  </Badge>
-                </button>
-              ))}
+              {allGroupChannel.map((ch) => {
+                const newCount = unreadByChannel[ch.id] || 0;
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => setActiveChannelId(ch.id)}
+                    className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
+                      activeChannelId === ch.id
+                        ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
+                        : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-foreground'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Globe className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{ch.name}</span>
+                    </div>
+                    {newCount > 0 ? (
+                      <Badge className="text-[9px] bg-rose-500 text-white font-extrabold animate-pulse border border-white/30 shrink-0">
+                        {newCount} New Msg
+                      </Badge>
+                    ) : (
+                      <Badge variant={activeChannelId === ch.id ? 'secondary' : 'default'} className="text-[9px] shrink-0">
+                        All Roles
+                      </Badge>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -356,27 +478,36 @@ export default function TeamChatPage() {
               Team Level Groups
             </span>
             <div className="space-y-1">
-              {teamGroupChannels.map((ch) => (
-                <button
-                  key={ch.id}
-                  onClick={() => setActiveChannelId(ch.id)}
-                  className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
-                    activeChannelId === ch.id
-                      ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
-                      : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <Users className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{ch.name}</span>
-                  </div>
-                  {ch.team && (
-                    <Badge variant={activeChannelId === ch.id ? 'secondary' : 'outline'} className="text-[9px]">
-                      {ch.team}
-                    </Badge>
-                  )}
-                </button>
-              ))}
+              {teamGroupChannels.map((ch) => {
+                const newCount = unreadByChannel[ch.id] || 0;
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => setActiveChannelId(ch.id)}
+                    className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
+                      activeChannelId === ch.id
+                        ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
+                        : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-foreground'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Users className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{ch.name}</span>
+                    </div>
+                    {newCount > 0 ? (
+                      <Badge className="text-[9px] bg-rose-500 text-white font-extrabold animate-pulse border border-white/30 shrink-0">
+                        {newCount} New Msg
+                      </Badge>
+                    ) : (
+                      ch.team && (
+                        <Badge variant={activeChannelId === ch.id ? 'secondary' : 'outline'} className="text-[9px] shrink-0">
+                          {ch.team}
+                        </Badge>
+                      )
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -390,20 +521,29 @@ export default function TeamChatPage() {
             </div>
             <div className="space-y-1">
               {directChannels.length > 0 ? (
-                directChannels.map((ch) => (
-                  <button
-                    key={ch.id}
-                    onClick={() => setActiveChannelId(ch.id)}
-                    className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
-                      activeChannelId === ch.id
-                        ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
-                        : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-foreground'
-                    }`}
-                  >
-                    <span className="truncate">{ch.name}</span>
-                    <span className="text-[10px] font-mono opacity-70">{ch.lastMessageTime}</span>
-                  </button>
-                ))
+                directChannels.map((ch) => {
+                  const newCount = unreadByChannel[ch.id] || 0;
+                  return (
+                    <button
+                      key={ch.id}
+                      onClick={() => setActiveChannelId(ch.id)}
+                      className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
+                        activeChannelId === ch.id
+                          ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
+                          : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-foreground'
+                      }`}
+                    >
+                      <span className="truncate">{ch.name}</span>
+                      {newCount > 0 ? (
+                        <Badge className="text-[9px] bg-rose-500 text-white font-extrabold animate-pulse border border-white/30 shrink-0">
+                          {newCount} New Msg
+                        </Badge>
+                      ) : (
+                        <span className="text-[10px] font-mono opacity-70">{ch.lastMessageTime}</span>
+                      )}
+                    </button>
+                  );
+                })
               ) : (
                 <p className="text-[11px] text-muted-foreground italic px-2 py-1">No direct chats yet. Click "+ Direct Chat" to start.</p>
               )}
@@ -429,34 +569,73 @@ export default function TeamChatPage() {
       {/* Main Chat Conversation Workspace */}
       <div className="flex-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card flex flex-col overflow-hidden shadow-sm">
         {/* Chat Header */}
-        <div className="p-4 border-b border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/40">
+        <div className="p-4 border-b border-zinc-200/60 dark:border-zinc-800/60 flex flex-wrap items-center justify-between gap-2 bg-zinc-50/50 dark:bg-zinc-900/40">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="font-extrabold text-base text-foreground tracking-tight">{activeChannel?.name}</h1>
               <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 font-bold">
                 {activeChannel?.scope === 'all' ? 'Group (TL, Member, Admin)' : activeChannel?.scope === 'team' ? `${activeChannel.team} Team` : 'Direct DM'}
               </Badge>
-              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold ml-2">
-                <Volume2 className="h-3.5 w-3.5" /> Sound & Alerts Active
-              </span>
+              {(unreadByChannel[activeChannelId] || 0) > 0 && (
+                <Badge className="bg-rose-500 text-white font-extrabold text-[10px] animate-pulse">
+                  ● {unreadByChannel[activeChannelId]} New Msg
+                </Badge>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  playNotificationChime();
+                  toast.success('🔊 Notification Chime Tested! Sound & Team Alerts are active.');
+                }}
+                className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold ml-1 px-2 py-0.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                title="Click to test notification chime sound"
+              >
+                <Volume2 className="h-3.5 w-3.5 animate-pulse" /> Sound &amp; Team Alerts Active
+              </button>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">{activeChannel?.description || 'Collaborate with text updates, share files, and link resources.'}</p>
           </div>
 
-          {/* Admin Group Controls */}
-          {isAdmin && messages.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleClearGroup}
-              className="text-xs text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1.5"
-              title="Admin: Clear all messages in this group"
+          {/* Right Header Controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3 py-1.5 text-xs font-bold text-foreground transition-colors"
+              title="Return to Home Dashboard"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-              Clear Group
-            </Button>
-          )}
+              <ArrowLeft className="h-3.5 w-3.5 text-brand-500" />
+              Home
+            </Link>
+            {totalUnreadChat > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  markChannelMessagesAsRead(activeChannelId);
+                  refreshUnreadCounts();
+                  toast.info('Marked channel messages as read');
+                }}
+                className="text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 gap-1"
+              >
+                <CheckCircle className="h-3.5 w-3.5" />
+                Mark Read
+              </Button>
+            )}
+            {isAdmin && messages.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleClearGroup}
+                className="text-xs text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1.5"
+                title="Admin: Clear all messages in this group"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Clear Group
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Message Feed */}
@@ -486,10 +665,14 @@ export default function TeamChatPage() {
                   <Avatar name={msg.senderName} src={msg.senderAvatar} size="md" className="shrink-0" />
                   <div className={`max-w-xl space-y-1 ${isMe ? 'items-end text-right' : 'items-start'}`}>
                     {/* Sender Info & Admin Delete Action */}
-                    <div className={`flex items-center gap-2 text-[11px] text-muted-foreground ${isMe ? 'justify-end' : ''}`}>
+                    <div className={`flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground ${isMe ? 'justify-end' : ''}`}>
                       <span className="font-bold text-foreground">{msg.senderName}</span>
                       <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
                         {msg.senderRole}
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1">
+                        <Bell className="h-2.5 w-2.5" />
+                        {activeChannel?.scope === 'all' ? 'Notified All Teams' : 'Team Notified'}
                       </span>
                       <span className="font-mono text-[10px]">
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -641,12 +824,13 @@ export default function TeamChatPage() {
             <Button
               type="submit"
               disabled={isSending || (!messageText.trim() && !attachedFile && !linkInput.trim())}
-              className="bg-[#086075] hover:bg-[#086075]/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl gap-1.5 shadow-sm disabled:opacity-50"
+              className="ambizcon-gradient hover:opacity-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl gap-1.5 shadow-glow disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" /> {isSending ? 'Sending...' : 'Send'}
             </Button>
           </div>
         </form>
+      </div>
       </div>
 
       {/* Direct DM User Selector Modal */}

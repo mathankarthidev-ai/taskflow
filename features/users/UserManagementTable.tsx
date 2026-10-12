@@ -17,10 +17,14 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Link from 'next/link';
-import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2, UserCheck, ShieldCheck, CheckCircle2, Plus, Sparkles, FolderPlus } from 'lucide-react';
+import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2, UserCheck, ShieldCheck, CheckCircle2, Plus, Sparkles, FolderPlus, Calendar as CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { isUserInCompany, resolveEffectiveCompany } from '@/lib/company-filter';
+import { CompletedPeriod } from '@/lib/completed-tasks-generator';
+import { CompletedTasksExplorerModal } from '@/components/tasks/CompletedTasksExplorerModal';
+import { FestivalAndLeaveAdminPanel } from '@/components/attendance/FestivalAndLeaveAdminPanel';
 
 // Format date of birth to strictly Date and Month only (No year)
 export function formatDayMonthOnly(val?: string): string {
@@ -60,11 +64,23 @@ export function UserManagementTable() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<TeamName | 'All'>('All');
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<CompanyBranch | 'All'>(selectedCompany || 'All');
-  const [activeTab, setActiveTab] = useState<'directory' | 'approvals'>('directory');
+  const [activeTab, setActiveTab] = useState<'directory' | 'approvals' | 'leaves'>('directory');
+
+  // Completed Tasks Explorer Modal State
+  const [isCompletedModalOpen, setIsCompletedModalOpen] = useState(false);
+  const [completedModalMemberId, setCompletedModalMemberId] = useState<string>('all');
+  const [completedModalPeriod, setCompletedModalPeriod] = useState<CompletedPeriod>('daily');
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.hash === '#approvals') {
-      setActiveTab('approvals');
+    if (selectedCompany) {
+      setSelectedCompanyFilter(selectedCompany);
+    }
+  }, [selectedCompany]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (window.location.hash === '#approvals') setActiveTab('approvals');
+      if (window.location.hash === '#leaves') setActiveTab('leaves');
     }
   }, []);
 
@@ -86,16 +102,22 @@ export function UserManagementTable() {
   const [newTeamNameInput, setNewTeamNameInput] = useState('');
   const [newTeamDescInput, setNewTeamDescInput] = useState('');
 
-  // Calculate team headcount
+  // Users scoped to the currently selected company branch filter
+  const companyScopedUsers = useMemo(() => {
+    if (selectedCompanyFilter === 'All') return users;
+    return users.filter((u) => isUserInCompany(u, selectedCompanyFilter));
+  }, [users, selectedCompanyFilter]);
+
+  // Calculate team headcount for active branch
   const teamCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     teamsList.forEach((t) => (counts[t] = 0));
-    users.forEach((u) => {
+    companyScopedUsers.forEach((u) => {
       const t = u.team || 'Development';
       counts[t] = (counts[t] || 0) + 1;
     });
     return counts;
-  }, [users, teamsList]);
+  }, [companyScopedUsers, teamsList]);
 
   const handleCreateTeam = (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,14 +328,7 @@ export function UserManagementTable() {
   const filteredUsers = users.filter((u) => {
     if (selectedTeamFilter !== 'All' && u.team !== selectedTeamFilter) return false;
     if (selectedCompanyFilter !== 'All') {
-      const uCompany = u.company || 'Ambizcon Health - India';
-      const isGlobalUser =
-        u.company === 'India & Australia' ||
-        u.role === 'Super Admin' ||
-        u.name.toLowerCase().includes('anirudh') ||
-        u.name.toLowerCase().includes('mathan');
-
-      if (!isGlobalUser && uCompany !== selectedCompanyFilter) {
+      if (!isUserInCompany(u, selectedCompanyFilter)) {
         return false;
       }
     }
@@ -347,6 +362,17 @@ export function UserManagementTable() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setActiveTab('leaves')}
+            className="gap-1.5 text-xs border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold hover:bg-amber-500/20"
+          >
+            <CalendarIcon className="h-4 w-4" />
+            Leave Update & Festival Leaves
+          </Button>
+
           <Link href="/finance">
             <Button size="sm" variant="outline" className="gap-1.5 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold">
               <DollarSign className="h-4 w-4" />
@@ -366,8 +392,8 @@ export function UserManagementTable() {
         </div>
       </div>
 
-      {/* Interactive Tab Switcher: User Directory vs Role Approvals */}
-      <div className="flex items-center gap-2 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-1">
+      {/* Interactive Tab Switcher: User Directory vs Role Approvals vs Leave Update & Festival Leaves */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-1">
         <button
           type="button"
           onClick={() => setActiveTab('directory')}
@@ -392,6 +418,19 @@ export function UserManagementTable() {
         >
           <ShieldCheck className="h-4 w-4" />
           Role Approvals & Sign-offs
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('leaves')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+            activeTab === 'leaves'
+              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+              : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-foreground'
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
+          Leave Update & Common Festival Leaves
         </button>
       </div>
 
@@ -421,7 +460,7 @@ export function UserManagementTable() {
               {teamsList.map((teamName) => {
                 const count = teamCounts[teamName] || 0;
                 const isSelected = selectedTeamFilter === teamName;
-                const teamUsers = users.filter((u) => u.team === teamName);
+                const teamUsers = companyScopedUsers.filter((u) => u.team === teamName);
 
                 return (
                   <div
@@ -500,13 +539,28 @@ export function UserManagementTable() {
             onChange={(e) => setSelectedTeamFilter(e.target.value as TeamName | 'All')}
             className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
           >
-            <option value="All">All Workspace Teams ({users.length} members)</option>
+            <option value="All">All Workspace Teams ({companyScopedUsers.length} members)</option>
             {teamsList.map((t) => (
               <option key={t} value={t}>
                 {t} Team ({teamCounts[t] || 0} {teamCounts[t] === 1 ? 'member' : 'members'})
               </option>
             ))}
           </select>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCompletedModalMemberId('all');
+              setCompletedModalPeriod('daily');
+              setIsCompletedModalOpen(true);
+            }}
+            className="gap-1.5 text-xs font-bold border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Completed Tasks View (5D • 10W • 40M • 100+Y)
+          </Button>
         </div>
       </div>
 
@@ -524,13 +578,16 @@ export function UserManagementTable() {
                   <th className="px-4 py-3">Authorized Email</th>
                   <th className="px-4 py-3">Team</th>
                   <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Completed Tasks (Click to View)</th>
                   <th className="px-4 py-3">Birthday / DOB</th>
                   <th className="px-4 py-3">Work Mode</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200/60 dark:border-zinc-800/60">
-                {filteredUsers.map((u) => (
+                {filteredUsers.map((u) => {
+                  const effCompany = resolveEffectiveCompany(u);
+                  return (
                   <tr key={u._id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -540,9 +597,9 @@ export function UserManagementTable() {
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant="outline" className="text-[10px] font-semibold whitespace-nowrap">
-                        {u.company === 'India & Australia' || u.name.startsWith('Anirudh')
+                        {effCompany === 'India & Australia'
                           ? '🌐 India & Australia'
-                          : (u.company || 'Ambizcon Health - India') === 'Ambizcon'
+                          : effCompany === 'Ambizcon'
                           ? '🇦🇺 Australia'
                           : '🇮🇳 India'}
                       </Badge>
@@ -556,6 +613,58 @@ export function UserManagementTable() {
                       >
                         {u.role}
                       </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCompletedModalMemberId(u._id);
+                            setCompletedModalPeriod('daily');
+                            setIsCompletedModalOpen(true);
+                          }}
+                          className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold font-mono text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white transition-colors"
+                          title={`View ${u.name}'s 5 Daily completed tasks`}
+                        >
+                          5D
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCompletedModalMemberId(u._id);
+                            setCompletedModalPeriod('weekly');
+                            setIsCompletedModalOpen(true);
+                          }}
+                          className="rounded-md border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-bold font-mono text-blue-600 dark:text-blue-400 hover:bg-blue-500 hover:text-white transition-colors"
+                          title={`View ${u.name}'s 10 Weekly completed tasks`}
+                        >
+                          10W
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCompletedModalMemberId(u._id);
+                            setCompletedModalPeriod('monthly');
+                            setIsCompletedModalOpen(true);
+                          }}
+                          className="rounded-md border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-bold font-mono text-purple-600 dark:text-purple-400 hover:bg-purple-500 hover:text-white transition-colors"
+                          title={`View ${u.name}'s 40 Monthly completed tasks`}
+                        >
+                          40M
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCompletedModalMemberId(u._id);
+                            setCompletedModalPeriod('yearly');
+                            setIsCompletedModalOpen(true);
+                          }}
+                          className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold font-mono text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white transition-colors"
+                          title={`View ${u.name}'s 105 (100+) Yearly completed tasks`}
+                        >
+                          100+Y
+                        </button>
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-mono font-semibold">{formatDayMonthOnly(u.dob || u.birthday || '14 Oct')}</td>
                     <td className="px-4 py-3 font-semibold text-emerald-600 dark:text-emerald-400">
@@ -584,13 +693,16 @@ export function UserManagementTable() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </Card>
       )}
         </>
+      ) : activeTab === 'leaves' ? (
+        <FestivalAndLeaveAdminPanel usersList={users} />
       ) : (
         /* Role Approvals & Security Governance Panel */
         <div className="space-y-6">
@@ -616,7 +728,7 @@ export function UserManagementTable() {
                 Workspace Member Access Matrix & Role Sign-offs
               </h4>
               <div className="space-y-2">
-                {users.map((u) => (
+                {companyScopedUsers.map((u) => (
                   <div
                     key={u._id}
                     className="flex flex-wrap items-center justify-between p-3 rounded-xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-zinc-900/40 text-xs gap-3"
@@ -984,6 +1096,15 @@ export function UserManagementTable() {
           </div>
         </form>
       </Modal>
+
+      {/* Member Completed Tasks Explorer Modal */}
+      <CompletedTasksExplorerModal
+        isOpen={isCompletedModalOpen}
+        onClose={() => setIsCompletedModalOpen(false)}
+        users={filteredUsers.length > 0 ? filteredUsers : companyScopedUsers}
+        initialMemberId={completedModalMemberId}
+        initialPeriod={completedModalPeriod}
+      />
     </div>
   );
 }

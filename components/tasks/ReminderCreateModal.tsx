@@ -74,6 +74,9 @@ const SUGGESTED_TEMPLATES = [
   },
 ];
 
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { isUserInCompany } from '@/lib/company-filter';
+
 export function ReminderCreateModal({
   isOpen,
   onClose,
@@ -86,6 +89,13 @@ export function ReminderCreateModal({
 }: ReminderCreateModalProps) {
   const { setTasks, tasks } = useTaskStore();
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const activeCompanyScope = isSuperAdmin
+    ? selectedCompany
+    : currentUser?.company === 'Ambizcon'
+    ? 'Ambizcon'
+    : 'Ambizcon Health - India';
 
   // Frequency Tab State
   const [frequency, setFrequency] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom'>(defaultFrequency);
@@ -535,7 +545,7 @@ export function ReminderCreateModal({
             >
               <option value="">-- Assign to Me ({currentUser?.name}) --</option>
               {users
-                .filter((u) => u.team === team)
+                .filter((u) => u.team === team && isUserInCompany(u, activeCompanyScope))
                 .map((u) => (
                   <option key={u._id} value={u._id}>
                     {u.name} ({u.role})

@@ -8,9 +8,9 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const userId = body.userId || 'user_anirudh_01';
-    const userName = body.userName || 'Anirudh K.';
-    const userTeam = body.userTeam || 'Development';
-    const userEmail = body.userEmail || '';
+    const userName = body.userName || body.name || 'Anirudh K.';
+    const userTeam = body.userTeam || body.team || 'Development';
+    const userEmail = (body.userEmail || body.email || '').toLowerCase().trim();
     const companyInput = body.company || 'Ambizcon Health - India';
     const workMode = body.workMode || 'Work From Office';
     const ipAddress = body.ipAddress || '192.168.1.104';

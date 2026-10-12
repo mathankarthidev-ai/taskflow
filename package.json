@@ -10,6 +10,7 @@
     "seed": "node -e \"console.log('Use /api/seed route or run seed action')\""
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.0",
     "@tanstack/react-query": "^5.66.0",
     "class-variance-authority": "^0.7.1",
@@ -18,7 +19,6 @@
     "framer-motion": "^12.4.7",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.475.0",
-    "mongoose": "^8.10.1",
     "next": "^15.1.7",
     "next-themes": "^0.4.4",
     "papaparse": "^5.5.2",

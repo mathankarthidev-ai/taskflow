@@ -1,7 +1,7 @@
 'use server';
 
-import { createTask, getTasks, updateTaskStatus, assignTask, deleteTask, TaskFilterOptions } from '@/services/taskService';
-import { TaskPriority, TaskStatus, TeamName } from '@/types';
+import { createTask, getTasks, getTaskById, updateTaskStatus, updateTask, assignTask, deleteTask, TaskFilterOptions } from '@/services/taskService';
+import { Task, TaskPriority, TaskStatus, TeamName, UserRole } from '@/types';
 import { revalidatePath } from 'next/cache';
 
 export async function fetchTasksAction(options: TaskFilterOptions = {}) {
@@ -30,6 +30,7 @@ export async function createTaskAction(data: {
   revalidatePath('/dashboard');
   revalidatePath('/kanban');
   revalidatePath('/incoming');
+  revalidatePath('/reminders');
   return task;
 }
 
@@ -37,7 +38,40 @@ export async function updateTaskStatusAction(taskId: string, status: TaskStatus)
   const task = await updateTaskStatus(taskId, status);
   revalidatePath('/kanban');
   revalidatePath('/dashboard');
+  revalidatePath('/reminders');
   return task;
+}
+
+export async function updateTaskAction(
+  taskId: string,
+  updates: Partial<Task>,
+  requestingUserId: string,
+  requestingUserRole: UserRole,
+  requestingUserName?: string
+) {
+  const existing = await getTaskById(taskId);
+  if (!existing) {
+    throw new Error('Task not found');
+  }
+
+  // Permission Rule:
+  // Admin can edit anything.
+  // TL or Member can edit ONLY their own created tasks and reminders.
+  const isAdmin = requestingUserRole === 'Super Admin' || requestingUserRole === 'Admin';
+  const isCreator =
+    String(existing.createdBy) === String(requestingUserId) ||
+    (existing.createdByUser && String(existing.createdByUser._id) === String(requestingUserId)) ||
+    (requestingUserName && existing.createdByUser?.name?.toLowerCase() === requestingUserName.toLowerCase());
+
+  if (!isAdmin && !isCreator) {
+    throw new Error('Access Denied: Only Admin or the creator can edit this task/reminder.');
+  }
+
+  const updated = await updateTask(taskId, updates);
+  revalidatePath('/kanban');
+  revalidatePath('/dashboard');
+  revalidatePath('/reminders');
+  return updated;
 }
 
 export async function assignTaskAction(taskId: string, assignedToUserId: string) {
@@ -45,6 +79,7 @@ export async function assignTaskAction(taskId: string, assignedToUserId: string)
   revalidatePath('/incoming');
   revalidatePath('/kanban');
   revalidatePath('/dashboard');
+  revalidatePath('/reminders');
   return task;
 }
 
@@ -52,5 +87,6 @@ export async function deleteTaskAction(taskId: string) {
   const success = await deleteTask(taskId);
   revalidatePath('/kanban');
   revalidatePath('/dashboard');
+  revalidatePath('/reminders');
   return success;
 }

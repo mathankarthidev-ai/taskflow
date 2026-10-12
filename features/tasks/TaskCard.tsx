@@ -3,11 +3,15 @@
 import React, { useState } from 'react';
 import { Task } from '@/types';
 import { useTaskStore } from '@/store/useTaskStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import { getPriorityBadgeColor, formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
-import { ChevronDown, X, Calendar, AlertCircle, Building2, Tag, Paperclip, MessageSquare, ExternalLink } from 'lucide-react';
+import { ChevronDown, X, Calendar, AlertCircle, Building2, Tag, Paperclip, MessageSquare, ExternalLink, Edit3, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
+import { TaskEditModal } from '@/components/tasks/TaskEditModal';
+import { toast } from 'sonner';
 
 interface TaskCardProps {
   task: Task;
@@ -17,10 +21,15 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onDelete }: TaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const setSelectedTask = useTaskStore((s) => s.setSelectedTask);
   const setDetailModalOpen = useTaskStore((s) => s.setDetailModalOpen);
+  const currentUser = useAuthStore((s) => s.currentUser);
 
   if (!task) return null;
+
+  const canEdit = canEditTaskOrReminder(task, currentUser);
+  const creatorName = getTaskCreatorName(task);
 
   const isOverdue =
     task.status !== 'Done' && task.dueDate
@@ -71,20 +80,45 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
           </span>
         </div>
 
-        {/* Delete Quick Button */}
-        {onDelete && (
+        {/* Card Quick Actions: Edit + Delete */}
+        <div className="flex items-center gap-0.5 shrink-0">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onDelete(task._id, task.title);
+              if (canEdit) {
+                setIsEditModalOpen(true);
+              } else {
+                toast.error('Permission Restricted', {
+                  description: `Only Admin or the creator (${creatorName}) can edit this task.`,
+                });
+              }
             }}
-            title="Delete task"
-            className="p-1 rounded text-muted-foreground/50 hover:text-rose-500 hover:bg-rose-500/10 transition shrink-0 opacity-0 group-hover:opacity-100"
+            title={canEdit ? 'Edit task' : `Created by ${creatorName} (Admin or creator only)`}
+            className={`p-1 rounded transition opacity-0 group-hover:opacity-100 ${
+              canEdit
+                ? 'text-muted-foreground/60 hover:text-brand-500 hover:bg-brand-500/10'
+                : 'text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10'
+            }`}
           >
-            <X className="h-3.5 w-3.5" />
+            {canEdit ? <Edit3 className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5 text-amber-500/70" />}
           </button>
-        )}
+
+          {/* Delete Quick Button */}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(task._id, task.title);
+              }}
+              title="Delete task"
+              className="p-1 rounded text-muted-foreground/50 hover:text-rose-500 hover:bg-rose-500/10 transition opacity-0 group-hover:opacity-100"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Mini Metadata Summary (Always Visible) */}
@@ -156,7 +190,7 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
                   ))}
               </div>
 
-              {/* Footer Open Details Link */}
+              {/* Footer Open Details Link & Quick Edit */}
               <div className="pt-1 flex items-center justify-between">
                 <button
                   type="button"
@@ -164,27 +198,59 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
                   className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
                 >
                   <ExternalLink className="h-3 w-3" />
-                  Full Details & Activity
+                  Full Details
                 </button>
-                <div className="flex items-center gap-2 text-muted-foreground text-[10px]">
-                  {task.attachments && task.attachments.length > 0 && (
-                    <span className="flex items-center gap-0.5">
-                      <Paperclip className="h-2.5 w-2.5" />
-                      {task.attachments.length}
+
+                <div className="flex items-center gap-3">
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsEditModalOpen(true);
+                      }}
+                      className="text-[11px] font-semibold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
+                    >
+                      <Edit3 className="h-3 w-3" />
+                      Edit Task
+                    </button>
+                  ) : (
+                    <span
+                      className="text-[10px] text-muted-foreground flex items-center gap-1 cursor-default"
+                      title={`Created by ${creatorName}. Only creator or Admin can edit.`}
+                    >
+                      <Lock className="h-2.5 w-2.5 text-amber-500" />
+                      by {creatorName}
                     </span>
                   )}
-                  {(task.commentsCount || 0) > 0 && (
-                    <span className="flex items-center gap-0.5">
-                      <MessageSquare className="h-2.5 w-2.5" />
-                      {task.commentsCount}
-                    </span>
-                  )}
+
+                  <div className="flex items-center gap-2 text-muted-foreground text-[10px]">
+                    {task.attachments && task.attachments.length > 0 && (
+                      <span className="flex items-center gap-0.5">
+                        <Paperclip className="h-2.5 w-2.5" />
+                        {task.attachments.length}
+                      </span>
+                    )}
+                    {(task.commentsCount || 0) > 0 && (
+                      <span className="flex items-center gap-0.5">
+                        <MessageSquare className="h-2.5 w-2.5" />
+                        {task.commentsCount}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Task Edit Modal */}
+      <TaskEditModal
+        task={task}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+      />
     </motion.div>
   );
 }

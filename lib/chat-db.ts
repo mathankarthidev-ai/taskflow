@@ -2,6 +2,7 @@ import { ChatChannel, ChatMessage, TeamName, UserRole } from '@/types';
 
 const CHANNELS_KEY = 'taskflow_chat_channels_v2';
 const MESSAGES_KEY = 'taskflow_chat_messages_v2';
+const DISMISSED_MSG_IDS_KEY = 'taskflow_chat_dismissed_msg_ids_v2';
 
 export const DEFAULT_CHANNELS: ChatChannel[] = [
   {
@@ -48,6 +49,20 @@ export const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
   channel_development: [],
 };
 
+// BroadcastChannel singleton for instant cross-tab notification & message sync
+let chatBroadcastChannel: BroadcastChannel | null = null;
+export function getChatBroadcastChannel(): BroadcastChannel | null {
+  if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return null;
+  if (!chatBroadcastChannel) {
+    try {
+      chatBroadcastChannel = new BroadcastChannel('ambizcon_chat_sync');
+    } catch (_) {
+      chatBroadcastChannel = null;
+    }
+  }
+  return chatBroadcastChannel;
+}
+
 // Auto-clean legacy v1 data from localStorage on first run
 function purgeLegacyV1() {
   if (typeof window === 'undefined') return;
@@ -55,6 +70,176 @@ function purgeLegacyV1() {
     localStorage.removeItem('taskflow_chat_channels_v1');
     localStorage.removeItem('taskflow_chat_messages_v1');
   } catch (_) {}
+}
+
+export function getDismissedMessageIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(DISMISSED_MSG_IDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function markChannelMessagesAsRead(channelId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(MESSAGES_KEY);
+    if (!raw) return;
+    const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
+    const dismissed = new Set<string>(getDismissedMessageIds());
+
+    if (channelId) {
+      const list = allMsgs[channelId] || [];
+      list.forEach((m) => {
+        if (m?.id) dismissed.add(m.id);
+      });
+    } else {
+      Object.values(allMsgs).forEach((list) => {
+        (list || []).forEach((m) => {
+          if (m?.id) dismissed.add(m.id);
+        });
+      });
+    }
+
+    localStorage.setItem(DISMISSED_MSG_IDS_KEY, JSON.stringify(Array.from(dismissed)));
+    window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
+  } catch (_) {}
+}
+
+export function isUserReceiverForChatMessage(
+  message: ChatMessage | null | undefined,
+  channelId: string,
+  currentUser?: { _id?: string; name?: string; team?: string; role?: string } | null
+): boolean {
+  if (!currentUser || !message) return false;
+
+  // 1. NEVER notify or play sound for the SENDER
+  if (
+    (currentUser._id && message.senderId === currentUser._id) ||
+    (currentUser.name && message.senderName === currentUser.name)
+  ) {
+    return false;
+  }
+
+  const channels = getStoredChannels();
+  const ch = channels.find((c) => c.id === channelId);
+  const isAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
+
+  // 2. All-in-One Group ('channel_all' / scope === 'all'): all users EXCEPT sender
+  if (channelId === 'channel_all' || ch?.scope === 'all') {
+    return true;
+  }
+
+  // 3. Team Group ('channel_creative', 'channel_marketing', 'channel_development' / scope === 'team'):
+  // Only members/TLs of that specific team (or Admin) EXCEPT sender
+  if (ch?.scope === 'team' || channelId.startsWith('channel_')) {
+    const targetTeam =
+      ch?.team ||
+      (channelId === 'channel_creative'
+        ? 'Creative'
+        : channelId === 'channel_marketing'
+        ? 'Marketing'
+        : channelId === 'channel_development'
+        ? 'Development'
+        : undefined);
+    if (isAdmin) return true;
+    return Boolean(targetTeam && currentUser.team === targetTeam);
+  }
+
+  // 4. Direct Individual Chat ('dm_...' / scope === 'direct'):
+  // Only the target participant member EXCEPT sender
+  if (ch?.scope === 'direct' || channelId.startsWith('dm_')) {
+    if (ch?.participantIds && currentUser._id) {
+      return ch.participantIds.includes(currentUser._id);
+    }
+    if (currentUser._id && channelId.includes(currentUser._id)) {
+      return true;
+    }
+    if (ch?.name && currentUser.name && ch.name.toLowerCase().includes(currentUser.name.toLowerCase())) {
+      return true;
+    }
+    return false;
+  }
+
+  return true;
+}
+
+export function getNewChatMessageCount(
+  userTeam?: string,
+  userRole?: string,
+  currentUserId?: string,
+  currentUserName?: string
+): {
+  total: number;
+  byChannel: Record<string, number>;
+  latestMessage: ChatMessage | null;
+} {
+  if (typeof window === 'undefined') {
+    return { total: 0, byChannel: {}, latestMessage: null };
+  }
+  try {
+    const raw = localStorage.getItem(MESSAGES_KEY);
+    if (!raw) return { total: 0, byChannel: {}, latestMessage: null };
+    const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
+    const dismissed = new Set<string>(getDismissedMessageIds());
+    const channels = getStoredChannels();
+    const isAdmin = userRole === 'Super Admin' || userRole === 'Admin';
+
+    let total = 0;
+    const byChannel: Record<string, number> = {};
+    let latestMessage: ChatMessage | null = null;
+
+    Object.entries(allMsgs).forEach(([chId, list]) => {
+      if (!Array.isArray(list) || list.length === 0) return;
+
+      // Check if user has access to this channel
+      const ch = channels.find((c) => c.id === chId);
+      if (ch && ch.scope === 'team' && !isAdmin && userTeam && ch.team !== userTeam) {
+        return;
+      }
+
+      // Deduplicate messages in channel
+      const seen = new Set<string>();
+      const validMsgs: ChatMessage[] = [];
+      for (const m of list) {
+        if (!m || !m.id || seen.has(m.id)) continue;
+        seen.add(m.id);
+        validMsgs.push(m);
+      }
+
+      // Only count messages where the user is a RECEIVER (never count the sender's own messages)
+      const unreadInChannel = validMsgs.filter((m) => {
+        if (dismissed.has(m.id)) return false;
+        if (currentUserId || currentUserName) {
+          return isUserReceiverForChatMessage(m, chId, {
+            _id: currentUserId,
+            name: currentUserName,
+            team: userTeam,
+            role: userRole,
+          });
+        }
+        return true;
+      });
+
+      if (unreadInChannel.length > 0) {
+        byChannel[chId] = unreadInChannel.length;
+        total += unreadInChannel.length;
+        const last = unreadInChannel[unreadInChannel.length - 1];
+        if (
+          !latestMessage ||
+          new Date(last.createdAt).getTime() >= new Date(latestMessage.createdAt).getTime()
+        ) {
+          latestMessage = last;
+        }
+      }
+    });
+
+    return { total, byChannel, latestMessage };
+  } catch (_) {
+    return { total: 0, byChannel: {}, latestMessage: null };
+  }
 }
 
 export function getStoredChannels(): ChatChannel[] {
@@ -107,6 +292,66 @@ export function getStoredMessages(channelId: string): ChatMessage[] {
   }
 }
 
+export async function syncMessagesFromServer(): Promise<{
+  newMessages: { channelId: string; message: ChatMessage }[];
+}> {
+  if (typeof window === 'undefined') return { newMessages: [] };
+  try {
+    const res = await fetch('/api/chat', { cache: 'no-store' });
+    if (!res.ok) return { newMessages: [] };
+    const data = await res.json();
+    if (!data.success || !data.messagesByChannel) return { newMessages: [] };
+
+    const raw = localStorage.getItem(MESSAGES_KEY);
+    const localMsgs: Record<string, ChatMessage[]> = raw ? JSON.parse(raw) : { ...INITIAL_MESSAGES };
+    const newlyDiscovered: { channelId: string; message: ChatMessage }[] = [];
+    let hasChanges = false;
+
+    Object.entries(data.messagesByChannel as Record<string, ChatMessage[]>).forEach(
+      ([channelId, serverList]) => {
+        if (!Array.isArray(serverList)) return;
+        const currentList = localMsgs[channelId] || [];
+        const existingIds = new Set(currentList.map((m) => m.id));
+
+        for (const srvMsg of serverList) {
+          if (srvMsg && srvMsg.id && !existingIds.has(srvMsg.id)) {
+            currentList.push(srvMsg);
+            existingIds.add(srvMsg.id);
+            newlyDiscovered.push({ channelId, message: srvMsg });
+            hasChanges = true;
+          }
+        }
+        localMsgs[channelId] = currentList;
+      }
+    );
+
+    // Also push any local messages that aren't on the server yet so other tabs/sessions get them
+    Object.entries(localMsgs).forEach(([channelId, localList]) => {
+      if (!Array.isArray(localList) || localList.length === 0) return;
+      const serverList: ChatMessage[] = data.messagesByChannel[channelId] || [];
+      const serverIds = new Set(serverList.map((m) => m.id));
+      for (const locMsg of localList) {
+        if (locMsg && locMsg.id && !serverIds.has(locMsg.id)) {
+          fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId, message: locMsg }),
+          }).catch(() => {});
+        }
+      }
+    });
+
+    if (hasChanges) {
+      localStorage.setItem(MESSAGES_KEY, JSON.stringify(localMsgs));
+      window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
+    }
+
+    return { newMessages: newlyDiscovered };
+  } catch (_) {
+    return { newMessages: [] };
+  }
+}
+
 export function sendChatMessage(
   channelId: string,
   sender: { _id: string; name: string; role: UserRole; team: TeamName; avatar?: string },
@@ -132,7 +377,6 @@ export function sendChatMessage(
         (!fileAttachment || lastMsg.fileAttachment?.name === fileAttachment.name) &&
         Date.now() - new Date(lastMsg.createdAt).getTime() < 2000
       ) {
-        // Return existing message without duplicating
         return lastMsg;
       }
 
@@ -160,12 +404,37 @@ export function sendChatMessage(
         c.id === channelId
           ? {
               ...c,
-              lastMessage: trimmedText.slice(0, 40) || (fileAttachment ? `Attachment: ${fileAttachment.name}` : 'File/Link Shared'),
-              lastMessageTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              lastMessage:
+                trimmedText.slice(0, 40) ||
+                (fileAttachment ? `Attachment: ${fileAttachment.name}` : 'File/Link Shared'),
+              lastMessageTime: new Date().toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
             }
           : c
       );
       localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
+
+      // Sync to server API (/api/chat) for all team members across browsers/sessions
+      fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId, message: newMsg }),
+      }).catch(() => {});
+
+      // Broadcast across open browser tabs via BroadcastChannel
+      const bc = getChatBroadcastChannel();
+      if (bc) {
+        try {
+          bc.postMessage({
+            type: 'CHAT_MESSAGE_SENT',
+            channelId,
+            message: newMsg,
+            originWindowId,
+          });
+        } catch (_) {}
+      }
 
       // Dispatch window event with originWindowId for cross-component / live-tab sync
       window.dispatchEvent(
@@ -173,6 +442,7 @@ export function sendChatMessage(
           detail: { channelId, message: newMsg, originWindowId },
         })
       );
+      window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
 
       return newMsg;
     } catch (err) {
@@ -214,21 +484,31 @@ export function deleteChatMessage(channelId: string, messageId: string): boolean
         ? {
             ...c,
             lastMessage: lastMsg
-              ? (lastMsg.text.slice(0, 40) || (lastMsg.fileAttachment ? `Attachment: ${lastMsg.fileAttachment.name}` : 'File/Link'))
+              ? lastMsg.text.slice(0, 40) ||
+                (lastMsg.fileAttachment ? `Attachment: ${lastMsg.fileAttachment.name}` : 'File/Link')
               : 'No messages yet',
             lastMessageTime: lastMsg
-              ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              ? new Date(lastMsg.createdAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
               : '',
           }
         : c
     );
     localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
 
+    fetch(
+      `/api/chat?channelId=${encodeURIComponent(channelId)}&messageId=${encodeURIComponent(messageId)}`,
+      { method: 'DELETE' }
+    ).catch(() => {});
+
     window.dispatchEvent(
       new CustomEvent('taskflow_chat_message_deleted', {
         detail: { channelId, messageId },
       })
     );
+    window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
     return true;
   } catch (err) {
     console.error('Failed to delete message', err);
@@ -255,6 +535,11 @@ export function clearChannelMessages(channelId: string): boolean {
         : c
     );
     localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
+
+    fetch(`/api/chat?channelId=${encodeURIComponent(channelId)}`, { method: 'DELETE' }).catch(
+      () => {}
+    );
+    window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
     return true;
   } catch (err) {
     console.error('Failed to clear channel messages', err);
@@ -266,12 +551,16 @@ export function clearAllStoredMessages(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(MESSAGES_KEY, JSON.stringify(INITIAL_MESSAGES));
+    localStorage.removeItem(DISMISSED_MSG_IDS_KEY);
     const resetChannels = DEFAULT_CHANNELS.map((c) => ({
       ...c,
       lastMessage: 'No messages yet',
       lastMessageTime: '',
     }));
     localStorage.setItem(CHANNELS_KEY, JSON.stringify(resetChannels));
+
+    fetch('/api/chat?clearAll=true', { method: 'DELETE' }).catch(() => {});
+    window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
   } catch (err) {
     console.error('Failed to clear all messages', err);
   }

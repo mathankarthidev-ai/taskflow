@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -19,11 +19,15 @@ import {
   User,
   LogOut,
   Bell,
+  BellRing,
   MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { getNewChatMessageCount } from '@/lib/chat-db';
+import { getCachedActiveSelfReminderCount, fetchSelfReminders } from '@/lib/self-reminders-store';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
 
@@ -38,6 +42,49 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   const currentUser = useAuthStore((s) => s.currentUser);
   const logout = useAuthStore((s) => s.logout);
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
+  const notifications = useNotificationStore((s) => s.notifications);
+  const [chatDbUnreadCount, setChatDbUnreadCount] = useState(0);
+  const [selfReminderCount, setSelfReminderCount] = useState(0);
+
+  useEffect(() => {
+    const refreshChatCount = () => {
+      if (!currentUser) return;
+      const res = getNewChatMessageCount(
+        currentUser.team,
+        currentUser.role,
+        currentUser._id,
+        currentUser.name
+      );
+      setChatDbUnreadCount(res.total);
+    };
+
+    const refreshSelfReminders = () => {
+      if (!currentUser) return;
+      setSelfReminderCount(getCachedActiveSelfReminderCount(currentUser.email));
+    };
+
+    refreshChatCount();
+    refreshSelfReminders();
+    if (currentUser) {
+      fetchSelfReminders(currentUser._id, currentUser.email, currentUser.name).then((list) => {
+        setSelfReminderCount(list.filter((r) => !r.is_completed && r.is_active).length);
+      });
+    }
+
+    window.addEventListener('taskflow_chat_unread_updated', refreshChatCount);
+    window.addEventListener('taskflow_chat_message_sent', refreshChatCount);
+    window.addEventListener('taskflow_chat_message_deleted', refreshChatCount);
+    window.addEventListener('ambizcon_self_reminders_updated', refreshSelfReminders);
+    window.addEventListener('storage', refreshChatCount);
+
+    return () => {
+      window.removeEventListener('taskflow_chat_unread_updated', refreshChatCount);
+      window.removeEventListener('taskflow_chat_message_sent', refreshChatCount);
+      window.removeEventListener('taskflow_chat_message_deleted', refreshChatCount);
+      window.removeEventListener('ambizcon_self_reminders_updated', refreshSelfReminders);
+      window.removeEventListener('storage', refreshChatCount);
+    };
+  }, [currentUser]);
 
   const handleLogout = () => {
     logout();
@@ -75,16 +122,52 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   const isTeamLead = currentUser.role === 'Team Lead' || isSuperAdmin;
   const isReception = currentUser.role === 'Reception Staff';
 
-  const navItems = isReception
+  const notifChatUnreadCount = notifications.filter((n) => {
+    if (n.type !== 'chat_message' || !n.unread) return false;
+    if (n.senderName === currentUser.name) return false;
+    if (n.targetTeam && !isSuperAdmin && currentUser.team !== n.targetTeam) return false;
+    if (n.channelId && n.channelId.startsWith('dm_') && !n.channelId.includes(currentUser._id)) {
+      return false;
+    }
+    return true;
+  }).length;
+  const activeNewChatCount = Math.max(chatDbUnreadCount, notifChatUnreadCount);
+
+  const navItems: {
+    label: string;
+    href: string;
+    icon: any;
+    badge?: string;
+    restricted?: boolean;
+    isNewChatAlert?: boolean;
+  }[] = isReception
     ? [
         { label: 'Attendance & Kiosk', href: '/attendance', icon: Clock, badge: 'Kiosk' },
+        {
+          label: 'Self Reminders',
+          href: '/self-reminders',
+          icon: BellRing,
+          badge: selfReminderCount > 0 ? `${selfReminderCount} Active` : 'Simple',
+        },
         { label: 'My Profile', href: '/profile', icon: User },
       ]
     : [
         { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
         { label: 'Bizzy Board', href: '/kanban', icon: KanbanSquare },
         { label: 'Reminders', href: '/reminders', icon: Bell, badge: 'Alerts' },
-        { label: 'Team Chat', href: '/chat', icon: MessageSquare, badge: 'Chat' },
+        {
+          label: 'Self Reminders',
+          href: '/self-reminders',
+          icon: BellRing,
+          badge: selfReminderCount > 0 ? `${selfReminderCount} Active` : 'Simple',
+        },
+        {
+          label: 'Team Chat',
+          href: '/chat',
+          icon: MessageSquare,
+          badge: activeNewChatCount > 0 ? `${activeNewChatCount} New Msg` : 'Chat',
+          isNewChatAlert: activeNewChatCount > 0,
+        },
         {
           label: 'Incoming Queue',
           href: '/incoming',
@@ -173,7 +256,12 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
 
       {/* Team Context Badge */}
       <div className="px-4 py-3">
-        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/20 p-2.5">
+        <div className={cn(
+          "flex items-center gap-2.5 rounded-xl border p-2.5",
+          isAustralia
+            ? "border-sky-500/20 bg-sky-500/5 dark:bg-sky-950/20"
+            : "border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/20"
+        )}>
           <div className={cn(
             "h-7 w-7 rounded-lg shadow-xs border flex items-center justify-center overflow-hidden",
             isAustralia ? "bg-white p-0.5 border-amber-500/30" : "border-emerald-500/30"
@@ -227,8 +315,16 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
               {item.badge && (
                 <Badge
                   variant={isActive ? 'secondary' : 'default'}
-                  className={cn('text-[9px] py-0 px-1.5 font-bold', isActive && 'bg-white/20 text-white')}
+                  className={cn(
+                    'text-[9px] py-0.5 px-2 font-extrabold flex items-center gap-1',
+                    item.isNewChatAlert
+                      ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/40 animate-pulse border border-white/30'
+                      : isActive && 'bg-white/20 text-white'
+                  )}
                 >
+                  {item.isNewChatAlert && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-white inline-block" />
+                  )}
                   {item.badge}
                 </Badge>
               )}
@@ -240,16 +336,25 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
       {/* Active User Card & Logout Area */}
       <div className="p-3.5 border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-2">
         <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-2.5">
-          <Avatar src={currentUser.avatar} name={currentUser.name} size="md" />
-          <div className="flex flex-col min-w-0 flex-1">
+          <Link href="/profile" onClick={onMobileClose} className="shrink-0" title="View or Upload Profile Picture in My Profile">
+            <Avatar
+              src={currentUser.avatar}
+              name={currentUser.name}
+              userId={currentUser._id}
+              email={currentUser.email}
+              size="md"
+              className="ring-2 ring-emerald-500/30"
+            />
+          </Link>
+          <Link href="/profile" onClick={onMobileClose} className="flex flex-col min-w-0 flex-1 hover:opacity-80 transition-opacity">
             <span className="text-xs font-semibold truncate leading-tight text-foreground">{currentUser.name}</span>
             <span className="text-[10px] text-muted-foreground truncate">{currentUser.role}</span>
-          </div>
+          </Link>
           <Link
             href="/profile"
             onClick={onMobileClose}
             className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground transition-colors"
-            title="My Profile"
+            title="My Profile & Upload Photo"
           >
             <UserCheck className="h-4 w-4" />
           </Link>

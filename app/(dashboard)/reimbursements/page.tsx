@@ -50,10 +50,13 @@ import {
   Minimize2,
   ChevronDown,
   ChevronUp,
+  Bell,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { getReceiptImageUrl } from '@/lib/receipt-helper';
+import { isUserInCompany } from '@/lib/company-filter';
 
 const DEFAULT_CATEGORIES = [
   'Client Lunch',
@@ -64,16 +67,108 @@ const DEFAULT_CATEGORIES = [
   'Medical',
 ];
 
+const CLAIMS_STORAGE_KEY = 'ambizcon_reimbursement_claims_v1';
+
+function getLocalYMD(daysAgo = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function doesClaimMatchDateRange(
+  claim: ReimbursementClaim,
+  rangeOption: 'All Time' | 'Today' | 'This Week' | 'This Month' | 'Custom',
+  startDate?: string,
+  endDate?: string
+): boolean {
+  if (rangeOption === 'All Time') return true;
+  const claimDate = claim.date || (claim.createdAt ? claim.createdAt.split('T')[0] : '');
+  if (!claimDate) return false;
+
+  const todayStr = getLocalYMD(0);
+  if (rangeOption === 'Today') {
+    return claimDate === todayStr;
+  }
+  if (rangeOption === 'This Week') {
+    const sevenDaysAgoStr = getLocalYMD(7);
+    return claimDate >= sevenDaysAgoStr && claimDate <= todayStr;
+  }
+  if (rangeOption === 'This Month') {
+    const thirtyDaysAgoStr = getLocalYMD(30);
+    const currentYearMonth = todayStr.substring(0, 7);
+    return claimDate.startsWith(currentYearMonth) || (claimDate >= thirtyDaysAgoStr && claimDate <= todayStr);
+  }
+  if (rangeOption === 'Custom') {
+    if (startDate && claimDate < startDate) return false;
+    if (endDate && claimDate > endDate) return false;
+    return true;
+  }
+  return true;
+}
+
+function saveClaimsToStorage(claims: ReimbursementClaim[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CLAIMS_STORAGE_KEY, JSON.stringify(claims));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+function mergeClaimsWithStorage(serverClaims: ReimbursementClaim[]): ReimbursementClaim[] {
+  if (typeof window === 'undefined') return serverClaims;
+  try {
+    const raw = localStorage.getItem(CLAIMS_STORAGE_KEY);
+    if (!raw) return serverClaims;
+    const stored: ReimbursementClaim[] = JSON.parse(raw);
+    if (!Array.isArray(stored) || stored.length === 0) return serverClaims;
+
+    const map = new Map<string, ReimbursementClaim>();
+    serverClaims.forEach((c) => map.set(c._id, c));
+    stored.forEach((sc) => {
+      const existing = map.get(sc._id);
+      if (!existing) {
+        map.set(sc._id, sc);
+      } else {
+        // Prefer whichever has more comments or more recent status, while preserving fresh dates on seed claims
+        const mergedComments =
+          (sc.comments?.length || 0) >= (existing.comments?.length || 0)
+            ? sc.comments
+            : existing.comments;
+        const isSeed = existing._id.startsWith('claim_seed_');
+        map.set(sc._id, {
+          ...existing,
+          ...sc,
+          date: isSeed ? existing.date : sc.date || existing.date,
+          createdAt: isSeed ? existing.createdAt : sc.createdAt || existing.createdAt,
+          comments: mergedComments || [],
+        });
+      }
+    });
+    return Array.from(map.values());
+  } catch {
+    return serverClaims;
+  }
+}
+
 export default function ReimbursementsPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
-  const isSuperAdmin = currentUser?.role === 'Super Admin';
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const isTeamLead = currentUser?.role === 'Team Lead';
   const isAustralia = isSuperAdmin
     ? selectedCompany === 'Ambizcon'
     : currentUser?.company === 'Ambizcon';
 
   const [claims, setClaims] = useState<ReimbursementClaim[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Inline Quick Note State on Ledger Cards
+  const [inlineNoteClaimId, setInlineNoteClaimId] = useState<string | null>(null);
+  const [inlineNoteInput, setInlineNoteInput] = useState('');
 
   // Custom Categories state
   const [categoriesList, setCategoriesList] = useState<string[]>(DEFAULT_CATEGORIES);
@@ -88,8 +183,17 @@ export default function ReimbursementsPage() {
 
   // Date Range Filter (Daily, Weekly, Monthly, Custom)
   const [dateRangeOption, setDateRangeOption] = useState<'All Time' | 'Today' | 'This Week' | 'This Month' | 'Custom'>('All Time');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [customStartDate, setCustomStartDate] = useState(() => getLocalYMD(30));
+  const [customEndDate, setCustomEndDate] = useState(() => getLocalYMD(0));
+
+  // Custom Download / Export CSV Modal State
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportRangeOption, setExportRangeOption] = useState<'All Time' | 'Today' | 'This Week' | 'This Month' | 'Custom'>('All Time');
+  const [exportStartDate, setExportStartDate] = useState(() => getLocalYMD(30));
+  const [exportEndDate, setExportEndDate] = useState(() => getLocalYMD(0));
+  const [exportStatusFilter, setExportStatusFilter] = useState<'All' | 'Paid & Settled' | 'Pending Signoff' | 'Approved' | 'Rejected'>('All');
+  const [exportCategoryFilter, setExportCategoryFilter] = useState<string>('All');
+  const [exportIncludeSummary, setExportIncludeSummary] = useState<boolean>(true);
 
   // Submit Claim Modal & Multi-Item Expense Form
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -140,11 +244,13 @@ export default function ReimbursementsPage() {
     async function loadData() {
       setLoading(true);
       const res = await fetchReimbursementsAction();
-      setClaims(res);
+      const merged = mergeClaimsWithStorage(res || []);
+      setClaims(merged);
+      saveClaimsToStorage(merged);
 
       // Extract existing categories
       const setCats = new Set(DEFAULT_CATEGORIES);
-      res.forEach((c) => {
+      merged.forEach((c) => {
         if (c.category) setCats.add(c.category);
       });
       setCategoriesList(Array.from(setCats));
@@ -153,6 +259,20 @@ export default function ReimbursementsPage() {
     }
     loadData();
   }, []);
+
+  // Listen for notification clicks to open specific claim notes
+  useEffect(() => {
+    const handleOpenFromNotif = (e: any) => {
+      const { claimId, claimNo } = e.detail || {};
+      if (!claimId && !claimNo) return;
+      const found = claims.find((c) => c._id === claimId || c.claimNo === claimNo);
+      if (found) {
+        handleOpenClaimDetails(found);
+      }
+    };
+    window.addEventListener('ambizcon_open_claim_note', handleOpenFromNotif);
+    return () => window.removeEventListener('ambizcon_open_claim_note', handleOpenFromNotif);
+  }, [claims]);
 
   if (!currentUser) return null;
 
@@ -295,7 +415,9 @@ export default function ReimbursementsPage() {
         isDraft,
       });
 
-      setClaims([created, ...claims]);
+      const nextClaims = [created, ...claims];
+      setClaims(nextClaims);
+      saveClaimsToStorage(nextClaims);
       toast.success(
         isDraft
           ? `Claim ${created.claimNo} saved as DRAFT!`
@@ -329,21 +451,33 @@ export default function ReimbursementsPage() {
     setImageRotation(0);
     setExpandedReceiptIdx(null);
 
-    const updated = await approveClaimAdminAction(id);
-    if (updated) {
-      setClaims(claims.map((c) => (c._id === id ? updated : c)));
-      if (selectedClaimDetail?._id === id) setSelectedClaimDetail(updated);
-      toast.success(`Claim approved by Admin! Receipt reduced to normal.`);
-    }
+    const serverUpdated = await approveClaimAdminAction(id);
+    const nextClaims = claims.map((c) => {
+      if (c._id !== id) return c;
+      const updatedClaim: ReimbursementClaim = serverUpdated
+        ? { ...c, ...serverUpdated, comments: c.comments || serverUpdated.comments || [] }
+        : { ...c, adminStatus: 'approved', ceoStatus: 'approved', status: 'Approved' };
+      if (selectedClaimDetail?._id === id) setSelectedClaimDetail(updatedClaim);
+      return updatedClaim;
+    });
+    setClaims(nextClaims);
+    saveClaimsToStorage(nextClaims);
+    toast.success(`Claim approved by Admin! Receipt reduced to normal.`);
   };
 
   const handleMarkPaid = async (id: string) => {
-    const updated = await markClaimPaidAction(id);
-    if (updated) {
-      setClaims(claims.map((c) => (c._id === id ? updated : c)));
-      if (selectedClaimDetail?._id === id) setSelectedClaimDetail(updated);
-      toast.success(`Claim marked as PAID OUT! Payout record archived.`);
-    }
+    const serverUpdated = await markClaimPaidAction(id);
+    const nextClaims = claims.map((c) => {
+      if (c._id !== id) return c;
+      const updatedClaim: ReimbursementClaim = serverUpdated
+        ? { ...c, ...serverUpdated, comments: c.comments || serverUpdated.comments || [] }
+        : { ...c, isPaid: true, status: 'Paid' };
+      if (selectedClaimDetail?._id === id) setSelectedClaimDetail(updatedClaim);
+      return updatedClaim;
+    });
+    setClaims(nextClaims);
+    saveClaimsToStorage(nextClaims);
+    toast.success(`Claim marked as PAID OUT! Payout record archived.`);
   };
 
   const handleOpenRejectModal = (id: string) => {
@@ -363,116 +497,226 @@ export default function ReimbursementsPage() {
     setImageRotation(0);
     setExpandedReceiptIdx(null);
 
-    const updated = await rejectClaimAction(rejectionModalClaimId, 'admin', rejectionReasonInput.trim());
-    if (updated) {
-      setClaims(claims.map((c) => (c._id === rejectionModalClaimId ? updated : c)));
-      if (selectedClaimDetail?._id === rejectionModalClaimId) setSelectedClaimDetail(updated);
-      toast.error(`Claim rejected by Admin with documented reason. Receipt reduced to normal.`);
-      setRejectionModalClaimId(null);
-    }
+    const serverUpdated = await rejectClaimAction(rejectionModalClaimId, 'admin', rejectionReasonInput.trim());
+    const nextClaims = claims.map((c) => {
+      if (c._id !== rejectionModalClaimId) return c;
+      const rejComment: ClaimComment = {
+        id: `cmt_${Date.now()}`,
+        authorName: currentUser.name,
+        authorRole: currentUser.role,
+        text: `Claim Rejected. Reason: ${rejectionReasonInput.trim()}`,
+        createdAt: new Date().toISOString(),
+      };
+      const updatedClaim: ReimbursementClaim = serverUpdated
+        ? { ...c, ...serverUpdated }
+        : {
+            ...c,
+            adminStatus: 'rejected',
+            tlStatus: 'rejected',
+            ceoStatus: 'rejected',
+            status: 'Rejected',
+            rejectionReason: rejectionReasonInput.trim(),
+            comments: [...(c.comments || []), rejComment],
+          };
+      if (selectedClaimDetail?._id === rejectionModalClaimId) setSelectedClaimDetail(updatedClaim);
+      return updatedClaim;
+    });
+    setClaims(nextClaims);
+    saveClaimsToStorage(nextClaims);
+    toast.error(`Claim rejected by Admin with documented reason. Receipt reduced to normal.`);
+    setRejectionModalClaimId(null);
   };
 
   const handleSubmitDraft = async (id: string) => {
-    const updated = await submitDraftClaimAction(id);
-    if (updated) {
-      setClaims(claims.map((c) => (c._id === id ? updated : c)));
-      toast.success('Draft claim submitted for Admin review!');
-    }
+    const serverUpdated = await submitDraftClaimAction(id);
+    const nextClaims = claims.map((c) =>
+      c._id === id ? (serverUpdated || { ...c, status: 'Pending Approval' as ClaimStatus }) : c
+    );
+    setClaims(nextClaims);
+    saveClaimsToStorage(nextClaims);
+    toast.success('Draft claim submitted for Admin review!');
   };
 
   const handleCancelClaim = async (id: string) => {
-    const updated = await cancelClaimAction(id);
-    if (updated) {
-      setClaims(claims.map((c) => (c._id === id ? updated : c)));
-      toast.info('Claim cancelled.');
+    const serverUpdated = await cancelClaimAction(id);
+    const nextClaims = claims.map((c) =>
+      c._id === id ? (serverUpdated || { ...c, status: 'Cancelled' as ClaimStatus }) : c
+    );
+    setClaims(nextClaims);
+    saveClaimsToStorage(nextClaims);
+    toast.info('Claim cancelled.');
+  };
+
+  // Shared helper to add a note on any claim and dispatch role-targeted notifications:
+  // - If note added by Member or TL -> Notify Admin in Notifications
+  // - If note added by Admin -> Notify Member & TL in Notifications
+  const addNoteAndNotify = async (targetClaim: ReimbursementClaim, rawText: string) => {
+    const trimmed = rawText.trim();
+    if (!trimmed) return;
+
+    setIsAddingComment(true);
+    try {
+      await addClaimCommentAction(
+        targetClaim._id,
+        currentUser.name,
+        currentUser.role,
+        trimmed
+      );
+    } catch {
+      // fallback to client state
     }
+
+    const newNote: ClaimComment = {
+      id: `cmt_${Date.now()}`,
+      authorName: currentUser.name,
+      authorRole: currentUser.role,
+      text: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+
+    const existingComments = targetClaim.comments || [];
+    const updatedComments = [...existingComments, newNote];
+    const noteNumber = updatedComments.length;
+    const noteLabel = `${noteNumber} ${noteNumber === 1 ? 'Note' : 'Notes'}`;
+
+    const updatedClaim: ReimbursementClaim = {
+      ...targetClaim,
+      comments: updatedComments,
+    };
+
+    const nextClaims = claims.map((c) => (c._id === targetClaim._id ? updatedClaim : c));
+    setClaims(nextClaims);
+    saveClaimsToStorage(nextClaims);
+
+    if (selectedClaimDetail?._id === targetClaim._id) {
+      setSelectedClaimDetail(updatedClaim);
+    }
+
+    // Role-based Notification Dispatch
+    const addedByAdmin =
+      currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
+
+    if (addedByAdmin) {
+      // Admin added note -> Notify Member and Team Lead in Notifications
+      useNotificationStore.getState().addNotification({
+        type: 'reimbursement_note',
+        category: 'Reimbursement Note (Member & TL)',
+        title: `📝 ${noteNumber} Note Added by Admin • ${targetClaim.claimNo}`,
+        text: `Admin ${currentUser.name} added ${noteNumber} Note on ${targetClaim.userName}'s Claim ${targetClaim.claimNo}: "${trimmed}" (Member & TL Notified)`,
+        color: 'bg-emerald-500',
+        link: '/reimbursements',
+        claimId: targetClaim._id,
+        claimNo: targetClaim.claimNo,
+        targetRoles: ['Team Member', 'Team Lead'],
+        senderName: currentUser.name,
+        senderRole: currentUser.role,
+      });
+
+      toast.success(`${noteNumber} Note Added on ${targetClaim.claimNo}!`, {
+        description: `Member (${targetClaim.userName}) & Team Lead (${targetClaim.userTeam} TL) have been notified in System Notifications.`,
+      });
+    } else {
+      // Member or Team Lead added note -> Notify Admin in Notifications
+      useNotificationStore.getState().addNotification({
+        type: 'reimbursement_note',
+        category: 'Reimbursement Note (Admin)',
+        title: `📝 ${noteNumber} Note Added by ${currentUser.role} • ${targetClaim.claimNo}`,
+        text: `${currentUser.name} (${currentUser.role}) added ${noteNumber} Note on Claim ${targetClaim.claimNo}: "${trimmed}" (Admin Notified)`,
+        color: 'bg-amber-500',
+        link: '/reimbursements',
+        claimId: targetClaim._id,
+        claimNo: targetClaim.claimNo,
+        targetRoles: ['Super Admin', 'Admin'],
+        senderName: currentUser.name,
+        senderRole: currentUser.role,
+      });
+
+      toast.success(`${noteNumber} Note Added on ${targetClaim.claimNo}!`, {
+        description: `Admin has been notified in System Notifications (${noteLabel} total).`,
+      });
+    }
+
+    setIsAddingComment(false);
   };
 
   const handlePostComment = async () => {
     if (!selectedClaimDetail || !newCommentText.trim()) return;
-    setIsAddingComment(true);
-
-    const updated = await addClaimCommentAction(
-      selectedClaimDetail._id,
-      currentUser.name,
-      currentUser.role,
-      newCommentText.trim()
-    );
-
-    if (updated) {
-      setClaims(claims.map((c) => (c._id === updated._id ? updated : c)));
-      setSelectedClaimDetail(updated);
-      setNewCommentText('');
-      toast.success('Comment added to audit trail');
-    }
-    setIsAddingComment(false);
+    const text = newCommentText;
+    setNewCommentText('');
+    await addNoteAndNotify(selectedClaimDetail, text);
   };
 
-  // CSV Export for filtered claims and date range
-  const handleExportCSV = () => {
-    let rangeLabel = dateRangeOption.replace(/\s+/g, '_');
-    if (dateRangeOption === 'Custom' && customStartDate && customEndDate) {
-      rangeLabel = `${customStartDate}_to_${customEndDate}`;
+  // Branch-scoped claims (Ambizcon AU vs Ambizcon Health - India)
+  const activeCompanyScope = isAustralia ? 'Ambizcon' : 'Ambizcon Health - India';
+  const branchScopedClaims = claims.filter((c) =>
+    isUserInCompany({ userId: c.userId, userName: c.userName, company: c.company }, activeCompanyScope)
+  );
+
+  // VISIBILITY FILTERING:
+  // - Admin sees ALL claims in selected branch
+  // - Team Lead sees their team's claims + self claims (so TL can view/add notes & receive Admin note alerts)
+  // - Regular Member sees self claims (or claims matching their name)
+  const visibleClaims = branchScopedClaims.filter((c) => {
+    if (isSuperAdmin) return true;
+    if (isTeamLead) {
+      return c.userTeam === currentUser.team || c.userId === currentUser._id || c.userName === currentUser.name;
     }
-
-    const headers =
-      'Claim No,Employee,Team,Company,Category,Total Amount (INR),Expense Count,Expense Date,Status,Paid Out,Rejection Reason';
-    const rows = filteredClaims.map((c) => {
-      const itemCount = c.items?.length || 1;
-      const reason = c.rejectionReason ? `"${c.rejectionReason.replace(/"/g, '""')}"` : 'N/A';
-      return `${c.claimNo},"${c.userName}",${c.userTeam},${c.company || 'Ambizcon'},${c.category},${c.amount},${itemCount},${c.date},${c.status},${c.isPaid ? 'Yes' : 'No'},${reason}`;
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers].concat(rows).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `AmbizClaim_Reimbursement_Report_${rangeLabel}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success(`Reimbursement Ledger (${dateRangeOption}) exported to CSV!`);
-  };
-
-  // Total Claim Overview Metrics (VISIBLE TO EVERYONE across organization)
-  const totalOrgClaimedAmount = claims.filter((c) => c.status !== 'Cancelled' && c.status !== 'Draft').reduce((acc, c) => acc + c.amount, 0);
-  const totalOrgPaidAmount = claims.filter((c) => c.isPaid).reduce((acc, c) => acc + c.amount, 0);
-  const totalOrgPendingAmount = claims.filter((c) => c.status === 'Pending Approval' || (c.status === 'Approved' && !c.isPaid)).reduce((acc, c) => acc + c.amount, 0);
-  const totalOrgClaimsCount = claims.length;
-
-  // VISIBILITY FILTERING: Show self claims only for regular members, show all for Admin
-  const visibleClaims = claims.filter((c) => {
-    if (!isSuperAdmin) {
-      // Regular user sees ONLY self claims
-      return c.userId === currentUser._id;
-    }
-    return true; // Admin sees ALL claims
+    return c.userId === currentUser._id || c.userName === currentUser.name;
   });
 
-  // Apply Search, Status, Category & Date Range Filters
+  // Time-Range & Category Scoped Organization Claims (Updates KPI cards dynamically when Time Range changes!)
+  const timeScopedBranchClaims = branchScopedClaims.filter((c) => {
+    if (!doesClaimMatchDateRange(c, dateRangeOption, customStartDate, customEndDate)) return false;
+    if (selectedCategoryFilter !== 'All' && c.category !== selectedCategoryFilter) return false;
+    return true;
+  });
+
+  const activeValidTimeClaims = timeScopedBranchClaims.filter(
+    (c) => c.status !== 'Cancelled' && c.status !== 'Draft'
+  );
+  const paidTimeClaims = activeValidTimeClaims.filter((c) => c.isPaid || c.status === 'Paid');
+  const pendingTimeClaims = activeValidTimeClaims.filter(
+    (c) => c.status === 'Pending Approval' || (c.status === 'Approved' && !c.isPaid)
+  );
+  const approvedUnpaidTimeClaims = activeValidTimeClaims.filter(
+    (c) => c.status === 'Approved' && !c.isPaid
+  );
+  const myTimeClaims = activeValidTimeClaims.filter(
+    (c) => c.userId === currentUser._id || c.userName === currentUser.name
+  );
+
+  // Dynamic KPI Totals for Selected Time Range (All Time / Daily / Weekly / Monthly / Custom)
+  const totalOrgClaimedAmount = activeValidTimeClaims.reduce((acc, c) => acc + c.amount, 0);
+  const totalOrgClaimsCount = activeValidTimeClaims.length;
+  const totalOrgPaidAmount = paidTimeClaims.reduce((acc, c) => acc + c.amount, 0);
+  const totalOrgPaidCount = paidTimeClaims.length;
+  const totalOrgPendingAmount = pendingTimeClaims.reduce((acc, c) => acc + c.amount, 0);
+  const totalOrgPendingCount = pendingTimeClaims.length;
+  const totalOrgApprovedUnpaidAmount = approvedUnpaidTimeClaims.reduce((acc, c) => acc + c.amount, 0);
+  const myActiveClaimsCount = myTimeClaims.length;
+  const myActiveClaimsAmount = myTimeClaims.reduce((acc, c) => acc + c.amount, 0);
+  const mySettledAmount = myTimeClaims
+    .filter((c) => c.isPaid || c.status === 'Paid')
+    .reduce((acc, c) => acc + c.amount, 0);
+
+  const TIME_RANGE_DISPLAY_LABELS: Record<'All Time' | 'Today' | 'This Week' | 'This Month' | 'Custom', string> = {
+    'All Time': 'All Time',
+    Today: 'Daily (Today)',
+    'This Week': 'Weekly (This Week)',
+    'This Month': 'Monthly (This Month)',
+    Custom: 'Custom Range',
+  };
+
+  const activeTimeRangeBadgeText =
+    dateRangeOption === 'Custom' && customStartDate && customEndDate
+      ? `Custom: ${customStartDate} → ${customEndDate}`
+      : TIME_RANGE_DISPLAY_LABELS[dateRangeOption];
+
+  // Apply Search, Status, Category & Date Range Filters for Ledger List
   const filteredClaims = visibleClaims
     .filter((c) => {
-      // Date Range Filter
-      if (dateRangeOption !== 'All Time') {
-        const claimDate = c.date || (c.createdAt ? c.createdAt.split('T')[0] : '');
-        const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
-
-        if (dateRangeOption === 'Today') {
-          if (claimDate !== todayStr) return false;
-        } else if (dateRangeOption === 'This Week') {
-          const startOfWeek = new Date(now);
-          startOfWeek.setDate(now.getDate() - now.getDay());
-          startOfWeek.setHours(0, 0, 0, 0);
-          const claimTime = new Date(claimDate).getTime();
-          if (claimTime < startOfWeek.getTime()) return false;
-        } else if (dateRangeOption === 'This Month') {
-          const currentYearMonth = now.toISOString().substring(0, 7);
-          if (!claimDate.startsWith(currentYearMonth)) return false;
-        } else if (dateRangeOption === 'Custom') {
-          if (customStartDate && claimDate < customStartDate) return false;
-          if (customEndDate && claimDate > customEndDate) return false;
-        }
+      if (!doesClaimMatchDateRange(c, dateRangeOption, customStartDate, customEndDate)) {
+        return false;
       }
 
       // Status Filter
@@ -501,10 +745,93 @@ export default function ReimbursementsPage() {
       return 0;
     });
 
+  // Helper to generate and download CSV for any given claim list and label
+  const downloadClaimsCSV = (
+    claimsToExport: ReimbursementClaim[],
+    rangeLabel: string,
+    includeSummary = true
+  ) => {
+    const headers =
+      'Claim No,Employee,Team,Company,Category,Total Amount (INR),Expense Count,Notes Count,Expense Date,Status,Paid & Settled,Rejection Reason';
+    const rows = claimsToExport.map((c) => {
+      const itemCount = c.items?.length || 1;
+      const notesCount = c.comments?.length || 0;
+      const reason = c.rejectionReason ? `"${c.rejectionReason.replace(/"/g, '""')}"` : 'N/A';
+      return `${c.claimNo},"${c.userName}",${c.userTeam},"${c.company || 'Ambizcon'}","${c.category}",${c.amount},${itemCount},${notesCount},${c.date},${c.status},${c.isPaid || c.status === 'Paid' ? 'Paid & Settled' : 'Unpaid'},${reason}`;
+    });
+
+    const summaryRows: string[] = [];
+    if (includeSummary) {
+      const validList = claimsToExport.filter((c) => c.status !== 'Cancelled' && c.status !== 'Draft');
+      const sumTotal = validList.reduce((acc, c) => acc + c.amount, 0);
+      const sumPaid = validList.filter((c) => c.isPaid || c.status === 'Paid').reduce((acc, c) => acc + c.amount, 0);
+      const sumPending = validList
+        .filter((c) => c.status === 'Pending Approval' || (c.status === 'Approved' && !c.isPaid))
+        .reduce((acc, c) => acc + c.amount, 0);
+
+      summaryRows.push('');
+      summaryRows.push(`"SUMMARY TOTALS (${rangeLabel})","","","","",${sumTotal},"","","","Total Claimed","Paid: INR ${sumPaid}","Pending: INR ${sumPending}"`);
+      summaryRows.push(`"PAID & SETTLED TOTAL","","","","",${sumPaid},"","","","Paid & Settled","${validList.filter((c) => c.isPaid || c.status === 'Paid').length} Vouchers",""`);
+      summaryRows.push(`"PENDING SIGNOFF TOTAL","","","","",${sumPending},"","","","Pending Signoff","${validList.filter((c) => c.status === 'Pending Approval' || (c.status === 'Approved' && !c.isPaid)).length} Claims",""`);
+    }
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers].concat(rows, summaryRows).join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `AmbizClaim_Reimbursement_Report_${rangeLabel}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Quick CSV Export for currently active page filter & date range
+  const handleExportCSV = () => {
+    let rangeLabel = dateRangeOption.replace(/\s+/g, '_');
+    if (dateRangeOption === 'Custom' && customStartDate && customEndDate) {
+      rangeLabel = `Custom_${customStartDate}_to_${customEndDate}`;
+    }
+    downloadClaimsCSV(filteredClaims, rangeLabel, true);
+    toast.success(`Reimbursement Report (${activeTimeRangeBadgeText}) downloaded!`);
+  };
+
+  // Custom Modal CSV Export
+  const customModalPreviewClaims = visibleClaims.filter((c) => {
+    if (!doesClaimMatchDateRange(c, exportRangeOption, exportStartDate, exportEndDate)) return false;
+    if (exportCategoryFilter !== 'All' && c.category !== exportCategoryFilter) return false;
+    if (exportStatusFilter === 'Paid & Settled') return c.isPaid || c.status === 'Paid';
+    if (exportStatusFilter === 'Pending Signoff')
+      return c.status === 'Pending Approval' || (c.status === 'Approved' && !c.isPaid);
+    if (exportStatusFilter === 'Approved') return c.status === 'Approved';
+    if (exportStatusFilter === 'Rejected') return c.status === 'Rejected';
+    return true;
+  });
+
+  const handleOpenCustomExportModal = () => {
+    setExportRangeOption(dateRangeOption);
+    setExportStartDate(customStartDate || getLocalYMD(30));
+    setExportEndDate(customEndDate || getLocalYMD(0));
+    setExportCategoryFilter(selectedCategoryFilter);
+    setIsExportModalOpen(true);
+  };
+
+  const handleExecuteCustomExport = () => {
+    let rangeLabel = exportRangeOption.replace(/\s+/g, '_');
+    if (exportRangeOption === 'Custom' && exportStartDate && exportEndDate) {
+      rangeLabel = `Custom_${exportStartDate}_to_${exportEndDate}`;
+    }
+    if (exportStatusFilter !== 'All') {
+      rangeLabel += `_${exportStatusFilter.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    }
+    downloadClaimsCSV(customModalPreviewClaims, rangeLabel, exportIncludeSummary);
+    toast.success(`Custom Reimbursement Report (${customModalPreviewClaims.length} records) downloaded!`);
+    setIsExportModalOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-[#086075]/15 via-[#2a8c82]/10 to-transparent p-6 glass-panel">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border ambizcon-hero-banner p-6 glass-panel">
         <div className="flex items-center gap-4">
           <div
             className={`h-14 w-14 rounded-2xl flex items-center justify-center shadow-glow border overflow-hidden ${
@@ -522,12 +849,16 @@ export default function ReimbursementsPage() {
               <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
                 AmbizClaim — Expense & Reimbursements
               </h1>
-              <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-bold border-emerald-500/30">
+              <Badge className={`font-bold ${
+                isAustralia
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/30'
+                  : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
+              }`}>
                 {isSuperAdmin ? 'Admin Approval Portal' : 'My Claims Portal'}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Multi-Item Expenses • Mandatory Receipt (&gt; ₹200) • Daily/Weekly/Monthly Date Range Exports
+              Multi-Item Expenses • Mandatory Receipt (&gt; ₹200) • Daily/Weekly/Monthly Date Range &amp; Custom Exports
             </p>
           </div>
         </div>
@@ -540,98 +871,187 @@ export default function ReimbursementsPage() {
 
           <Button onClick={handleExportCSV} variant="outline" className="gap-1.5 text-xs">
             <Download className="h-4 w-4" />
-            Export CSV ({dateRangeOption})
+            Export CSV ({TIME_RANGE_DISPLAY_LABELS[dateRangeOption]})
+          </Button>
+
+          <Button
+            onClick={handleOpenCustomExportModal}
+            variant="outline"
+            className="gap-1.5 text-xs border-brand-500/40 bg-brand-500/10 text-brand-600 dark:text-brand-300 hover:bg-brand-500/20"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Download Option (Custom)
           </Button>
         </div>
       </div>
 
-      {/* Financial Overview Cards (SHOWN TO ALL MEMBERS) */}
+      {/* Financial Overview Cards (DYNAMICALLY RECALCULATED BY SELECTED TIME RANGE: ALL TIME / DAILY / WEEKLY / MONTHLY / CUSTOM) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
-            Total Organization Claims
-          </span>
+        <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 relative overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+              Total Organization Claims
+            </span>
+            <span className="rounded-full bg-brand-500/10 border border-brand-500/30 px-2 py-0.5 text-[9px] font-bold text-brand-600 dark:text-brand-300">
+              {activeTimeRangeBadgeText}
+            </span>
+          </div>
           <div className="text-2xl font-extrabold text-foreground mt-1">
             ₹{totalOrgClaimedAmount.toLocaleString('en-IN')}
           </div>
-          <span className="text-[11px] text-muted-foreground mt-0.5 block">{totalOrgClaimsCount} Total Submissions</span>
+          <span className="text-[11px] text-muted-foreground mt-0.5 block">
+            {totalOrgClaimsCount} Total Submissions in {TIME_RANGE_DISPLAY_LABELS[dateRangeOption]}
+          </span>
         </Card>
 
-        <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
-            Paid & Settled
-          </span>
+        <Card className="p-4 border border-emerald-500/30 bg-emerald-500/[0.02] relative overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+              Paid &amp; Settled
+            </span>
+            <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300">
+              {activeTimeRangeBadgeText}
+            </span>
+          </div>
           <div className="text-2xl font-extrabold text-emerald-500 mt-1">
             ₹{totalOrgPaidAmount.toLocaleString('en-IN')}
           </div>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
-            {claims.filter((c) => c.isPaid).length} Disbursed Vouchers
+            {totalOrgPaidCount} Disbursed Vouchers • Settled
           </span>
         </Card>
 
-        <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
-            Pending Admin Signoff
-          </span>
+        <Card className="p-4 border border-amber-500/30 bg-amber-500/[0.02] relative overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+              Pending Admin Signoff
+            </span>
+            <span className="rounded-full bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-300">
+              {activeTimeRangeBadgeText}
+            </span>
+          </div>
           <div className="text-2xl font-extrabold text-amber-500 mt-1">
             ₹{totalOrgPendingAmount.toLocaleString('en-IN')}
           </div>
-          <span className="text-[11px] text-muted-foreground mt-0.5 block">Awaiting Payout Signoff</span>
+          <span className="text-[11px] text-muted-foreground mt-0.5 block">
+            {totalOrgPendingCount} Claims Awaiting Payout Signoff
+            {totalOrgApprovedUnpaidAmount > 0 ? ` (₹${totalOrgApprovedUnpaidAmount.toLocaleString('en-IN')} Approved)` : ''}
+          </span>
         </Card>
 
-        <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
-            My Active Claims
-          </span>
-          <div className="text-2xl font-extrabold text-brand-500 mt-1">
-            {claims.filter((c) => c.userId === currentUser._id).length}
+        <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 relative overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+              My Active Claims
+            </span>
+            <span className="rounded-full bg-brand-500/10 border border-brand-500/30 px-2 py-0.5 text-[9px] font-bold text-brand-600 dark:text-brand-300">
+              {activeTimeRangeBadgeText}
+            </span>
           </div>
-          <span className="text-[11px] text-muted-foreground mt-0.5 block">Submitted by You</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-extrabold text-brand-500">{myActiveClaimsCount}</span>
+            <span className="text-sm font-bold text-foreground">
+              (₹{myActiveClaimsAmount.toLocaleString('en-IN')})
+            </span>
+          </div>
+          <span className="text-[11px] text-muted-foreground mt-0.5 block">
+            Submitted by You • ₹{mySettledAmount.toLocaleString('en-IN')} Settled
+          </span>
         </Card>
       </div>
 
       {/* Date Range & Category Management Bar */}
       <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 space-y-3">
         {/* Date Range Selector Row */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-zinc-100 dark:border-zinc-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-zinc-100 dark:border-zinc-900">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5 text-brand-500" />
               Time Range:
             </span>
-            {(['All Time', 'Today', 'This Week', 'This Month', 'Custom'] as const).map((opt) => (
+            {([
+              { id: 'All Time', label: 'All Time' },
+              { id: 'Today', label: 'Daily (Today)' },
+              { id: 'This Week', label: 'Weekly (This Week)' },
+              { id: 'This Month', label: 'Monthly (This Month)' },
+              { id: 'Custom', label: 'Custom Range' },
+            ] as const).map((opt) => (
               <button
-                key={opt}
-                onClick={() => setDateRangeOption(opt)}
+                key={opt.id}
+                onClick={() => {
+                  setDateRangeOption(opt.id);
+                  if (opt.id === 'Custom') {
+                    if (!customStartDate) setCustomStartDate(getLocalYMD(30));
+                    if (!customEndDate) setCustomEndDate(getLocalYMD(0));
+                  }
+                }}
                 className={`rounded-full px-3.5 py-1 text-xs font-bold border transition-all ${
-                  dateRangeOption === opt
-                    ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300'
+                  dateRangeOption === opt.id
+                    ? 'border-brand-500 bg-brand-500/15 text-brand-600 dark:text-brand-300 shadow-sm'
                     : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {opt}
+                {opt.label}
               </button>
             ))}
           </div>
 
-          {dateRangeOption === 'Custom' && (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground text-[11px]">From:</span>
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1 text-xs focus-ring"
-              />
-              <span className="text-muted-foreground text-[11px]">To:</span>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1 text-xs focus-ring"
-              />
-            </div>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {dateRangeOption === 'Custom' && (
+              <div className="flex items-center gap-2 text-xs bg-zinc-100/70 dark:bg-zinc-900/70 px-3 py-1.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+                <span className="text-muted-foreground text-[11px] font-semibold">From:</span>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-2 py-0.5 text-xs focus-ring"
+                />
+                <span className="text-muted-foreground text-[11px] font-semibold">To:</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-2 py-0.5 text-xs focus-ring"
+                />
+              </div>
+            )}
+
+            <Button
+              onClick={handleOpenCustomExportModal}
+              size="sm"
+              variant="outline"
+              className="text-xs gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/20"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download Custom CSV
+            </Button>
+          </div>
+        </div>
+
+        {/* Live Period Breakdown Summary Bar (Updates immediately on Daily / Weekly / Monthly / Custom click) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/80 px-3.5 py-2 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-extrabold text-foreground uppercase tracking-wider text-[10px]">
+              {activeTimeRangeBadgeText} Breakdown:
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-lg bg-card px-2.5 py-1 border border-zinc-200/70 dark:border-zinc-800 font-bold text-foreground">
+              Total Claimed: <span className="text-brand-500">₹{totalOrgClaimedAmount.toLocaleString('en-IN')}</span> ({totalOrgClaimsCount})
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2.5 py-1 border border-emerald-500/25 font-bold text-emerald-600 dark:text-emerald-400">
+              Paid &amp; Settled: ₹{totalOrgPaidAmount.toLocaleString('en-IN')} ({totalOrgPaidCount})
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-2.5 py-1 border border-amber-500/25 font-bold text-amber-600 dark:text-amber-400">
+              Pending Signoff: ₹{totalOrgPendingAmount.toLocaleString('en-IN')} ({totalOrgPendingCount})
+            </span>
+          </div>
+
+          <button
+            onClick={handleExportCSV}
+            className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
+          >
+            <Download className="h-3 w-3" />
+            Quick Download ({TIME_RANGE_DISPLAY_LABELS[dateRangeOption]})
+          </button>
         </div>
 
         {/* Category Pills & Add Custom Category */}
@@ -767,114 +1187,234 @@ export default function ReimbursementsPage() {
                 (claim.status as string) === 'Pending CEO';
               const isReadyPaid = claim.status === 'Approved' && !claim.isPaid;
               const isDraft = claim.status === 'Draft';
+              const notesList = claim.comments || [];
+              const noteCount = notesList.length;
+              const isInlineNoteOpen = inlineNoteClaimId === claim._id;
 
               return (
                 <div
                   key={claim._id}
-                  className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50 transition-colors"
+                  className="flex flex-col gap-3 p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50 transition-colors"
                 >
-                  {/* Employee & Claim Detail */}
-                  <div className="flex items-center gap-3.5 min-w-[280px]">
-                    <Avatar src={claim.userAvatar} name={claim.userName} size="md" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-foreground">{claim.userName}</span>
-                        <Badge variant="outline" className="text-[10px] font-mono">
-                          {claim.claimNo}
-                        </Badge>
-                        <span className="text-[10px] font-mono text-muted-foreground">[{claim.userTeam}]</span>
-                      </div>
-                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                        ₹{claim.amount.toLocaleString('en-IN')} • {claim.category}
-                        {claim.items && claim.items.length > 1 && (
-                          <span className="ml-1 text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
-                            ({claim.items.length} Items)
-                          </span>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    {/* Employee & Claim Detail */}
+                    <div className="flex items-start gap-3.5 min-w-[280px] flex-1">
+                      <Avatar src={claim.userAvatar} name={claim.userName} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-sm text-foreground">{claim.userName}</span>
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            {claim.claimNo}
+                          </Badge>
+                          <span className="text-[10px] font-mono text-muted-foreground">[{claim.userTeam}]</span>
+
+                          {/* Note Count Badge right on the claim header if notes added */}
+                          {noteCount > 0 && (
+                            <span
+                              onClick={() => handleOpenClaimDetails(claim)}
+                              className="cursor-pointer inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 shadow-sm"
+                              title="Click to inspect notes"
+                            >
+                              <MessageSquare className="h-3 w-3" />
+                              {noteCount === 1 ? '1 Note Added' : `${noteCount} Notes Added`}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                          ₹{claim.amount.toLocaleString('en-IN')} • {claim.category}
+                          {claim.items && claim.items.length > 1 && (
+                            <span className="ml-1 text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                              ({claim.items.length} Items)
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 mt-0.5 italic max-w-md truncate">"{claim.description}"</p>
+
+                        {/* Numbered Notes List (1 Note, 2 Note...) directly on the Ledger Card */}
+                        {noteCount > 0 && (
+                          <div className="mt-2.5 space-y-1.5">
+                            {notesList.map((cmt, idx) => {
+                              const byAdmin =
+                                cmt.authorRole === 'Super Admin' || cmt.authorRole === 'Admin';
+                              return (
+                                <div
+                                  key={cmt.id || idx}
+                                  className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-500/25 bg-brand-500/10 px-3 py-1.5 text-xs"
+                                >
+                                  <span className="rounded-md bg-brand-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold font-mono uppercase">
+                                    {idx + 1} Note
+                                  </span>
+                                  <span className="font-semibold text-foreground">"{cmt.text}"</span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    — by <strong>{cmt.authorName}</strong> ({cmt.authorRole})
+                                  </span>
+                                  <span
+                                    className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
+                                      byAdmin
+                                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                        : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                    }`}
+                                  >
+                                    <Bell className="h-2.5 w-2.5" />
+                                    {byAdmin ? 'Notified Member & TL' : 'Notified Admin'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
-                      </p>
-                      <p className="text-[11px] text-zinc-500 mt-0.5 italic max-w-md truncate">"{claim.description}"</p>
+                      </div>
+                    </div>
+
+                    {/* Inspect & Quick Add Note Buttons */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isInlineNoteOpen) {
+                            setInlineNoteClaimId(null);
+                          } else {
+                            setInlineNoteClaimId(claim._id);
+                            setInlineNoteInput('');
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 rounded-xl hover:bg-emerald-500/20 transition-all"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        {noteCount > 0
+                          ? `${noteCount} ${noteCount === 1 ? 'Note' : 'Notes'} (+ Add)`
+                          : '+ Add Note'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenClaimDetails(claim)}
+                        className="inline-flex items-center gap-1.5 text-xs text-brand-600 dark:text-brand-400 font-semibold border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 rounded-xl hover:bg-brand-500/20 transition-all"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Inspect Claim & Receipts
+                      </button>
+                    </div>
+
+                    {/* Workflow Status Badge (Single Admin Approval) */}
+                    <div className="flex items-center gap-2 text-xs">
+                      {isDraft ? (
+                        <Badge className="bg-zinc-500/20 text-zinc-600 dark:text-zinc-400 border-zinc-500/30 font-bold">
+                          DRAFT SAVED
+                        </Badge>
+                      ) : claim.status === 'Approved' ? (
+                        <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-extrabold">
+                          ✓ APPROVED BY ADMIN
+                        </Badge>
+                      ) : claim.status === 'Rejected' ? (
+                        <Badge className="bg-rose-500/20 text-rose-600 border-rose-500/30 font-extrabold">
+                          ✗ REJECTED
+                        </Badge>
+                      ) : claim.status === 'Paid' ? (
+                        <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold">
+                          PAID OUT
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 font-bold">
+                          ... PENDING ADMIN APPROVAL
+                        </Badge>
+                      )}
+
+                      {claim.isPaid && (
+                        <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold">
+                          PAID OUT
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Action Controls (Admin Only Can Approve) */}
+                    <div className="flex items-center gap-2">
+                      {isDraft && claim.userId === currentUser._id && (
+                        <div className="flex items-center gap-1">
+                          <Button onClick={() => handleSubmitDraft(claim._id)} size="sm" className="bg-emerald-600 text-white text-xs py-1">
+                            Submit Draft
+                          </Button>
+                          <Button onClick={() => handleCancelClaim(claim._id)} size="sm" variant="ghost" className="text-zinc-500 text-xs py-1">
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
+
+                      {isSuperAdmin && isPendingAdmin && (
+                        <div className="flex items-center gap-1">
+                          <Button onClick={() => handleApproveAdmin(claim._id)} size="sm" className="ambizcon-gradient text-white text-xs py-1 shadow-glow">
+                            Approve Claim
+                          </Button>
+                          <Button onClick={() => handleOpenRejectModal(claim._id)} size="sm" variant="ghost" className="text-rose-500 text-xs py-1">
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+
+                      {isSuperAdmin && isReadyPaid && (
+                        <Button onClick={() => handleMarkPaid(claim._id)} size="sm" className="bg-blue-600 text-white text-xs py-1 gap-1">
+                          <CreditCard className="h-3.5 w-3.5" />
+                          Mark as Paid
+                        </Button>
+                      )}
+
+                      {claim.isPaid && (
+                        <span className="font-extrabold text-blue-600 dark:text-blue-400 text-xs border-2 border-blue-500 rounded-lg px-2.5 py-1 rotate-[-4deg]">
+                          PAID OUT
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Inspect Button */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleOpenClaimDetails(claim)}
-                      className="inline-flex items-center gap-1.5 text-xs text-brand-600 dark:text-brand-400 font-semibold border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 rounded-xl hover:bg-brand-500/20 transition-all"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      Inspect Claim & Receipts
-                    </button>
-                  </div>
-
-                  {/* Workflow Status Badge (Single Admin Approval) */}
-                  <div className="flex items-center gap-2 text-xs">
-                    {isDraft ? (
-                      <Badge className="bg-zinc-500/20 text-zinc-600 dark:text-zinc-400 border-zinc-500/30 font-bold">
-                        DRAFT SAVED
-                      </Badge>
-                    ) : claim.status === 'Approved' ? (
-                      <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-extrabold">
-                        ✓ APPROVED BY ADMIN
-                      </Badge>
-                    ) : claim.status === 'Rejected' ? (
-                      <Badge className="bg-rose-500/20 text-rose-600 border-rose-500/30 font-extrabold">
-                        ✗ REJECTED
-                      </Badge>
-                    ) : claim.status === 'Paid' ? (
-                      <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold">
-                        PAID OUT
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 font-bold">
-                        ... PENDING ADMIN APPROVAL
-                      </Badge>
-                    )}
-
-                    {claim.isPaid && (
-                      <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold">
-                        PAID OUT
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Action Controls (Admin Only Can Approve) */}
-                  <div className="flex items-center gap-2">
-                    {isDraft && claim.userId === currentUser._id && (
-                      <div className="flex items-center gap-1">
-                        <Button onClick={() => handleSubmitDraft(claim._id)} size="sm" className="bg-emerald-600 text-white text-xs py-1">
-                          Submit Draft
-                        </Button>
-                        <Button onClick={() => handleCancelClaim(claim._id)} size="sm" variant="ghost" className="text-zinc-500 text-xs py-1">
-                          Cancel
-                        </Button>
-                      </div>
-                    )}
-
-                    {isSuperAdmin && isPendingAdmin && (
-                      <div className="flex items-center gap-1">
-                        <Button onClick={() => handleApproveAdmin(claim._id)} size="sm" className="ambizcon-gradient text-white text-xs py-1 shadow-glow">
-                          Approve Claim
-                        </Button>
-                        <Button onClick={() => handleOpenRejectModal(claim._id)} size="sm" variant="ghost" className="text-rose-500 text-xs py-1">
-                          Reject
-                        </Button>
-                      </div>
-                    )}
-
-                    {isSuperAdmin && isReadyPaid && (
-                      <Button onClick={() => handleMarkPaid(claim._id)} size="sm" className="bg-blue-600 text-white text-xs py-1 gap-1">
-                        <CreditCard className="h-3.5 w-3.5" />
-                        Mark as Paid
-                      </Button>
-                    )}
-
-                    {claim.isPaid && (
-                      <span className="font-extrabold text-blue-600 dark:text-blue-400 text-xs border-2 border-blue-500 rounded-lg px-2.5 py-1 rotate-[-4deg]">
-                        PAID OUT
+                  {/* Inline Quick Note Input Box on the Ledger Card */}
+                  {isInlineNoteOpen && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
+                      <span className="text-[11px] font-extrabold text-brand-600 dark:text-brand-400 font-mono">
+                        Add {noteCount + 1} Note:
                       </span>
-                    )}
-                  </div>
+                      <input
+                        type="text"
+                        value={inlineNoteInput}
+                        onChange={(e) => setInlineNoteInput(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === 'Enter' && inlineNoteInput.trim()) {
+                            e.preventDefault();
+                            const text = inlineNoteInput;
+                            setInlineNoteInput('');
+                            await addNoteAndNotify(claim, text);
+                          }
+                        }}
+                        placeholder={
+                          isSuperAdmin
+                            ? `Write ${noteCount + 1} Note (Will notify Member & TL in Notifications)...`
+                            : `Write ${noteCount + 1} Note (Will notify Admin in Notifications)...`
+                        }
+                        className="flex-1 min-w-[220px] rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isAddingComment || !inlineNoteInput.trim()}
+                        onClick={async () => {
+                          const text = inlineNoteInput;
+                          setInlineNoteInput('');
+                          await addNoteAndNotify(claim, text);
+                        }}
+                        className="ambizcon-gradient text-white text-xs font-bold"
+                      >
+                        Save {noteCount + 1} Note &amp; Notify
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setInlineNoteClaimId(null)}
+                        className="text-xs"
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1419,28 +1959,71 @@ export default function ReimbursementsPage() {
 
             {/* Audit Trail & Comments */}
             <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4">
-              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <MessageSquare className="h-4 w-4 text-brand-500" />
-                Audit Trail &amp; Discussion Comments ({selectedClaimDetail.comments?.length || 0})
-              </h4>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4 text-brand-500" />
+                  Claim Notes &amp; Audit Trail (
+                  {selectedClaimDetail.comments && selectedClaimDetail.comments.length > 0
+                    ? `${selectedClaimDetail.comments.length} ${
+                        selectedClaimDetail.comments.length === 1 ? 'Note Added' : 'Notes Added'
+                      }`
+                    : '0 Notes'}
+                  )
+                </h4>
+                <span className="text-[10px] text-muted-foreground font-semibold">
+                  {isSuperAdmin
+                    ? '🔔 Adding a note notifies Member & TL in Notifications'
+                    : '🔔 Adding a note notifies Admin in Notifications'}
+                </span>
+              </div>
 
-              <div className="space-y-2 max-h-36 overflow-y-auto pr-1 mb-3">
+              <div className="space-y-2 max-h-44 overflow-y-auto pr-1 mb-3">
                 {!selectedClaimDetail.comments || selectedClaimDetail.comments.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">No discussion comments logged yet.</p>
+                  <p className="text-xs text-muted-foreground italic">No notes added yet.</p>
                 ) : (
-                  selectedClaimDetail.comments.map((cmt) => (
-                    <div key={cmt.id} className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-foreground">
-                          {cmt.authorName} <span className="text-[10px] text-muted-foreground font-normal">({cmt.authorRole})</span>
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {new Date(cmt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                  selectedClaimDetail.comments.map((cmt, idx) => {
+                    const byAdmin =
+                      cmt.authorRole === 'Super Admin' || cmt.authorRole === 'Admin';
+                    return (
+                      <div
+                        key={cmt.id || idx}
+                        className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-md bg-brand-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold font-mono uppercase">
+                              {idx + 1} Note
+                            </span>
+                            <span className="font-bold text-foreground">
+                              {cmt.authorName}{' '}
+                              <span className="text-[10px] text-muted-foreground font-normal">
+                                ({cmt.authorRole})
+                              </span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
+                                byAdmin
+                                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                              }`}
+                            >
+                              <Bell className="h-2.5 w-2.5" />
+                              {byAdmin ? 'Notified Member & TL' : 'Notified Admin'}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {new Date(cmt.createdAt).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-foreground font-medium text-xs pl-1">"{cmt.text}"</p>
                       </div>
-                      <p className="text-muted-foreground text-xs">{cmt.text}</p>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
@@ -1449,11 +2032,26 @@ export default function ReimbursementsPage() {
                   type="text"
                   value={newCommentText}
                   onChange={(e) => setNewCommentText(e.target.value)}
-                  placeholder="Type a note or query on this claim..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newCommentText.trim()) {
+                      e.preventDefault();
+                      handlePostComment();
+                    }
+                  }}
+                  placeholder={
+                    isSuperAdmin
+                      ? `Type ${(selectedClaimDetail.comments?.length || 0) + 1} Note (Notifies Member & TL)...`
+                      : `Type ${(selectedClaimDetail.comments?.length || 0) + 1} Note (Notifies Admin)...`
+                  }
                   className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
                 />
-                <Button onClick={handlePostComment} disabled={isAddingComment} size="sm" className="ambizcon-gradient text-white text-xs">
-                  Add Note
+                <Button
+                  onClick={handlePostComment}
+                  disabled={isAddingComment || !newCommentText.trim()}
+                  size="sm"
+                  className="ambizcon-gradient text-white text-xs font-bold"
+                >
+                  Add {(selectedClaimDetail.comments?.length || 0) + 1} Note
                 </Button>
               </div>
             </div>
@@ -1494,6 +2092,228 @@ export default function ReimbursementsPage() {
           </div>
         </Modal>
       )}
+
+      {/* Custom Download & Export CSV Modal */}
+      {isExportModalOpen && (
+        <Modal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          title="Download Reimbursement Report — Custom Export Option"
+          description="Choose a preset period (Daily, Weekly, Monthly, All Time) or a Custom Date Range, filter by settlement status, and export a detailed CSV ledger."
+          maxWidth="lg"
+        >
+          <div className="space-y-4 pt-2">
+            {/* Step 1: Time Range Selection */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-brand-500" />
+                1. Select Time Range / Custom Dates
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {([
+                  { id: 'All Time', label: 'All Time' },
+                  { id: 'Today', label: 'Daily (Today)' },
+                  { id: 'This Week', label: 'Weekly' },
+                  { id: 'This Month', label: 'Monthly' },
+                  { id: 'Custom', label: 'Custom Range' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setExportRangeOption(opt.id)}
+                    className={`rounded-xl px-3 py-2 text-xs font-bold border transition-all text-center ${
+                      exportRangeOption === opt.id
+                        ? 'border-brand-500 bg-brand-500/15 text-brand-600 dark:text-brand-300 shadow-sm'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {exportRangeOption === 'Custom' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/70 border border-zinc-200 dark:border-zinc-800 mt-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                      From Date (Start)
+                    </label>
+                    <input
+                      type="date"
+                      value={exportStartDate}
+                      onChange={(e) => setExportStartDate(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-background px-3 py-1.5 text-xs focus-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                      To Date (End)
+                    </label>
+                    <input
+                      type="date"
+                      value={exportEndDate}
+                      onChange={(e) => setExportEndDate(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-background px-3 py-1.5 text-xs focus-ring"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: Settlement / Payout Status Filter */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Filter className="h-3.5 w-3.5 text-emerald-500" />
+                2. Filter by Settlement / Approval Status
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {(['All', 'Paid & Settled', 'Pending Signoff', 'Approved', 'Rejected'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setExportStatusFilter(st)}
+                    className={`rounded-full px-3.5 py-1.5 text-xs font-bold border transition-all ${
+                      exportStatusFilter === st
+                        ? 'border-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {st === 'All' ? 'All Claims' : st}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 3: Category Filter & Summary Row Toggle */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                  3. Expense Category
+                </label>
+                <select
+                  value={exportCategoryFilter}
+                  onChange={(e) => setExportCategoryFilter(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-semibold focus-ring"
+                >
+                  <option value="All">All Categories</option>
+                  {categoriesList.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col justify-end">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={exportIncludeSummary}
+                    onChange={(e) => setExportIncludeSummary(e.target.checked)}
+                    className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <span className="text-xs font-semibold text-foreground">
+                    Include Summary Totals Footer in CSV
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Live Preview Summary of Selected Export */}
+            {(() => {
+              const validPreview = customModalPreviewClaims.filter(
+                (c) => c.status !== 'Cancelled' && c.status !== 'Draft'
+              );
+              const previewTotalAmt = validPreview.reduce((acc, c) => acc + c.amount, 0);
+              const previewPaidAmt = validPreview
+                .filter((c) => c.isPaid || c.status === 'Paid')
+                .reduce((acc, c) => acc + c.amount, 0);
+              const previewPendingAmt = validPreview
+                .filter((c) => c.status === 'Pending Approval' || (c.status === 'Approved' && !c.isPaid))
+                .reduce((acc, c) => acc + c.amount, 0);
+
+              return (
+                <div className="rounded-2xl border border-brand-500/30 bg-brand-500/5 p-4 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-brand-600 dark:text-brand-300">
+                      Export Preview ({customModalPreviewClaims.length} Matching Claims)
+                    </span>
+                    <span className="text-[11px] font-semibold text-muted-foreground">
+                      {exportRangeOption === 'Custom'
+                        ? `${exportStartDate} → ${exportEndDate}`
+                        : TIME_RANGE_DISPLAY_LABELS[exportRangeOption]}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="rounded-xl bg-card p-2.5 border border-zinc-200/80 dark:border-zinc-800">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground block">
+                        Total Claimed
+                      </span>
+                      <span className="text-sm font-extrabold text-foreground">
+                        ₹{previewTotalAmt.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="rounded-xl bg-card p-2.5 border border-emerald-500/30">
+                      <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 block">
+                        Paid &amp; Settled
+                      </span>
+                      <span className="text-sm font-extrabold text-emerald-500">
+                        ₹{previewPaidAmt.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="rounded-xl bg-card p-2.5 border border-amber-500/30">
+                      <span className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 block">
+                        Pending Signoff
+                      </span>
+                      <span className="text-sm font-extrabold text-amber-500">
+                        ₹{previewPendingAmt.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDateRangeOption(exportRangeOption);
+                  if (exportRangeOption === 'Custom') {
+                    setCustomStartDate(exportStartDate);
+                    setCustomEndDate(exportEndDate);
+                  }
+                  setSelectedCategoryFilter(exportCategoryFilter);
+                  setIsExportModalOpen(false);
+                  toast.success('Time range filters applied to page view!');
+                }}
+                className="text-xs"
+              >
+                Apply Range to Page View
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setIsExportModalOpen(false)} className="text-xs">
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleExecuteCustomExport}
+                  size="sm"
+                  className="gap-1.5 ambizcon-gradient text-white text-xs font-bold shadow-glow"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download Custom CSV ({customModalPreviewClaims.length})
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
+

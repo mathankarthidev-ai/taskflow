@@ -12,6 +12,8 @@ export const useCompanyStore = create<CompanyState>((set) => ({
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('ambizcon_selected_company', company);
+        const isAus = company === 'Ambizcon';
+        document.documentElement.setAttribute('data-company', isAus ? 'ambizcon' : 'ambizcon-health');
       } catch (e) {}
     }
     set({ selectedCompany: company });

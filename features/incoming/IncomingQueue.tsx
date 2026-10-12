@@ -14,15 +14,25 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { getPriorityBadgeColor, formatDate } from '@/lib/utils';
 import { Inbox, ArrowRight, UserPlus, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { isTaskInCompany, isUserInCompany } from '@/lib/company-filter';
 
 export function IncomingQueue() {
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const { setSelectedTask, setDetailModalOpen } = useTaskStore();
 
   const [incomingTasks, setIncomingTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const activeCompanyScope = isSuperAdmin
+    ? selectedCompany
+    : currentUser?.company === 'Ambizcon'
+    ? 'Ambizcon'
+    : 'Ambizcon Health - India';
 
   useEffect(() => {
     async function loadIncoming() {
@@ -46,6 +56,7 @@ export function IncomingQueue() {
   if (!currentUser) return null;
 
   const isLeadOrAdmin = currentUser.role === 'Team Lead' || currentUser.role === 'Super Admin';
+  const scopedIncomingTasks = incomingTasks.filter((t) => isTaskInCompany(t, activeCompanyScope, users));
 
   const handleAssign = async (taskId: string, memberId: string) => {
     if (!memberId) return;
@@ -95,7 +106,7 @@ export function IncomingQueue() {
           </div>
         </div>
         <Badge variant="default" className="text-xs px-3 py-1">
-          {incomingTasks.length} Pending Approval
+          {scopedIncomingTasks.length} Pending Approval
         </Badge>
       </div>
 
@@ -106,7 +117,7 @@ export function IncomingQueue() {
             <Skeleton key={i} className="h-28 w-full rounded-2xl" />
           ))}
         </div>
-      ) : incomingTasks.length === 0 ? (
+      ) : scopedIncomingTasks.length === 0 ? (
         <Card className="py-12 text-center">
           <CardContent className="flex flex-col items-center justify-center space-y-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500">
@@ -120,8 +131,10 @@ export function IncomingQueue() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {incomingTasks.map((task) => {
-            const teamMembers = users.filter((u) => u.team === task.team);
+          {scopedIncomingTasks.map((task) => {
+            const teamMembers = users.filter(
+              (u) => u.team === task.team && isUserInCompany(u, activeCompanyScope)
+            );
 
             return (
               <Card

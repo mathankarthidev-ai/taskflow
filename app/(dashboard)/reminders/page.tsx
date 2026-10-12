@@ -32,11 +32,17 @@ import {
   ArrowRight,
   Layers,
   Sparkles,
+  Edit3,
+  Lock,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { toast } from 'sonner';
+import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
+import { TaskEditModal } from '@/components/tasks/TaskEditModal';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import { isTaskInCompany } from '@/lib/company-filter';
 
 const ITEMS_PER_PAGE = 4;
 
@@ -50,10 +56,18 @@ interface TaskWithReminder {
 export default function RemindersPage() {
   const { tasks, setTasks, setSelectedTask, setDetailModalOpen } = useTaskStore();
   const currentUser = useAuthStore((s) => s.currentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const activeCompanyScope = isSuperAdmin
+    ? selectedCompany
+    : currentUser?.company === 'Ambizcon'
+    ? 'Ambizcon'
+    : 'Ambizcon Health - India';
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [dismissedReminders, setDismissedReminders] = useState<Record<string, boolean>>({});
+  const [editingReminderTask, setEditingReminderTask] = useState<Task | null>(null);
 
   // Active Frequency View: Default is Daily Reminders as requested
   const [activeFrequency, setActiveFrequency] = useState<FrequencyTab>('Daily');
@@ -140,10 +154,11 @@ export default function RemindersPage() {
     }));
   }, [tasks]);
 
-  // Filter out dismissed tasks and search term
+  // Filter out dismissed tasks, branch scope, and search term
   const activeList = useMemo(() => {
     return tasksWithReminders.filter(({ task }) => {
       if (!task) return false;
+      if (!isTaskInCompany(task, activeCompanyScope)) return false;
       if (dismissedReminders[task._id]) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -154,7 +169,7 @@ export default function RemindersPage() {
       }
       return true;
     });
-  }, [tasksWithReminders, dismissedReminders, searchQuery]);
+  }, [tasksWithReminders, dismissedReminders, searchQuery, activeCompanyScope]);
 
   // Group items by Frequency
   const dailyTasks = useMemo(
@@ -330,6 +345,9 @@ export default function RemindersPage() {
 
   // Standard line-item renderer for individual paginated tasks
   const renderTaskLineItem = ({ task, reminder }: TaskWithReminder, tagPrefix?: string) => {
+    const canEdit = canEditTaskOrReminder(task, currentUser);
+    const creatorName = getTaskCreatorName(task);
+
     return (
       <div
         key={task._id + (tagPrefix || '')}
@@ -404,6 +422,28 @@ export default function RemindersPage() {
           </div>
 
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (canEdit) {
+                  setEditingReminderTask(task);
+                } else {
+                  toast.error('Permission Restricted', {
+                    description: `Only Admin or the creator (${creatorName}) can edit this reminder.`,
+                  });
+                }
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 ${
+                canEdit
+                  ? 'bg-brand-500/10 hover:bg-brand-500/20 text-brand-600 dark:text-brand-400 border border-brand-500/20'
+                  : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 text-muted-foreground'
+              }`}
+              title={canEdit ? 'Edit reminder' : `Created by ${creatorName} (Admin or creator only)`}
+            >
+              {canEdit ? <Edit3 className="h-3.5 w-3.5" /> : <Lock className="h-3 w-3 text-amber-500" />}
+              <span>Edit</span>
+            </button>
             <button
               type="button"
               onClick={(e) => {
@@ -1047,6 +1087,11 @@ export default function RemindersPage() {
         defaultTime={reminderDefaults.slotTime}
         defaultWeek={reminderDefaults.weekName}
         defaultDate={reminderDefaults.dateStr}
+      />
+      <TaskEditModal
+        task={editingReminderTask}
+        isOpen={Boolean(editingReminderTask)}
+        onClose={() => setEditingReminderTask(null)}
       />
     </div>
   );

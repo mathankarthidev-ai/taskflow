@@ -1,10 +1,22 @@
 'use client';
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export interface AppNotification {
   id: string;
-  type: 'assigned' | 'updated' | 'due_date_reminder' | 'overdue' | 'comment' | 'task_completed' | 'task_approval' | 'review_assigned' | 'client_approval' | 'chat_message';
+  type:
+    | 'assigned'
+    | 'updated'
+    | 'due_date_reminder'
+    | 'overdue'
+    | 'comment'
+    | 'task_completed'
+    | 'task_approval'
+    | 'review_assigned'
+    | 'client_approval'
+    | 'chat_message'
+    | 'reimbursement_note';
   title: string;
   text: string;
   time: string;
@@ -12,7 +24,15 @@ export interface AppNotification {
   color: string;
   category: string;
   taskId?: string;
+  claimId?: string;
+  claimNo?: string;
+  channelId?: string;
+  messageId?: string;
+  targetTeam?: string;
   link?: string;
+  targetRoles?: ('Super Admin' | 'Admin' | 'Team Lead' | 'Team Member' | 'Reception Staff')[];
+  senderName?: string;
+  senderRole?: string;
 }
 
 interface NotificationState {
@@ -106,27 +126,34 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-export const useNotificationStore = create<NotificationState>((set) => ({
-  notifications: INITIAL_NOTIFICATIONS,
-  addNotification: (notif) =>
-    set((state) => ({
-      notifications: [
-        {
-          ...notif,
-          id: `notif_${Date.now()}`,
-          time: 'Just now',
-          unread: true,
-        },
-        ...state.notifications,
-      ],
-    })),
-  markAllRead: () =>
-    set((state) => ({
-      notifications: state.notifications.map((n) => ({ ...n, unread: false })),
-    })),
-  markAsRead: (id) =>
-    set((state) => ({
-      notifications: state.notifications.map((n) => (n.id === id ? { ...n, unread: false } : n)),
-    })),
-  clearAll: () => set({ notifications: [] }),
-}));
+export const useNotificationStore = create<NotificationState>()(
+  persist(
+    (set) => ({
+      notifications: INITIAL_NOTIFICATIONS,
+      addNotification: (notif) =>
+        set((state) => ({
+          notifications: [
+            {
+              ...notif,
+              id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              time: 'Just now',
+              unread: true,
+            },
+            ...state.notifications,
+          ],
+        })),
+      markAllRead: () =>
+        set((state) => ({
+          notifications: state.notifications.map((n) => ({ ...n, unread: false })),
+        })),
+      markAsRead: (id) =>
+        set((state) => ({
+          notifications: state.notifications.map((n) => (n.id === id ? { ...n, unread: false } : n)),
+        })),
+      clearAll: () => set({ notifications: [] }),
+    }),
+    {
+      name: 'taskflow_notifications_v2',
+    }
+  )
+);

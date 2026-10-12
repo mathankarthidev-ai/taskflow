@@ -1,5 +1,3 @@
-import { redirect } from 'next/navigation';
+import LocalBizHomePage from './local-biz/page';
 
-export default function RootPage() {
-  redirect('/login');
-}
+export default LocalBizHomePage;

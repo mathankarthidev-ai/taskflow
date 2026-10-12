@@ -13,11 +13,13 @@ import { fetchCommentsAction, addCommentAction, deleteCommentAction } from '@/ac
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
 import { getPriorityBadgeColor, getStatusBadgeColor, formatDate, formatTimeAgo } from '@/lib/utils';
-import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck } from 'lucide-react';
+import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { SEED_CLIENTS_FULL } from '@/lib/seed-data';
 import { Copy, Lock, Globe, CheckCircle2, Shield, Timer } from 'lucide-react';
+import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
+import { TaskEditModal } from '@/components/tasks/TaskEditModal';
 
 export function TaskDetailModal() {
   const { selectedTask, isDetailModalOpen, setDetailModalOpen, setSelectedTask, setTasks, tasks } = useTaskStore();
@@ -29,6 +31,7 @@ export function TaskDetailModal() {
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [workspaceUsers, setWorkspaceUsers] = useState<User[]>([]);
   const [isReviewerModalOpen, setIsReviewerModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Time logging state
   const [hoursToLog, setHoursToLog] = useState<string>('');
@@ -387,37 +390,64 @@ export function TaskDetailModal() {
   const completedSubtasksCount = subtasksList.filter((s) => s.completed).length;
   const subtaskProgressPct = subtasksList.length > 0 ? Math.round((completedSubtasksCount / subtasksList.length) * 100) : 0;
 
+  const canEdit = canEditTaskOrReminder(selectedTask, currentUser);
+  const creatorName = getTaskCreatorName(selectedTask);
+  const isReminder = Boolean(selectedTask.reminderSettings?.enabled);
+
   return (
-    <Modal
-      isOpen={isDetailModalOpen}
-      onClose={() => setDetailModalOpen(false)}
-      maxWidth="4xl"
-    >
-      <div className="space-y-6 text-xs text-foreground">
-        {/* Top Header Badge Row */}
-        <div className="flex items-center justify-between border-b border-zinc-200/60 dark:border-zinc-800/60 pb-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[11px] font-bold text-muted-foreground bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
-              T-101
-            </span>
-            <Badge className={getPriorityBadgeColor(selectedTask.priority)}>
-              {selectedTask.priority}
-            </Badge>
-            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
-              {selectedTask.clientName || 'Manipal Hospitals'}
-            </Badge>
-            {selectedTask.doctorName && (
-              <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
-                🩺 {selectedTask.doctorName}
+    <>
+      <Modal
+        isOpen={isDetailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        maxWidth="4xl"
+      >
+        <div className="space-y-6 text-xs text-foreground">
+          {/* Top Header Badge Row */}
+          <div className="flex items-center justify-between border-b border-zinc-200/60 dark:border-zinc-800/60 pb-3 gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-[11px] font-bold text-muted-foreground bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
+                T-10{selectedTask._id?.slice(-2) || '01'}
+              </span>
+              <Badge className={getPriorityBadgeColor(selectedTask.priority)}>
+                {selectedTask.priority}
               </Badge>
-            )}
-            {selectedTask.specialist && (
-              <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold">
-                ⚕️ {selectedTask.specialist}
+              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
+                {selectedTask.clientName || 'Manipal Hospitals'}
               </Badge>
-            )}
+              {selectedTask.doctorName && (
+                <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
+                  🩺 {selectedTask.doctorName}
+                </Badge>
+              )}
+              {selectedTask.specialist && (
+                <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold">
+                  ⚕️ {selectedTask.specialist}
+                </Badge>
+              )}
+            </div>
+
+            {/* Edit / Creator Security Button */}
+            <div className="flex items-center gap-2 shrink-0">
+              {canEdit ? (
+                <Button
+                  size="sm"
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="bg-brand-500 hover:bg-brand-600 text-white font-semibold flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs shadow-sm shadow-brand-500/20"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>{isReminder ? 'Edit Reminder' : 'Edit Task'}</span>
+                </Button>
+              ) : (
+                <div
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-muted-foreground text-[11px] border border-zinc-200/80 dark:border-zinc-700/80 shadow-xs"
+                  title={`Created by ${creatorName}. Only the creator or an Admin can edit this.`}
+                >
+                  <Lock className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Created by <strong>{creatorName}</strong> (read-only)</span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
         {/* Task Title */}
         <div>
@@ -581,7 +611,7 @@ export function TaskDetailModal() {
                   <Button
                     type="submit"
                     disabled={isAddingComment || !newComment.trim()}
-                    className="bg-[#086075] hover:bg-[#086075]/90 text-white font-bold text-xs px-5 py-2 rounded-xl"
+                    className="ambizcon-gradient hover:opacity-90 text-white font-bold text-xs px-5 py-2 rounded-xl shadow-glow"
                   >
                     Post
                   </Button>
@@ -689,7 +719,7 @@ export function TaskDetailModal() {
             {/* Primary Action Button */}
             <Button
               onClick={() => setIsReviewerModalOpen(true)}
-              className="w-full bg-[#086075] hover:bg-[#086075]/90 text-white font-bold text-xs py-3 rounded-2xl gap-2 shadow-sm"
+              className="w-full ambizcon-gradient hover:opacity-90 text-white font-bold text-xs py-3 rounded-2xl gap-2 shadow-glow"
             >
               <UserCheck className="h-4 w-4" />
               Submit for Review
@@ -727,7 +757,7 @@ export function TaskDetailModal() {
                   placeholder="What did you do?"
                   className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
                 />
-                <Button type="submit" size="sm" className="bg-[#086075] text-white text-xs px-3 font-bold">
+                <Button type="submit" size="sm" className="ambizcon-gradient text-white text-xs px-3 font-bold shadow-glow">
                   Log
                 </Button>
               </form>
@@ -855,6 +885,17 @@ export function TaskDetailModal() {
           </div>
         </div>
       </Modal>
-    </Modal>
+      </Modal>
+
+      {/* Task & Reminder Edit Modal */}
+      <TaskEditModal
+        task={selectedTask}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onUpdated={(updatedTask) => {
+          setSelectedTask(updatedTask);
+        }}
+      />
+    </>
   );
 }

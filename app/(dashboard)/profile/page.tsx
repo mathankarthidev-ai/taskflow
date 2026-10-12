@@ -25,21 +25,36 @@ import {
   Award,
   BookOpen,
   Sparkles,
+  Camera,
+  Upload,
 } from 'lucide-react';
 import { EducationRecord, ExperienceRecord } from '@/types';
 import { toast } from 'sonner';
 import { formatDayMonthOnly } from '@/features/users/UserManagementTable';
 
 import { updateUserProfileSectionAction } from '@/actions/userActions';
+import { useCompanyStore } from '@/store/useCompanyStore';
+import {
+  compressImageFileToDataUrl,
+  getCustomUserAvatar,
+  removeCustomUserAvatar,
+  saveCustomUserAvatar,
+} from '@/lib/avatar-store';
 
 export default function ProfilePage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const setCurrentUser = useAuthStore((s) => s.setCurrentUser);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
+  const isAustralia = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin'
+    ? selectedCompany === 'Ambizcon'
+    : currentUser?.company === 'Ambizcon';
 
   const [phone, setPhone] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
   const [address, setAddress] = useState('');
   const [bloodGroup, setBloodGroup] = useState('O+');
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [education, setEducation] = useState<EducationRecord[]>([]);
   const [experience, setExperience] = useState<ExperienceRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -57,7 +72,14 @@ export default function ProfilePage() {
       }
 
       const user = savedUser || currentUser;
+      const customAvatar = getCustomUserAvatar({
+        userId: currentUser._id,
+        email: currentUser.email,
+        name: currentUser.name,
+        fallbackSrc: user.avatar || currentUser.avatar,
+      });
 
+      setAvatarUrl(customAvatar);
       setPhone(user.phone || '+91 98765 43210');
       setEmergencyContact(user.emergencyContact || 'Spouse: +91 98765 00000');
       setAddress(user.address || 'No. 42, Ambizcon Health Tech Park, Chennai, India');
@@ -117,6 +139,49 @@ export default function ProfilePage() {
 
   if (!currentUser) return null;
 
+  // Profile Picture Upload Handler (Can be uploaded by Team Member, TL, or Admin)
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file (JPG, PNG, WEBP)');
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const dataUrl = await compressImageFileToDataUrl(file, 280);
+      setAvatarUrl(dataUrl);
+      saveCustomUserAvatar(currentUser, dataUrl);
+
+      const updatedUser = {
+        ...currentUser,
+        avatar: dataUrl,
+      };
+      setCurrentUser(updatedUser);
+
+      await updateUserProfileSectionAction(currentUser._id, { avatar: dataUrl }).catch(() => {});
+      toast.success('Profile picture uploaded! Now displayed in Navbar, Sidebar & Overview.');
+    } catch (err) {
+      toast.error('Failed to process profile picture');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarUrl(undefined);
+    removeCustomUserAvatar(currentUser);
+    const updatedUser = {
+      ...currentUser,
+      avatar: '',
+    };
+    setCurrentUser(updatedUser);
+    await updateUserProfileSectionAction(currentUser._id, { avatar: '' }).catch(() => {});
+    toast.info('Custom profile picture removed.');
+  };
+
   // Education Handlers
   const handleAddEducation = () => {
     const newEdu: EducationRecord = {
@@ -174,6 +239,7 @@ export default function ProfilePage() {
     setIsSaving(true);
 
     const nonSensitiveUpdates = {
+      avatar: avatarUrl,
       phone,
       emergencyContact,
       address,
@@ -183,18 +249,21 @@ export default function ProfilePage() {
     };
 
     try {
+      if (avatarUrl) {
+        saveCustomUserAvatar(currentUser, avatarUrl);
+      }
       const dbUpdated = await updateUserProfileSectionAction(currentUser._id, nonSensitiveUpdates);
       const updatedUser = {
         ...currentUser,
         ...(dbUpdated || nonSensitiveUpdates),
+        avatar: avatarUrl || currentUser.avatar,
       };
 
       setCurrentUser(updatedUser);
       if (typeof window !== 'undefined') {
         localStorage.setItem('ambizcon_user_details_' + currentUser._id, JSON.stringify(updatedUser));
-        document.cookie = `taskflow_user=${encodeURIComponent(JSON.stringify(updatedUser))}; path=/; max-age=864000`;
       }
-      toast.success('Your non-sensitive profile details, education & experience saved to database!');
+      toast.success('Your profile picture, details, education & experience saved!');
     } catch (err) {
       toast.error('Failed to save profile updates to database');
     } finally {
@@ -212,14 +281,50 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6 max-w-4xl pb-16">
-      {/* Header Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-[#086075]/15 via-[#2a8c82]/10 to-transparent p-6 glass-panel">
-        <div className="flex items-center gap-4">
-          <Avatar src={currentUser.avatar} name={currentUser.name} size="xl" />
+      {/* Header Banner with Direct Profile Picture Upload */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border ambizcon-hero-banner p-6 glass-panel">
+        <div className="flex flex-wrap items-center gap-5">
+          {/* Interactive Profile Picture Upload Box */}
+          <div className="relative group">
+            <Avatar
+              src={avatarUrl || currentUser.avatar}
+              name={currentUser.name}
+              userId={currentUser._id}
+              email={currentUser.email}
+              size="xl"
+              className="h-20 w-20 text-2xl ring-4 ring-white/50 dark:ring-zinc-800 shadow-lg"
+            />
+            <label
+              className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/55 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              title="Click to upload your profile picture"
+            >
+              <Camera className="h-5 w-5" />
+              <span className="text-[9px] font-bold mt-0.5">Upload</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+            </label>
+            <label
+              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full ambizcon-gradient text-white shadow-md border-2 border-white dark:border-zinc-900 cursor-pointer hover:scale-110 transition-transform"
+              title="Upload Profile Picture"
+            >
+              <Camera className="h-3.5 w-3.5" />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
+
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold tracking-tight text-foreground">{currentUser.name}</h1>
-              <Badge variant="default" className="text-xs bg-emerald-600 text-white font-bold">
+              <Badge variant="default" className="text-xs ambizcon-gradient text-white font-bold">
                 {currentUser.role}
               </Badge>
               <Badge variant="outline" className="text-xs">
@@ -227,12 +332,38 @@ export default function ProfilePage() {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Personal Employee Profile, Educational Qualifications & Professional Experience
+              Personal Employee Profile, Profile Picture Upload, Educational Qualifications &amp; Experience
             </p>
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl ambizcon-gradient text-white text-xs font-bold shadow-glow cursor-pointer hover:opacity-95 transition-all">
+                <Upload className="h-3.5 w-3.5" />
+                <span>{isUploadingAvatar ? 'Uploading...' : 'Upload Profile Picture'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+              </label>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-500/20 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Remove Photo</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <Badge variant="outline" className="text-xs font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+        <Badge variant="outline" className={`text-xs font-mono ${
+          isAustralia
+            ? 'text-amber-600 dark:text-amber-400 border-amber-500/30'
+            : 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+        }`}>
           ● Verified Ambizcon Roster
         </Badge>
       </div>

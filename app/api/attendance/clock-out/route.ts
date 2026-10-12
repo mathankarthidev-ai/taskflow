@@ -7,15 +7,16 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const userId = body.userId || 'user_anirudh_01';
-    const userName = body.userName || userId;
-    const userTeam = body.userTeam || 'General';
+    const userName = body.userName || body.name || userId;
+    const userTeam = body.userTeam || body.team || 'General';
+    const userEmail = (body.userEmail || body.email || '').toLowerCase().trim();
 
     const nowIso = new Date().toISOString();
     const formattedIst = formatTimeIST(nowIso);
     const formattedAest = formatTimeAEST(nowIso);
 
     // 1. In-memory update
-    let active = attendanceDb.getActiveByUser(userId, userName, body.userEmail);
+    let active = attendanceDb.getActiveByUser(userId, userName, userEmail);
     if (!active) {
       const fallbackIn = new Date(Date.now() - 3600 * 1000).toISOString();
       active = attendanceDb.add({
@@ -64,10 +65,14 @@ export async function POST(req: Request) {
     }
 
     // Clear any working shift residue for this user in memory
-    attendanceDb.clearUserWorking(userId, userName, body.userEmail);
+    attendanceDb.clearUserWorking(userId, userName, userEmail);
 
     // 2. Supabase Cloud update
     try {
+      const orClauses = [`user_id.eq.${userId}`, `user_name.ilike.%${userName}%`];
+      if (userEmail) {
+        orClauses.push(`user_email.eq.${userEmail}`);
+      }
       await supabase
         .from('attendance')
         .update({
@@ -78,7 +83,7 @@ export async function POST(req: Request) {
           worked_hours: workedHoursStr,
           updated_at: nowIso,
         })
-        .or(`user_id.eq.${userId},user_name.ilike.%${userName}%`)
+        .or(orClauses.join(','))
         .eq('status', 'working');
     } catch (dbErr) {
       console.warn('Supabase clock-out exception:', dbErr);

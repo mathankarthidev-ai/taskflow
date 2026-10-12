@@ -49,6 +49,7 @@ import {
   Camera,
   Users,
   HeartPulse,
+  Sparkles,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -68,6 +69,10 @@ import { DynamicQrKioskModal } from '@/components/attendance/DynamicQrKioskModal
 import { QrScannerModal } from '@/components/attendance/QrScannerModal';
 import { supabase } from '@/lib/supabase';
 import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
+import { isUserInCompany } from '@/lib/company-filter';
+import { fetchAllUsersAction } from '@/actions/userActions';
+import { TeamPresenceOverviewPanel } from '@/components/dashboard/TeamPresenceOverviewPanel';
+import { FestivalAndLeaveAdminPanel } from '@/components/attendance/FestivalAndLeaveAdminPanel';
 
 export default function AttendancePage() {
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -82,15 +87,17 @@ export default function AttendancePage() {
   const isAustralia = isSuperAdmin
     ? selectedCompany === 'Ambizcon'
     : currentUser?.company === 'Ambizcon';
+  const activeCompanyScope = isAustralia ? 'Ambizcon' : 'Ambizcon Health - India';
   const isTeamLead = roleLower.includes('lead') || isSuperAdmin;
   const isReception = roleLower.includes('reception');
   const canAccessKiosk = isSuperAdmin || isTeamLead || isReception;
   const [liveAttendanceRecords, setLiveAttendanceRecords] = useState<any[]>([]);
+  const [rosterUsers, setRosterUsers] = useState<any[]>(SEED_USERS);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Sub-Navigation Tab State
-  const [activeTab, setActiveTab] = useState<'today' | 'muster' | 'approvals' | 'permissions' | 'ledger' | 'reports'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'muster' | 'approvals' | 'festivals' | 'permissions' | 'ledger' | 'reports'>('today');
 
   // Daily Present & Hours Bar Chart Toggle State ('both' | 'present' | 'hours')
   const [attendanceBarMode, setAttendanceBarMode] = useState<'both' | 'present' | 'hours'>('both');
@@ -156,8 +163,14 @@ export default function AttendancePage() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const res = await fetchLeaveRequestsAction();
+      const [res, usersList] = await Promise.all([
+        fetchLeaveRequestsAction(),
+        fetchAllUsersAction().catch(() => []),
+      ]);
       setRequests(res);
+      if (usersList && usersList.length > 0) {
+        setRosterUsers(usersList);
+      }
       setLoading(false);
     }
     loadData();
@@ -966,18 +979,26 @@ export default function AttendancePage() {
     );
   }
 
-  // Team Hierarchy Filtering
+  // Team Hierarchy & Company Branch Filtering
   const scopedRequests = requests.filter((req) => {
+    const matchesBranch = isUserInCompany(
+      {
+        userId: req.empId,
+        email: (req as any).empEmail,
+        name: req.empName,
+        company: (req as any).company,
+      },
+      activeCompanyScope
+    );
+    if (!matchesBranch) return false;
+
     if (isSuperAdmin) return true;
     if (currentUser?.role === 'Team Lead') return req.empTeam === currentUser.team;
     return req.empId === currentUser?._id;
   });
 
-  const scopedRegister = SEED_USERS.filter((u) => {
-    const matchesBranch = isAustralia
-      ? u.company === 'Ambizcon' || u.company === 'India & Australia'
-      : u.company === 'Ambizcon Health - India' || u.company === 'India & Australia';
-    if (!matchesBranch) return false;
+  const scopedRegister = rosterUsers.filter((u) => {
+    if (!isUserInCompany(u, activeCompanyScope)) return false;
 
     if (isSuperAdmin) return true;
     if (currentUser?.role === 'Team Lead') return u.team === currentUser.team;
@@ -988,10 +1009,15 @@ export default function AttendancePage() {
   const onTheFloorRecords = liveAttendanceRecords.filter((rec) => {
     if (rec.status !== 'working' || (rec.clock_out && rec.clock_out !== '—')) return false;
 
-    const recBranch = rec.company || 'Ambizcon Health - India';
-    const matchesBranch = isAustralia
-      ? recBranch === 'Ambizcon'
-      : recBranch === 'Ambizcon Health - India';
+    const matchesBranch = isUserInCompany(
+      {
+        userId: rec.user_id,
+        email: rec.user_email,
+        name: rec.user_name,
+        company: rec.company,
+      },
+      activeCompanyScope
+    );
     if (!matchesBranch) return false;
 
     if (isSuperAdmin) return true;
@@ -1004,14 +1030,18 @@ export default function AttendancePage() {
   const displayHistory = (() => {
     if (liveAttendanceRecords && liveAttendanceRecords.length > 0) {
       const scoped = liveAttendanceRecords.filter((rec) => {
-        if (isSuperAdmin) return true;
-
-        const recBranch = rec.company || 'Ambizcon Health - India';
-        const matchesBranch = isAustralia
-          ? recBranch === 'Ambizcon' || recBranch === 'India & Australia'
-          : recBranch === 'Ambizcon Health - India' || recBranch === 'India & Australia';
+        const matchesBranch = isUserInCompany(
+          {
+            userId: rec.user_id,
+            email: rec.user_email,
+            name: rec.user_name,
+            company: rec.company,
+          },
+          activeCompanyScope
+        );
         if (!matchesBranch) return false;
 
+        if (isSuperAdmin) return true;
         if (currentUser?.role === 'Team Lead') return rec.user_team === currentUser.team;
         return (
           rec.user_id === currentUser?._id ||
@@ -1449,7 +1479,7 @@ export default function AttendancePage() {
   return (
     <div className="space-y-6">
       {/* Top Status Bar Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-[#086075]/15 via-[#2a8c82]/10 to-transparent p-5 glass-panel">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border ambizcon-hero-banner p-5 glass-panel">
         <div className="flex items-center gap-4">
           <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shadow-glow border overflow-hidden ${
             isAustralia ? 'bg-white p-1.5 border-amber-500/40' : 'border-emerald-500/30'
@@ -1465,7 +1495,11 @@ export default function AttendancePage() {
               <h1 className="text-xl font-extrabold tracking-tight text-foreground">
                 Ambizcon Pulse — Attendance & Leave {isAustralia ? '(Ambizcon)' : '(Ambizcon Health - India)'}
               </h1>
-              <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">
+              <Badge variant="outline" className={`text-[10px] font-bold ${
+                isAustralia
+                  ? 'text-amber-600 dark:text-amber-400 border-amber-500/30'
+                  : 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+              }`}>
                 {isAustralia ? '10 min grace • Brisbane AEST' : '10 min grace • Chennai IST'}
               </Badge>
               {isReception && (
@@ -1563,31 +1597,36 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {/* Management Sub-Navigation Tabs (Admin & Team Lead) */}
-      {isTeamLead && (
-        <div className="flex items-center gap-2 overflow-x-auto border-b border-zinc-200/80 dark:border-zinc-800/80 pb-2">
-          {[
-            { key: 'today', label: 'TODAY' },
-            { key: 'muster', label: 'COMPANY MUSTER' },
-            { key: 'approvals', label: 'APPROVALS' },
-            { key: 'permissions', label: 'PERMISSIONS' },
-            { key: 'ledger', label: 'LEAVE LEDGER' },
-            { key: 'reports', label: 'REPORTS' },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as any)}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                activeTab === tab.key
-                  ? 'ambizcon-gradient text-white shadow-md'
-                  : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Management & Employee Sub-Navigation Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto border-b border-zinc-200/80 dark:border-zinc-800/80 pb-2">
+        {(isTeamLead
+          ? [
+              { key: 'today', label: 'TODAY' },
+              { key: 'muster', label: 'COMPANY MUSTER' },
+              { key: 'approvals', label: 'APPROVALS' },
+              { key: 'festivals', label: isSuperAdmin ? '🎉 FESTIVAL & LEAVE UPDATE' : '🎉 FESTIVAL LEAVES' },
+              { key: 'permissions', label: 'PERMISSIONS' },
+              { key: 'ledger', label: 'LEAVE LEDGER' },
+              { key: 'reports', label: 'REPORTS' },
+            ]
+          : [
+              { key: 'today', label: 'TODAY' },
+              { key: 'festivals', label: '🎉 COMMON FESTIVAL LEAVES & MY BALANCE' },
+            ]
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as any)}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === tab.key
+                ? 'ambizcon-gradient text-white shadow-md'
+                : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {/* TAB 1: TODAY (Personal Attendance, Clock In/Out, KPI Cards & History) */}
       {activeTab === 'today' && (
@@ -1650,9 +1689,13 @@ export default function AttendancePage() {
           )}
 
           {/* Centered Mobile-Responsive Office Attendance QR Scan Quick Action */}
-          <div className="p-5 sm:p-6 rounded-3xl border-2 border-emerald-500/40 bg-gradient-to-r from-[#086075]/15 via-emerald-500/10 to-[#2a8c82]/15 shadow-glow flex flex-col md:flex-row items-center justify-between gap-5 text-center md:text-left">
+          <div className="p-5 sm:p-6 rounded-3xl border-2 ambizcon-hero-banner shadow-glow flex flex-col md:flex-row items-center justify-between gap-5 text-center md:text-left">
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="h-14 w-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-glow shrink-0">
+              <div className={`h-14 w-14 rounded-2xl flex items-center justify-center shadow-glow shrink-0 border ${
+                isAustralia
+                  ? 'bg-sky-500/20 border-sky-500/40 text-sky-600 dark:text-sky-400'
+                  : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+              }`}>
                 <Camera className="h-7 w-7 animate-pulse" />
               </div>
               <div className="space-y-1">
@@ -1660,7 +1703,11 @@ export default function AttendancePage() {
                   <h2 className="text-base sm:text-lg font-black text-foreground">
                     Office Kiosk Attendance QR Scanner
                   </h2>
-                  <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-bold">
+                  <Badge className={`text-[10px] font-bold border ${
+                    isAustralia
+                      ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                  }`}>
                     ⚡ 1-TAP INSTANT PUNCH
                   </Badge>
                 </div>
@@ -1772,6 +1819,16 @@ export default function AttendancePage() {
                     Apply Leave
                   </Button>
 
+                  <Button
+                    onClick={() => setActiveTab('festivals')}
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold hover:bg-amber-500/20"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {isSuperAdmin ? 'Leave Update & Festival Leaves' : 'Festival Leaves'}
+                  </Button>
+
                   {/* Member Scan Office QR Button */}
                   <Button
                     onClick={() => setIsMemberScannerOpen(true)}
@@ -1795,85 +1852,93 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* WEEKLY & MONTHLY ATTENDANCE SUMMARY WIDGETS (Section 16 & 17 of Prompt) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Weekly Summary Widget */}
-            <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-emerald-500" />
-                    This Week's Attendance Summary
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Daily breakdown of hours worked for current week</p>
-                </div>
-                <Badge variant="outline" className="text-xs font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-                  Mon – Fri
-                </Badge>
-              </div>
+          {/* TEAM PRESENCE OVERVIEW PANEL + WEEKLY & MONTHLY ATTENDANCE SUMMARY WIDGETS */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Column 1: Zoho-Style Team Presence Overview Panel (Strictly Scoped to Their Team Only) */}
+            <div className="lg:col-span-1">
+              <TeamPresenceOverviewPanel />
+            </div>
 
-              <div className="space-y-2 text-xs">
-                {weeklyDayRows.map((d) => (
-                  <div key={d.name} className="flex justify-between items-center py-1.5 border-b border-zinc-100 dark:border-zinc-800/50">
-                    <span className={`font-semibold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground'}`}>
-                      {d.name} {d.isToday ? '(Today)' : ''}
-                    </span>
-                    <span className={`font-mono font-bold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
-                      {d.formattedStr}
+            {/* Columns 2 & 3: Weekly & Monthly Attendance Summary */}
+            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Weekly Summary Widget */}
+              <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+                <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4 text-emerald-500" />
+                      This Week's Attendance Summary
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Daily breakdown of hours worked for current week</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                    Mon – Fri
+                  </Badge>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  {weeklyDayRows.map((d) => (
+                    <div key={d.name} className="flex justify-between items-center py-1.5 border-b border-zinc-100 dark:border-zinc-800/50">
+                      <span className={`font-semibold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground'}`}>
+                        {d.name} {d.isToday ? '(Today)' : ''}
+                      </span>
+                      <span className={`font-mono font-bold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
+                        {d.formattedStr}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center pt-2 font-bold text-sm text-foreground">
+                    <span>Total Weekly Hours:</span>
+                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-extrabold">
+                      {formattedTotalWeekly}
                     </span>
                   </div>
-                ))}
-                <div className="flex justify-between items-center pt-2 font-bold text-sm text-foreground">
-                  <span>Total Weekly Hours:</span>
-                  <span className="font-mono text-emerald-600 dark:text-emerald-400 font-extrabold">
-                    {formattedTotalWeekly}
-                  </span>
                 </div>
-              </div>
-            </Card>
+              </Card>
 
-            {/* Monthly Summary Widget */}
-            <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4 text-emerald-500" />
-                    Monthly Attendance Summary
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Aggregated metrics for current month (October 2026)</p>
+              {/* Monthly Summary Widget */}
+              <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+                <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-emerald-500" />
+                      Monthly Attendance Summary
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Aggregated metrics for current month (October 2026)</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs font-mono">
+                    Monthly Stats
+                  </Badge>
                 </div>
-                <Badge variant="outline" className="text-xs font-mono">
-                  Monthly Stats
-                </Badge>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4 py-2">
-                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Days Worked</span>
-                  <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
-                    {monthlyWorkedDays} Days
-                  </span>
+                <div className="grid grid-cols-2 gap-4 py-2">
+                  <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Days Worked</span>
+                    <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
+                      {monthlyWorkedDays} Days
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Total Worked Hours</span>
+                    <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
+                      {monthlyTotalHoursStr}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Average / Day</span>
+                    <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
+                      {monthlyAvgDayStr}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Completed Shifts</span>
+                    <span className="text-2xl font-extrabold text-brand-500 font-mono mt-1 block">
+                      {monthlyShiftsCount} Shifts
+                    </span>
+                  </div>
                 </div>
-                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Total Worked Hours</span>
-                  <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
-                    {monthlyTotalHoursStr}
-                  </span>
-                </div>
-                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Average / Day</span>
-                  <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
-                    {monthlyAvgDayStr}
-                  </span>
-                </div>
-                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Completed Shifts</span>
-                  <span className="text-2xl font-extrabold text-brand-500 font-mono mt-1 block">
-                    {monthlyShiftsCount} Shifts
-                  </span>
-                </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
           </div>
 
           {/* DAILY PRESENT & HOURS BAR CHART ANALYTICS CARD */}
@@ -2972,14 +3037,25 @@ export default function AttendancePage() {
                           </div>
                         )}
 
-                        {isSuperAdmin && isPendingCEO && (
+                        {isSuperAdmin && req.ceo !== 'approved' && (
                           <div className="flex items-center gap-1">
-                            <Button onClick={() => handleApproveCEO(req.id)} size="sm" className="ambizcon-gradient text-white text-xs py-1 shadow-glow">
-                              Grant Leave (CEO)
+                            <Button
+                              onClick={async () => {
+                                if (req.tl !== 'approved') {
+                                  await handleApproveTL(req.id);
+                                }
+                                await handleApproveCEO(req.id);
+                              }}
+                              size="sm"
+                              className="ambizcon-gradient text-white text-xs py-1 shadow-glow"
+                            >
+                              Grant Leave (Admin/CEO)
                             </Button>
-                            <Button onClick={() => handleReject(req.id, 'ceo')} size="sm" variant="ghost" className="text-rose-500 text-xs py-1">
-                              Reject
-                            </Button>
+                            {req.ceo !== 'rejected' && (
+                              <Button onClick={() => handleReject(req.id, 'ceo')} size="sm" variant="ghost" className="text-rose-500 text-xs py-1">
+                                Reject
+                              </Button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2990,6 +3066,16 @@ export default function AttendancePage() {
             )}
           </Card>
         </div>
+      )}
+
+      {/* TAB 3B: FESTIVAL LEAVES & ADMIN LEAVE UPDATE CONSOLE */}
+      {activeTab === 'festivals' && (
+        <FestivalAndLeaveAdminPanel
+          usersList={rosterUsers}
+          onLeaveCreatedOrUpdated={() => {
+            fetchLeaveRequestsAction().then(setRequests);
+          }}
+        />
       )}
 
       {/* TAB 4: PERMISSIONS — Total List of Each Employee Requested & Taken Permission */}
@@ -3161,13 +3247,23 @@ export default function AttendancePage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 p-3 rounded-2xl border border-amber-500/30 bg-card/80">
-                  <Avatar name="Thanikaivel" size="md" />
-                  <div>
-                    <span className="font-bold text-xs text-foreground block">Thanikaivel M.</span>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">100% Attendance • 0 Leaves</span>
+                {isAustralia ? (
+                  <div className="flex items-center gap-3 p-3 rounded-2xl border border-amber-500/30 bg-card/80">
+                    <Avatar name="Adriana Ruju" size="md" />
+                    <div>
+                      <span className="font-bold text-xs text-foreground block">Adriana Ruju</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">100% Attendance • 0 Leaves</span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-3 p-3 rounded-2xl border border-amber-500/30 bg-card/80">
+                    <Avatar name="Thanikaivel" size="md" />
+                    <div>
+                      <span className="font-bold text-xs text-foreground block">Thanikaivel M.</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">100% Attendance • 0 Leaves</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -3213,19 +3309,25 @@ export default function AttendancePage() {
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
               <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground block">Overall Attendance %</span>
-                <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">98.2%</span>
+                <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
+                  {isAustralia ? '99.4%' : '98.2%'}
+                </span>
                 <span className="text-[10px] text-muted-foreground">{reportsTimeRange}</span>
               </div>
 
               <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground block">Total Hours Logged</span>
-                <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">2,840 hrs</span>
-                <span className="text-[10px] text-muted-foreground">Across all roster members</span>
+                <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
+                  {isAustralia ? '540 hrs' : '2,840 hrs'}
+                </span>
+                <span className="text-[10px] text-muted-foreground">Across {scopedRegister.length} branch members</span>
               </div>
 
               <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground block">Overtime Pay Disbursed</span>
-                <span className="text-2xl font-extrabold text-purple-600 dark:text-purple-400 font-mono mt-1 block">+$1,450</span>
+                <span className="text-2xl font-extrabold text-purple-600 dark:text-purple-400 font-mono mt-1 block">
+                  {isAustralia ? '+A$420' : '+$1,450'}
+                </span>
                 <span className="text-[10px] text-muted-foreground">Total overtime compensation</span>
               </div>
 
@@ -3301,42 +3403,32 @@ export default function AttendancePage() {
               <div className="flex items-center gap-2 mb-3">
                 <Star className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 <h4 className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                  ⭐ Zero Leave Taken Honor Roll (From Joining till Date)
+                  ⭐ Zero Leave Taken Honor Roll ({isAustralia ? 'Ambizcon — Australia' : 'Ambizcon Health — India'})
                 </h4>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-zinc-200 dark:border-zinc-800">
-                  <Avatar name="Anirudh" size="sm" />
-                  <div>
-                    <span className="font-bold text-foreground block">Anirudh K.</span>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">0 Leaves Taken • 100% Rate</span>
+                {(isAustralia
+                  ? [
+                      { name: 'Anirudh K.', avatar: 'Anirudh', rate: '0 Leaves Taken • 100% Rate' },
+                      { name: 'Mathan P.', avatar: 'Mathan P', rate: '0 Leaves Taken • 100% Rate' },
+                      { name: 'Adriana Ruju', avatar: 'Adriana Ruju', rate: '0 Leaves Taken • 100% Rate' },
+                    ]
+                  : [
+                      { name: 'Anirudh K.', avatar: 'Anirudh', rate: '0 Leaves Taken • 100% Rate' },
+                      { name: 'Thanikaivel M.', avatar: 'Thanikaivel', rate: '0 Leaves Taken • 100% Rate' },
+                      { name: 'Kasthuri S.', avatar: 'Kasthuri', rate: '0 Leaves Taken • 100% Rate' },
+                      { name: 'Naraine V.', avatar: 'Naraine', rate: '0 Leaves Taken • 99.2% Rate' },
+                    ]
+                ).map((winner) => (
+                  <div key={winner.name} className="flex items-center gap-3 p-3 rounded-xl bg-card border border-zinc-200 dark:border-zinc-800">
+                    <Avatar name={winner.avatar} size="sm" />
+                    <div>
+                      <span className="font-bold text-foreground block">{winner.name}</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">{winner.rate}</span>
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-zinc-200 dark:border-zinc-800">
-                  <Avatar name="Thanikaivel" size="sm" />
-                  <div>
-                    <span className="font-bold text-foreground block">Thanikaivel M.</span>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">0 Leaves Taken • 100% Rate</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-zinc-200 dark:border-zinc-800">
-                  <Avatar name="Kasthuri" size="sm" />
-                  <div>
-                    <span className="font-bold text-foreground block">Kasthuri S.</span>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">0 Leaves Taken • 100% Rate</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-zinc-200 dark:border-zinc-800">
-                  <Avatar name="Naraine" size="sm" />
-                  <div>
-                    <span className="font-bold text-foreground block">Naraine V.</span>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">0 Leaves Taken • 99.2% Rate</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
