@@ -100,7 +100,22 @@ export async function fetchSelfReminders(
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      const mapped: SelfReminder[] = data.map((row: any) => ({
+      const DEMO_TITLES = [
+        'daily morning standup & priority review',
+        'weekly progress & timesheet check'
+      ];
+
+      const demoIds = data
+        .filter((row: any) => DEMO_TITLES.includes(String(row.title || '').trim().toLowerCase()))
+        .map((r: any) => r.id);
+
+      if (demoIds.length > 0) {
+        supabase.from('self_reminders').delete().in('id', demoIds).then(() => {});
+      }
+
+      const nonDemoRows = data.filter((row: any) => !demoIds.includes(row.id));
+
+      const mapped: SelfReminder[] = nonDemoRows.map((row: any) => ({
         id: row.id,
         user_id: row.user_id || userId,
         user_email: row.user_email || emailLower,
@@ -152,6 +167,18 @@ export function getCachedActiveSelfReminderCount(userEmail?: string): number {
 export async function createSelfReminder(
   payload: Omit<SelfReminder, 'id' | 'created_at'>
 ): Promise<SelfReminder> {
+  const DEMO_TITLES = [
+    'daily morning standup & priority review',
+    'weekly progress & timesheet check'
+  ];
+  if (DEMO_TITLES.includes(String(payload.title || '').trim().toLowerCase())) {
+    return {
+      ...payload,
+      id: `SR-blocked-${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+  }
+
   const emailLower = payload.user_email.toLowerCase();
   const storageKey = `${STORAGE_PREFIX}${emailLower}`;
   const newItem: SelfReminder = {
