@@ -67,12 +67,13 @@ const DEFAULT_CATEGORIES = [
   'Medical',
 ];
 
-const CLAIMS_STORAGE_KEY = 'ambizcon_reimbursement_claims_v2';
+const CLAIMS_STORAGE_KEY = 'ambizcon_reimbursement_claims_v3';
 
 function purgeLegacyClaims() {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem('ambizcon_reimbursement_claims_v1');
+    localStorage.removeItem('ambizcon_reimbursement_claims_v2');
   } catch (_) {}
 }
 
@@ -456,7 +457,7 @@ export default function ReimbursementsPage() {
         items.length > 1
           ? `${items[0].description} (+${items.length - 1} more items)`
           : items[0].description;
-      const primaryReceipt = items[0].receiptName.trim() || 'expense_receipt.pdf';
+      const primaryReceipt = items[0].receiptName.trim() || '';
 
       const formattedItems: ExpenseItem[] = items.map((it, idx) => {
         const catName =
@@ -470,7 +471,7 @@ export default function ReimbursementsPage() {
           amount: Number(it.amount) || 0,
           date: it.date,
           description: it.description,
-          receiptName: it.receiptName.trim() || 'expense_receipt.pdf',
+          receiptName: it.receiptName.trim() || '',
           receiptUrl: it.receiptUrl || '',
         };
       });
@@ -1927,46 +1928,52 @@ export default function ReimbursementsPage() {
                               ₹{it.amount.toLocaleString('en-IN')}
                             </span>
                             <span className="text-[10px] text-zinc-500 font-mono block">
-                              📄 {it.receiptName || 'demo.jpg'}
+                              {receiptSrc ? `📄 ${it.receiptName || 'Receipt file'}` : 'No receipt attached'}
                             </span>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (isExpanded) {
-                                setExpandedReceiptIdx(null);
-                                setImageZoom(1);
-                                setImageRotation(0);
-                              } else {
-                                setExpandedReceiptIdx(idx);
-                                setImageZoom(1);
-                                setImageRotation(0);
-                              }
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                              isExpanded
-                                ? 'bg-brand-500 text-white border-brand-500 shadow-sm'
-                                : 'bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/20 hover:bg-brand-500/20'
-                            }`}
-                          >
-                            {isExpanded ? (
-                              <>
-                                <ChevronUp className="h-3.5 w-3.5" />
-                                <span>Collapse Receipt</span>
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="h-3.5 w-3.5" />
-                                <span>Expand Receipt</span>
-                              </>
-                            )}
-                          </button>
+                          {receiptSrc ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isExpanded) {
+                                  setExpandedReceiptIdx(null);
+                                  setImageZoom(1);
+                                  setImageRotation(0);
+                                } else {
+                                  setExpandedReceiptIdx(idx);
+                                  setImageZoom(1);
+                                  setImageRotation(0);
+                                }
+                              }}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                                isExpanded
+                                  ? 'bg-brand-500 text-white border-brand-500 shadow-sm'
+                                  : 'bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/20 hover:bg-brand-500/20'
+                              }`}
+                            >
+                              {isExpanded ? (
+                                <>
+                                  <ChevronUp className="h-3.5 w-3.5" />
+                                  <span>Collapse Receipt</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="h-3.5 w-3.5" />
+                                  <span>View Receipt</span>
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-[11px] text-zinc-400 font-medium">
+                              No Receipt Attached
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       {/* Expanded Receipt Viewer: Inline, with Zoom In/Out, Reset, Rotate */}
-                      {isExpanded && (
+                      {isExpanded && receiptSrc && (
                         <div className="mt-3 pt-3 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-2.5 animate-in fade-in duration-200">
                           {/* Zoom & Inspection Toolbar */}
                           <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-100/90 dark:bg-zinc-900/90 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -1976,7 +1983,7 @@ export default function ReimbursementsPage() {
                                 Receipt Document:
                               </span>
                               <span className="text-xs text-brand-600 dark:text-brand-400 font-mono truncate max-w-[160px]">
-                                {it.receiptName || 'demo.jpg'}
+                                {it.receiptName || 'Receipt file'}
                               </span>
                               <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-background border border-zinc-200 dark:border-zinc-800 text-muted-foreground">
                                 Zoom: {Math.round(imageZoom * 100)}%

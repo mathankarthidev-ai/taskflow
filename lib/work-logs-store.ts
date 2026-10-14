@@ -23,7 +23,21 @@ export interface WorkLogItem {
   created_at?: string;
 }
 
-const STORAGE_KEY_PREFIX = 'ambizcon_work_logs_';
+const STORAGE_KEY_PREFIX = 'ambizcon_work_logs_v2_';
+
+function purgeLegacyWorkLogs() {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('ambizcon_work_logs_') && !k.startsWith('ambizcon_work_logs_v2_')) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (_) {}
+}
 const COLOR_ROTATION: WorkBlockColor[] = ['blue', 'green', 'orange', 'purple', 'teal'];
 
 export function parseTimeToMinutes(timeStr: string): number {
@@ -74,6 +88,7 @@ function toDbWorkLogRow(item: WorkLogItem) {
 }
 
 export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogItem[]> {
+  purgeLegacyWorkLogs();
   const storageKey = `${STORAGE_KEY_PREFIX}${workDate}`;
 
   try {

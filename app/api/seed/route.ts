@@ -171,7 +171,7 @@ export async function DELETE() {
 
   // 2. Wipe Supabase dynamic tables
   try {
-    await supabase.from('tasks').update({ reminder_settings: null }).neq('id', '___none___');
+    await supabase.from('tasks').delete().neq('id', '___none___');
     await supabase.from('reimbursements').delete().neq('id', '___none___');
     await supabase.from('chat_messages').delete().neq('id', '___none___');
     await supabase.from('self_reminders').delete().neq('id', '___none___');
