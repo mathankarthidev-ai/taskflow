@@ -349,7 +349,7 @@ export function TaskCreateModal() {
     <Modal
       isOpen={isCreateModalOpen}
       onClose={() => setCreateModalOpen(false)}
-      title="Create New Task"
+      title="Create Task"
       description="Add a task to your team board or raise a cross-team request."
       maxWidth="xl"
     >
@@ -391,18 +391,58 @@ export function TaskCreateModal() {
                   </optgroup>
                 )}
 
-                <optgroup label="── 🔄 Repetitive Creative & Marketing Tasks ──">
-                  {SEED_TASK_TYPES.filter((t) => !t.id.startsWith('tt_wp') && !t.id.startsWith('tt_speed')).map((tmpl) => (
+                <optgroup label="── 📝 Marketing, Content & SEO Tasks ──">
+                  {SEED_TASK_TYPES.filter((t) =>
+                    [
+                      'tt_blogs_drafting',
+                      'tt_content_creation',
+                      'tt_mailer',
+                      'tt_seo_keywords',
+                      'tt_website_content_drafting',
+                      'tt_blog',
+                      'tt_seo_revamp',
+                      'tt_seo_audit',
+                      'tt_google_ads',
+                      'tt_monthly_social_planning',
+                      'tt_awareness_day_content',
+                    ].includes(t.id)
+                  ).map((tmpl) => (
                     <option key={tmpl.id} value={tmpl.id}>
                       📌 {tmpl.name} ({tmpl.category} · {tmpl.defaultEstimatedHours}h · {tmpl.defaultChecklist.length} checklist items)
                     </option>
                   ))}
                 </optgroup>
 
-                <optgroup label="── 💻 Development & Technical Tasks ──">
-                  {SEED_TASK_TYPES.filter((t) => t.id.startsWith('tt_wp') || t.id.startsWith('tt_speed')).map((tmpl) => (
+                <optgroup label="── 💻 Development, Website & Logs Tasks ──">
+                  {SEED_TASK_TYPES.filter((t) =>
+                    [
+                      'tt_daily_user_log',
+                      'tt_page_creation',
+                      'tt_monthly_tasks_page_speed',
+                      'tt_website_task_backup',
+                      'tt_wp_build',
+                      'tt_wp_maintenance',
+                      'tt_speed_opt',
+                    ].includes(t.id)
+                  ).map((tmpl) => (
                     <option key={tmpl.id} value={tmpl.id}>
                       🛠️ {tmpl.name} ({tmpl.category} · {tmpl.defaultEstimatedHours}h · {tmpl.defaultChecklist.length} checklist items)
+                    </option>
+                  ))}
+                </optgroup>
+
+                <optgroup label="── 🎨 Creative & Media Design Tasks ──">
+                  {SEED_TASK_TYPES.filter((t) =>
+                    [
+                      'tt_weekly_social_media',
+                      'tt_video_production_editing',
+                      'tt_meta_ads_creatives',
+                      'tt_client_design_collateral',
+                      'tt_client_revisions_delivery',
+                    ].includes(t.id)
+                  ).map((tmpl) => (
+                    <option key={tmpl.id} value={tmpl.id}>
+                      🎨 {tmpl.name} ({tmpl.category} · {tmpl.defaultEstimatedHours}h · {tmpl.defaultChecklist.length} checklist items)
                     </option>
                   ))}
                 </optgroup>

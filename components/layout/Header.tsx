@@ -949,7 +949,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             className="hidden sm:inline-flex gap-1.5 ambizcon-gradient text-white shadow-glow"
           >
             <Plus className="h-4 w-4" />
-            <span>New Task</span>
+            <span>Create Task</span>
           </Button>
         )}
 

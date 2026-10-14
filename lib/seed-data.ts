@@ -297,6 +297,150 @@ export const SEED_GP_INTELLIGENCE: GPIntelligence = {
 };
 
 export const SEED_TASK_TYPES: TaskTypeTemplate[] = [
+  // --- New Quick Start Team Repetitive Tasks ---
+  {
+    id: 'tt_blogs_drafting',
+    name: 'Blogs drafting',
+    category: 'Marketing',
+    description: 'Blog drafting with title & meta descriptions, internal/external links, and CTA/author assignment.',
+    defaultEstimatedHours: 4,
+    defaultChecklist: [
+      'Title & Meta Decriptions',
+      'Hyperlinking of internal & external links',
+      'CTA/Author',
+    ],
+  },
+  {
+    id: 'tt_content_creation',
+    name: 'Content Creation',
+    category: 'Creative / Marketing',
+    description: 'Content creation according to brief and upload to SPOT/Calendar.',
+    defaultEstimatedHours: 4,
+    defaultChecklist: [
+      'Content creation accordingly',
+      'Get it uploaded on SPOT/Calendar',
+    ],
+  },
+  {
+    id: 'tt_mailer',
+    name: 'Mailer',
+    category: 'Marketing',
+    description: 'Creation of mailer, sending test mailer for preview and approval, and scheduling on correct time & date.',
+    defaultEstimatedHours: 3,
+    defaultChecklist: [
+      'Creation of mailer',
+      'Send out test mailer for preview & approval',
+      'Schedule it on correct time & date',
+    ],
+  },
+  {
+    id: 'tt_seo_keywords',
+    name: 'SEO & Keywords',
+    category: 'Marketing',
+    description: 'Finding out keyphrases, implementing on metadata, and proper documentation.',
+    defaultEstimatedHours: 4,
+    defaultChecklist: [
+      'Finding out the keyphrase',
+      'Making use of it on metadata\'s',
+      'Documentation',
+    ],
+  },
+  {
+    id: 'tt_website_content_drafting',
+    name: 'Website Content Creation & Drafting',
+    category: 'Marketing / Creative',
+    description: 'Discussion with Dev team on theme and needed, drafting each page with proper documentation, review approval, and sharing to dev team.',
+    defaultEstimatedHours: 8,
+    defaultChecklist: [
+      'Getting of details & Discussion with Dev team on theme and needed',
+      'Drafting each page accordingly and proper documentation of content on doc',
+      'Sent out for review and getting approval',
+      'Sharing to dev team member',
+    ],
+  },
+  {
+    id: 'tt_daily_user_log',
+    name: 'Daily & User Log',
+    category: 'Development / Operations',
+    description: 'User log audit, daily work log review, website performance check, and plugin update routine.',
+    defaultEstimatedHours: 2,
+    defaultChecklist: [
+      'user log',
+      'daily log',
+      'website performance',
+      'plugin update',
+    ],
+  },
+  {
+    id: 'tt_blog',
+    name: 'Blog',
+    category: 'Marketing',
+    description: 'Regular blog post creation, visual media formatting, and client review.',
+    defaultEstimatedHours: 4,
+    defaultChecklist: [
+      'Draft blog post content & structure',
+      'Design banner & embedded illustrations',
+      'Internal quality & plagiarism check',
+      'Client review and live publishing',
+    ],
+  },
+  {
+    id: 'tt_page_creation',
+    name: 'Page Creation',
+    category: 'Development / Creative',
+    description: 'New website page creation, layout build, content styling, and mobile responsiveness.',
+    defaultEstimatedHours: 6,
+    defaultChecklist: [
+      'Page wireframe & layout structure review',
+      'Build responsive page layout with blocks / Elementor',
+      'Embed approved content & graphics',
+      'Mobile responsiveness & cross-device QA',
+      'Publish page and configure navigation link',
+    ],
+  },
+  {
+    id: 'tt_monthly_tasks_page_speed',
+    name: 'Monthly Tasks Page Speed',
+    category: 'Development',
+    description: 'Monthly website speed tuning, caching, asset optimization, and Core Web Vitals audit.',
+    defaultEstimatedHours: 4,
+    defaultChecklist: [
+      'Page speed & Core Web Vitals check',
+      'Image compression & WebP conversion',
+      'Cache clearing & CDN performance check',
+      'Database cleanup & transients purge',
+      'Mobile loading speed verification',
+    ],
+  },
+  {
+    id: 'tt_website_task_backup',
+    name: 'Website Task Backup',
+    category: 'Development',
+    description: 'Full website files and database backup routine with cloud storage sync verification.',
+    defaultEstimatedHours: 2,
+    defaultChecklist: [
+      'Full database & WP files backup',
+      'Verify backup integrity and cloud storage upload',
+      'Security vulnerability & malware scan',
+      'Cache flush & live site verification',
+    ],
+  },
+  {
+    id: 'tt_seo_revamp',
+    name: 'SEO Revamp',
+    category: 'Marketing',
+    description: 'Comprehensive SEO revamp, keyword repositioning, metadata overhaul, and sitemap resubmission.',
+    defaultEstimatedHours: 8,
+    defaultChecklist: [
+      'Comprehensive on-page SEO review',
+      'Meta titles, descriptions, and H1/H2 revamp',
+      'Keyword ranking & search impression audit',
+      'Internal linking & anchor text optimization',
+      'Google Search Console crawl error audit & sitemap resubmission',
+    ],
+  },
+
+  // --- Existing Team Repetitive Templates ---
   {
     id: 'tt_weekly_social_media',
     name: 'Weekly Social Media Content',

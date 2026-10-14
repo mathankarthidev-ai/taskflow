@@ -21,7 +21,7 @@ export function KeyboardShortcutsModal() {
 
   const shortcuts = [
     { key: '⌘ K / Ctrl K', description: 'Open Global Search Command Palette' },
-    { key: 'N', description: 'Open New Task Modal' },
+    { key: 'N', description: 'Open Create Task Modal' },
     { key: '?', description: 'Toggle Keyboard Shortcuts Helper' },
     { key: 'Esc', description: 'Close any active Modal or Overlay' },
   ];
