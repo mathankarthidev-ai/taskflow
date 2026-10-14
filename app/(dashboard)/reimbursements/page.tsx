@@ -12,6 +12,7 @@ import {
   markClaimPaidAction,
   rejectClaimAction,
   addClaimCommentAction,
+  updateReimbursementAction,
 } from '@/actions/reimbursementActions';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -209,8 +210,60 @@ export default function ReimbursementsPage() {
   const [exportCategoryFilter, setExportCategoryFilter] = useState<string>('All');
   const [exportIncludeSummary, setExportIncludeSummary] = useState<boolean>(true);
 
-  // Submit Claim Modal & Multi-Item Expense Form
+  // Submit & Edit Claim Modal
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [editingClaim, setEditingClaim] = useState<ReimbursementClaim | null>(null);
+
+  const handleOpenCreateModal = () => {
+    setEditingClaim(null);
+    setItems([
+      {
+        category: categoriesList[0] || 'Client Lunch',
+        customCategoryName: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        description: '',
+        receiptName: '',
+        receiptUrl: '',
+      },
+    ]);
+    setIsSubmitModalOpen(true);
+  };
+
+  const handleOpenEditModal = (claim: ReimbursementClaim) => {
+    const isApprovedOrPaid =
+      claim.status === 'Approved' || claim.status === 'Paid' || claim.adminStatus === 'approved';
+    if (isApprovedOrPaid) {
+      toast.error('Approved claims cannot be edited.');
+      return;
+    }
+
+    setEditingClaim(claim);
+    const claimItems =
+      Array.isArray(claim.items) && claim.items.length > 0
+        ? claim.items.map((it) => ({
+            category: it.category || 'Client Lunch',
+            customCategoryName: '',
+            amount: String(it.amount || ''),
+            date: it.date || new Date().toISOString().split('T')[0],
+            description: it.description || '',
+            receiptName: it.receiptName || '',
+            receiptUrl: it.receiptUrl || '',
+          }))
+        : [
+            {
+              category: claim.category || 'Client Lunch',
+              customCategoryName: '',
+              amount: String(claim.amount || ''),
+              date: claim.date || new Date().toISOString().split('T')[0],
+              description: claim.description || '',
+              receiptName: claim.receiptName || '',
+              receiptUrl: claim.receiptUrl || '',
+            },
+          ];
+    setItems(claimItems);
+    setIsSubmitModalOpen(true);
+  };
   const [items, setItems] = useState<
     {
       category: string;
@@ -475,6 +528,58 @@ export default function ReimbursementsPage() {
           receiptUrl: it.receiptUrl || '',
         };
       });
+
+      if (editingClaim) {
+        // Edit Mode: update existing claim before approval
+        const editPayload = {
+          claimId: editingClaim._id,
+          category: firstCategory,
+          amount: totalCalculatedAmount,
+          date: items[0].date,
+          description: primaryDesc,
+          receiptName: primaryReceipt,
+          receiptUrl: items[0].receiptUrl || '',
+          items: formattedItems,
+        };
+
+        let updated: ReimbursementClaim | null = null;
+        try {
+          const res = await fetch('/api/reimbursements/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editPayload),
+          });
+          if (res.ok) {
+            const resJson = await res.json();
+            if (resJson && resJson.claim) {
+              updated = resJson.claim;
+            }
+          }
+        } catch (apiErr) {
+          console.warn('API update failed, attempting Server Action fallback:', apiErr);
+        }
+
+        if (!updated) {
+          updated = await updateReimbursementAction(editingClaim._id, editPayload);
+        }
+
+        if (!updated) {
+          throw new Error('Unable to update claim record');
+        }
+
+        const nextClaims = claims.map((c) => (c._id === editingClaim._id ? { ...c, ...updated } : c));
+        setClaims(nextClaims);
+        saveClaimsToStorage(nextClaims);
+
+        if (selectedClaimDetail?._id === editingClaim._id) {
+          setSelectedClaimDetail({ ...selectedClaimDetail, ...updated });
+        }
+
+        toast.success(`Claim ${editingClaim.claimNo} updated successfully!`);
+        setIsSubmitModalOpen(false);
+        setEditingClaim(null);
+        return;
+      }
 
       const submissionPayload = {
         userId: currentUser._id,
@@ -990,7 +1095,7 @@ export default function ReimbursementsPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={() => setIsSubmitModalOpen(true)} className="gap-2 ambizcon-gradient text-white shadow-glow">
+          <Button onClick={handleOpenCreateModal} className="gap-2 ambizcon-gradient text-white shadow-glow">
             <Plus className="h-4 w-4" />
             Submit Expense Claim
           </Button>
@@ -1423,6 +1528,27 @@ export default function ReimbursementsPage() {
                         <Eye className="h-3.5 w-3.5" />
                         Inspect Claim & Receipts
                       </button>
+
+                      {(() => {
+                        const isApprovedOrPaid =
+                          claim.status === 'Approved' ||
+                          claim.adminStatus === 'approved' ||
+                          claim.isPaid ||
+                          claim.status === 'Paid';
+                        const canEditClaim =
+                          !isApprovedOrPaid && (isSuperAdmin || claim.userId === currentUser._id);
+                        if (!canEditClaim) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(claim)}
+                            className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-bold border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 rounded-xl hover:bg-blue-500/20 transition-all"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                            Edit Claim
+                          </button>
+                        );
+                      })()}
                     </div>
 
                     {/* Workflow Status Badge (Single Admin Approval) */}
@@ -1548,9 +1674,16 @@ export default function ReimbursementsPage() {
       {/* Multi-Item Create Claim Modal with > ₹200 Document Validation & Custom Categories */}
       <Modal
         isOpen={isSubmitModalOpen}
-        onClose={() => setIsSubmitModalOpen(false)}
-        title="Submit Reimbursement Claim"
-        description="Add line items. For any expense item above ₹200, attaching a document/receipt is mandatory."
+        onClose={() => {
+          setIsSubmitModalOpen(false);
+          setEditingClaim(null);
+        }}
+        title={editingClaim ? `Edit Claim (${editingClaim.claimNo})` : "Submit Reimbursement Claim"}
+        description={
+          editingClaim
+            ? "Update expense items, amounts, or receipts before approval."
+            : "Add line items. For any expense item above ₹200, attaching a document/receipt is mandatory."
+        }
         maxWidth="2xl"
       >
         <form className="space-y-4 pt-2">
@@ -1703,7 +1836,7 @@ export default function ReimbursementsPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <Button type="button" variant="outline" onClick={() => setIsSubmitModalOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => { setIsSubmitModalOpen(false); setEditingClaim(null); }}>
               Cancel
             </Button>
             <Button
@@ -1760,6 +1893,33 @@ export default function ReimbursementsPage() {
               </div>
 
               <div className="flex items-center gap-4">
+                {(() => {
+                  const isApprovedOrPaid =
+                    selectedClaimDetail.status === 'Approved' ||
+                    selectedClaimDetail.adminStatus === 'approved' ||
+                    selectedClaimDetail.isPaid ||
+                    selectedClaimDetail.status === 'Paid';
+                  const canEditClaim =
+                    !isApprovedOrPaid &&
+                    (isSuperAdmin || selectedClaimDetail.userId === currentUser._id);
+                  if (!canEditClaim) return null;
+                  return (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const toEdit = selectedClaimDetail;
+                        setSelectedClaimDetail(null);
+                        handleOpenEditModal(toEdit);
+                      }}
+                      className="gap-1.5 text-xs border-blue-500/40 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                      Edit Claim
+                    </Button>
+                  );
+                })()}
+
                 <div className="flex items-center gap-2">
                   {selectedClaimDetail.status === 'Approved' ||
                   selectedClaimDetail.adminStatus === 'approved' ||

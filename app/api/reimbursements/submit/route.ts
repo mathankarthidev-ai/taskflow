@@ -64,6 +64,68 @@ export async function POST(req: Request) {
   try {
     const input = await req.json();
 
+    // 1. Check if this is an EDIT of an existing claim before approval
+    const editClaimId = input.claimId || input.id;
+    if (editClaimId) {
+      const claimId = String(editClaimId);
+      const { data: existing } = await supabase
+        .from('reimbursements')
+        .select('*')
+        .eq('id', claimId)
+        .single();
+
+      if (existing) {
+        if (
+          existing.status === 'Approved' ||
+          existing.status === 'Paid' ||
+          existing.admin_status === 'approved'
+        ) {
+          return NextResponse.json(
+            { success: false, error: 'Approved claims cannot be edited.' },
+            { status: 400 }
+          );
+        }
+
+        const calculatedTotal =
+          input.items && input.items.length > 0
+            ? input.items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0)
+            : Number(input.amount || existing.amount || 0);
+
+        const primaryReceiptName =
+          input.receiptName !== undefined
+            ? input.receiptName
+            : input.items?.[0]?.receiptName || '';
+        const primaryReceiptUrl =
+          input.receiptUrl !== undefined
+            ? input.receiptUrl
+            : input.items?.[0]?.receiptUrl || '';
+
+        const updatedFields = {
+          category: input.category || existing.category,
+          amount: calculatedTotal,
+          date: input.date || existing.date,
+          description: input.description !== undefined ? input.description : existing.description,
+          receipt_name: primaryReceiptName || null,
+          receipt_url: primaryReceiptUrl || null,
+          items: input.items || existing.items || [],
+        };
+
+        const { data: updated, error: updateErr } = await supabase
+          .from('reimbursements')
+          .update(updatedFields)
+          .eq('id', claimId)
+          .select('*')
+          .single();
+
+        if (!updateErr && updated) {
+          const mapped = mapRowToClaim(updated);
+          revalidatePath('/reimbursements');
+          return NextResponse.json({ success: true, claim: mapped });
+        }
+      }
+    }
+
+    // 2. New Claim Submission
     const claimNo = `CLM-${Math.floor(8045 + Math.random() * 900)}`;
     const isDraft = Boolean(input.isDraft);
     const calculatedTotal =
@@ -72,10 +134,8 @@ export async function POST(req: Request) {
         : Number(input.amount || 0);
     const nowIso = new Date().toISOString();
 
-    const primaryReceiptName =
-      input.receiptName || input.items?.[0]?.receiptName || 'receipt_document.pdf';
-    const primaryReceiptUrl =
-      input.receiptUrl || input.items?.[0]?.receiptUrl || '';
+    const primaryReceiptName = input.receiptName || input.items?.[0]?.receiptName || '';
+    const primaryReceiptUrl = input.receiptUrl || input.items?.[0]?.receiptUrl || '';
 
     const newClaim: ReimbursementClaim = {
       _id: `claim_${Date.now()}`,

@@ -420,3 +420,99 @@ export async function addClaimCommentAction(
   }
   return null;
 }
+
+export async function updateReimbursementAction(
+  claimId: string,
+  input: {
+    category?: ClaimCategory;
+    amount?: number;
+    date?: string;
+    description?: string;
+    receiptName?: string;
+    receiptUrl?: string;
+    items?: ExpenseItem[];
+  }
+): Promise<ReimbursementClaim | null> {
+  try {
+    const { data: existing } = await supabase
+      .from('reimbursements')
+      .select('*')
+      .eq('id', claimId)
+      .single();
+
+    if (existing) {
+      if (
+        existing.status === 'Approved' ||
+        existing.status === 'Paid' ||
+        existing.admin_status === 'approved'
+      ) {
+        throw new Error('Approved claims cannot be edited.');
+      }
+
+      const calculatedTotal =
+        input.items && input.items.length > 0
+          ? input.items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+          : Number(input.amount || existing.amount || 0);
+
+      const primaryReceiptName =
+        input.receiptName !== undefined
+          ? input.receiptName
+          : input.items?.[0]?.receiptName || '';
+      const primaryReceiptUrl =
+        input.receiptUrl !== undefined
+          ? input.receiptUrl
+          : input.items?.[0]?.receiptUrl || '';
+
+      const updatedFields: any = {
+        category: input.category || existing.category,
+        amount: calculatedTotal,
+        date: input.date || existing.date,
+        description: input.description !== undefined ? input.description : existing.description,
+        receipt_name: primaryReceiptName,
+        receipt_url: primaryReceiptUrl,
+        items: input.items || existing.items || [],
+      };
+
+      const { data: updated, error: updateErr } = await supabase
+        .from('reimbursements')
+        .update(updatedFields)
+        .eq('id', claimId)
+        .select('*')
+        .single();
+
+      if (!updateErr && updated) {
+        const claim = mockStore.reimbursements.find((c) => c._id === claimId);
+        if (claim) {
+          Object.assign(claim, {
+            category: updatedFields.category,
+            amount: updatedFields.amount,
+            date: updatedFields.date,
+            description: updatedFields.description,
+            receiptName: updatedFields.receipt_name,
+            receiptUrl: updatedFields.receipt_url,
+            items: updatedFields.items,
+          });
+        }
+        revalidatePath('/reimbursements');
+        return mapRowToClaim(updated);
+      }
+    }
+  } catch (e) {
+    console.error('Error updating reimbursement in Supabase:', e);
+  }
+
+  const claim = mockStore.reimbursements.find((c) => c._id === claimId);
+  if (claim && claim.status !== 'Approved' && claim.status !== 'Paid') {
+    if (input.category) claim.category = input.category;
+    if (input.amount !== undefined) claim.amount = input.amount;
+    if (input.date) claim.date = input.date;
+    if (input.description !== undefined) claim.description = input.description;
+    if (input.receiptName !== undefined) claim.receiptName = input.receiptName;
+    if (input.receiptUrl !== undefined) claim.receiptUrl = input.receiptUrl;
+    if (input.items) claim.items = input.items;
+    revalidatePath('/reimbursements');
+    return { ...claim };
+  }
+
+  return null;
+}
