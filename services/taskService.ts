@@ -102,6 +102,9 @@ function mapRowToTask(row: any, allUsers: User[]): Task {
     dueDate: row.due_date ? new Date(row.due_date).toISOString() : new Date().toISOString(),
     estimatedHours: Number(row.estimated_hours || 0),
     actualHours: Number(row.actual_hours || 0),
+    extraHours: Array.isArray(row.time_entries)
+      ? row.time_entries.reduce((sum: number, te: any) => sum + (te?.isExtraHours ? Number(te.hoursLogged || 0) : 0), 0)
+      : 0,
     timeEntries: Array.isArray(row.time_entries) ? row.time_entries : [],
     progressPct: Number(row.progress_pct || 0),
     subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
@@ -118,8 +121,6 @@ function mapRowToTask(row: any, allUsers: User[]): Task {
   };
 }
 
-let tasksAutoSeeded = false;
-
 export async function getTasks(options: TaskFilterOptions = {}): Promise<Task[]> {
   const allUsers = await getAllUsers();
 
@@ -131,14 +132,6 @@ export async function getTasks(options: TaskFilterOptions = {}): Promise<Task[]>
 
     if (!error && rows) {
       let taskList: Task[] = rows.map((r) => mapRowToTask(r, allUsers));
-
-      // Auto-seed initial tasks into Supabase if table is empty on first boot
-      if (taskList.length === 0 && !tasksAutoSeeded && mockStore.tasks.length > 0) {
-        tasksAutoSeeded = true;
-        const seedRows = mockStore.tasks.map(mapTaskToRow);
-        await supabase.from('tasks').upsert(seedRows, { onConflict: 'id' });
-        taskList = [...mockStore.tasks];
-      }
 
       if (options.team) {
         taskList = taskList.filter((t) => t.team === options.team);
@@ -326,14 +319,19 @@ export async function assignTask(taskId: string, assignedToUserId: string): Prom
   const assignedUser = allUsers.find((u) => u._id === assignedToUserId);
   const nowIso = new Date().toISOString();
 
+  const dbPayload: Record<string, any> = {
+    assigned_to: assignedUser?._id || assignedToUserId,
+    incoming: false,
+    updated_at: nowIso,
+  };
+  if (assignedUser?.team && assignedUser.role !== 'Super Admin') {
+    dbPayload.team = assignedUser.team;
+  }
+
   try {
     const { data, error } = await supabase
       .from('tasks')
-      .update({
-        assigned_to: assignedUser?._id || assignedToUserId,
-        incoming: false,
-        updated_at: nowIso,
-      })
+      .update(dbPayload)
       .eq('id', taskId)
       .select('*')
       .single();
@@ -343,6 +341,9 @@ export async function assignTask(taskId: string, assignedToUserId: string): Prom
       if (task) {
         task.assignedTo = assignedUser?._id || assignedToUserId;
         task.assignedUser = assignedUser;
+        if (assignedUser?.team && assignedUser.role !== 'Super Admin') {
+          task.team = assignedUser.team;
+        }
         task.incoming = false;
         task.updatedAt = nowIso;
       }
@@ -356,6 +357,9 @@ export async function assignTask(taskId: string, assignedToUserId: string): Prom
   if (task) {
     task.assignedTo = assignedUser?._id || assignedToUserId;
     task.assignedUser = assignedUser;
+    if (assignedUser?.team && assignedUser.role !== 'Super Admin') {
+      task.team = assignedUser.team;
+    }
     task.incoming = false;
     task.updatedAt = nowIso;
     return { ...task };
@@ -413,6 +417,7 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
   if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
   if (updates.estimatedHours !== undefined) dbUpdates.estimated_hours = updates.estimatedHours;
   if (updates.actualHours !== undefined) dbUpdates.actual_hours = updates.actualHours;
+  if (updates.timeEntries !== undefined) dbUpdates.time_entries = updates.timeEntries;
   if (updates.subtasks !== undefined) dbUpdates.subtasks = updates.subtasks;
   if (updates.reminderSettings !== undefined) dbUpdates.reminder_settings = updates.reminderSettings;
   if (updates.labels !== undefined) dbUpdates.labels = updates.labels;

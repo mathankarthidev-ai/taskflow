@@ -54,12 +54,10 @@ export function ReportsView() {
     loadData();
   }, []);
 
-  if (!currentUser) return null;
-
-  const isSuperAdmin = currentUser.role === 'Super Admin';
+  const isSuperAdmin = currentUser?.role === 'Super Admin';
   const activeCompanyScope = isSuperAdmin
     ? selectedCompany
-    : currentUser.company === 'Ambizcon'
+    : currentUser?.company === 'Ambizcon'
     ? 'Ambizcon'
     : 'Ambizcon Health - India';
 
@@ -69,9 +67,9 @@ export function ReportsView() {
         (u) =>
           u &&
           isUserInCompany(u, activeCompanyScope) &&
-          (reportType === 'company' || isSuperAdmin || u.team === currentUser.team)
+          (reportType === 'company' || isSuperAdmin || u.team === currentUser?.team)
       ),
-    [users, activeCompanyScope, reportType, isSuperAdmin, currentUser.team]
+    [users, activeCompanyScope, reportType, isSuperAdmin, currentUser?.team]
   );
 
   const completedPeriod: CompletedPeriod =
@@ -95,6 +93,8 @@ export function ReportsView() {
     const activeNonDone = (tasks || []).filter((t) => t && t.status !== 'Done');
     return [...activeNonDone, ...generatedCompleted];
   }, [tasks, generatedCompleted, statusScope]);
+
+  if (!currentUser) return null;
 
   // Strict Filter Tasks based on Company Branch, Report Type, Member & Role Scoping
   const filteredTasks = combinedTasks.filter((t) => {

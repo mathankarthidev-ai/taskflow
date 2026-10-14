@@ -75,6 +75,7 @@ const SUGGESTED_TEMPLATES = [
 ];
 
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { isUserInCompany } from '@/lib/company-filter';
 
 export function ReminderCreateModal({
@@ -157,6 +158,81 @@ export function ReminderCreateModal({
     toast.success(`Applied "${tmpl.title}" template!`);
   };
 
+  const time12To24 = (time12: string): string => {
+    const clean = (time12 || '').trim();
+    if (/^\d{2}:\d{2}$/.test(clean)) return clean;
+    const match = clean.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!match) return '09:30';
+    let h = parseInt(match[1], 10);
+    const m = match[2];
+    const period = match[3].toUpperCase();
+    if (period === 'PM' && h < 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2, '0')}:${m}`;
+  };
+
+  const time24To12 = (time24: string): string => {
+    if (!time24 || !time24.includes(':')) return time24 || '09:30 AM';
+    const [hStr, mStr] = time24.split(':');
+    const h = parseInt(hStr, 10);
+    if (isNaN(h)) return time24;
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${String(h12).padStart(2, '0')}:${mStr.slice(0, 2)} ${period}`;
+  };
+
+  const handleSetNowTime = () => {
+    const now = new Date();
+    const h24 = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    setReminderTime(time24To12(h24));
+  };
+
+  const renderEditableTriggerTime = (label: string) => (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-[11px] font-semibold text-foreground">{label}</label>
+        <button
+          type="button"
+          onClick={handleSetNowTime}
+          className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+          title="Set trigger time to current time"
+        >
+          ⚡ Now
+        </button>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="time"
+          value={time12To24(reminderTime)}
+          onChange={(e) => setReminderTime(time24To12(e.target.value))}
+          className="w-[115px] shrink-0 rounded-xl border border-indigo-500/30 bg-background px-2.5 py-1.5 text-xs font-mono font-bold focus-ring cursor-pointer"
+          title="Pick or type exact trigger time"
+        />
+        <input
+          type="text"
+          list="reminder-time-presets"
+          value={reminderTime}
+          onChange={(e) => setReminderTime(e.target.value)}
+          placeholder="e.g. 10:45 AM"
+          className="flex-1 min-w-0 rounded-xl border border-indigo-500/30 bg-background px-2.5 py-1.5 text-xs font-semibold focus-ring"
+          title="Type custom time (e.g. 10:45 AM) or choose preset"
+        />
+        <datalist id="reminder-time-presets">
+          <option value="09:00 AM" />
+          <option value="09:30 AM" />
+          <option value="10:30 AM" />
+          <option value="11:00 AM" />
+          <option value="12:30 PM" />
+          <option value="02:00 PM" />
+          <option value="02:30 PM" />
+          <option value="04:30 PM" />
+          <option value="05:00 PM" />
+          <option value="05:30 PM" />
+        </datalist>
+      </div>
+    </div>
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -215,6 +291,19 @@ export function ReminderCreateModal({
 
       setTasks([newTask, ...(tasks || [])]);
       if (onCreated) onCreated(newTask);
+
+      useNotificationStore.getState().addNotification({
+        type: 'system',
+        category: 'Due Reminder Scheduled',
+        title: `🔔 Reminder Scheduled: ${newTask.title}`,
+        text: `${currentUser.name} scheduled a ${frequency} reminder for ${clientName} at ${reminderTime}.`,
+        color: 'bg-indigo-500',
+        link: '/reminders',
+        taskId: newTask._id,
+        senderName: currentUser.name,
+        senderRole: currentUser.role,
+        targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+      });
 
       toast.success(`Reminder alert scheduled successfully!`, {
         description: `${frequency} trigger registered for ${clientName} at ${reminderTime}.`,
@@ -351,16 +440,26 @@ export function ReminderCreateModal({
 
           <div>
             <label className="text-xs font-semibold text-foreground block mb-1">
-              Responsible Team / Department *
+              Responsible Team / Department * {!isSuperAdmin && <span className="text-[10px] text-blue-500 font-normal">(Your Team)</span>}
             </label>
             <select
               value={team}
-              onChange={(e) => setTeam(e.target.value as TeamName)}
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-semibold focus-ring"
+              onChange={(e) => {
+                setTeam(e.target.value as TeamName);
+                setAssignedTo('');
+              }}
+              disabled={!isSuperAdmin}
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-semibold focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <option value="Development">💻 Development Team</option>
-              <option value="Marketing">📈 Marketing Team</option>
-              <option value="Creative">🎨 Creative Team</option>
+              {isSuperAdmin ? (
+                <>
+                  <option value="Development">💻 Development Team</option>
+                  <option value="Marketing">📈 Marketing Team</option>
+                  <option value="Creative">🎨 Creative Team</option>
+                </>
+              ) : (
+                <option value={currentUser?.team || team}>{currentUser?.team || team} Team</option>
+              )}
             </select>
           </div>
         </div>
@@ -408,24 +507,13 @@ export function ReminderCreateModal({
                 </select>
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-foreground block mb-1">Slot Trigger Time</label>
-                <select
-                  value={reminderTime}
-                  onChange={(e) => setReminderTime(e.target.value)}
-                  className="w-full rounded-xl border border-indigo-500/30 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
-                >
-                  <option value="09:30 AM">09:30 AM (Morning Shift)</option>
-                  <option value="02:00 PM">02:00 PM (Afternoon Shift)</option>
-                  <option value="05:30 PM">05:30 PM (Evening Sign-off)</option>
-                </select>
-              </div>
+              {renderEditableTriggerTime('Slot Trigger Time (Editable)')}
             </div>
           )}
 
           {/* If Monthly: Week Block, Day, Date, Time */}
           {frequency === 'Monthly' && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
               <div>
                 <label className="text-[11px] font-semibold text-foreground block mb-1">Calendar Week</label>
                 <select
@@ -466,19 +554,7 @@ export function ReminderCreateModal({
                 />
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-foreground block mb-1">Audit Time</label>
-                <select
-                  value={reminderTime}
-                  onChange={(e) => setReminderTime(e.target.value)}
-                  className="w-full rounded-xl border border-indigo-500/30 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
-                >
-                  <option value="09:30 AM">09:30 AM</option>
-                  <option value="11:00 AM">11:00 AM</option>
-                  <option value="02:00 PM">02:00 PM</option>
-                  <option value="04:30 PM">04:30 PM</option>
-                </select>
-              </div>
+              {renderEditableTriggerTime('Trigger / Audit Time')}
             </div>
           )}
 
@@ -495,19 +571,7 @@ export function ReminderCreateModal({
                 />
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-foreground block mb-1">Trigger Time</label>
-                <select
-                  value={reminderTime}
-                  onChange={(e) => setReminderTime(e.target.value)}
-                  className="w-full rounded-xl border border-indigo-500/30 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
-                >
-                  <option value="09:30 AM">09:30 AM</option>
-                  <option value="11:00 AM">11:00 AM</option>
-                  <option value="02:30 PM">02:30 PM</option>
-                  <option value="05:00 PM">05:00 PM</option>
-                </select>
-              </div>
+              {renderEditableTriggerTime('Trigger Time (Editable)')}
 
               <div>
                 <label className="text-[11px] font-semibold text-foreground block mb-1">
@@ -536,16 +600,24 @@ export function ReminderCreateModal({
           <div>
             <label className="text-xs font-semibold text-foreground block mb-1 flex items-center gap-1">
               <UserIcon className="h-3.5 w-3.5 text-brand-500" />
-              Responsible Assignee
+              Responsible Assignee {currentUser?.role === 'Team Member' && <span className="text-[10px] text-amber-500 font-normal">(Handled by TL)</span>}
             </label>
             <select
-              value={assignedTo}
+              value={currentUser?.role === 'Team Member' ? currentUser._id : assignedTo}
               onChange={(e) => setAssignedTo(e.target.value)}
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-semibold focus-ring"
+              disabled={currentUser?.role === 'Team Member'}
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-semibold focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="">-- Assign to Me ({currentUser?.name}) --</option>
               {users
-                .filter((u) => u.team === team && isUserInCompany(u, activeCompanyScope))
+                .filter((u) => {
+                  if (!isUserInCompany(u, activeCompanyScope)) return false;
+                  if (isSuperAdmin) return u.team === team || u.role === 'Super Admin';
+                  if (currentUser?.role === 'Team Lead') {
+                    return u.team === currentUser.team && u.role !== 'Super Admin';
+                  }
+                  return u._id === currentUser?._id;
+                })
                 .map((u) => (
                   <option key={u._id} value={u._id}>
                     {u.name} ({u.role})

@@ -67,7 +67,14 @@ const DEFAULT_CATEGORIES = [
   'Medical',
 ];
 
-const CLAIMS_STORAGE_KEY = 'ambizcon_reimbursement_claims_v1';
+const CLAIMS_STORAGE_KEY = 'ambizcon_reimbursement_claims_v2';
+
+function purgeLegacyClaims() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('ambizcon_reimbursement_claims_v1');
+  } catch (_) {}
+}
 
 function getLocalYMD(daysAgo = 0): string {
   const d = new Date();
@@ -127,27 +134,33 @@ function mergeClaimsWithStorage(serverClaims: ReimbursementClaim[]): Reimburseme
     if (!Array.isArray(stored) || stored.length === 0) return serverClaims;
 
     const map = new Map<string, ReimbursementClaim>();
-    serverClaims.forEach((c) => map.set(c._id, c));
-    stored.forEach((sc) => {
-      const existing = map.get(sc._id);
-      if (!existing) {
-        map.set(sc._id, sc);
-      } else {
-        // Prefer whichever has more comments or more recent status, while preserving fresh dates on seed claims
-        const mergedComments =
-          (sc.comments?.length || 0) >= (existing.comments?.length || 0)
-            ? sc.comments
-            : existing.comments;
-        const isSeed = existing._id.startsWith('claim_seed_');
-        map.set(sc._id, {
-          ...existing,
-          ...sc,
-          date: isSeed ? existing.date : sc.date || existing.date,
-          createdAt: isSeed ? existing.createdAt : sc.createdAt || existing.createdAt,
-          comments: mergedComments || [],
-        });
-      }
-    });
+    serverClaims
+      .filter((c) => !String(c._id).startsWith('claim_seed_'))
+      .forEach((c) => map.set(c._id, c));
+
+    const nowMs = Date.now();
+    stored
+      .filter((sc) => !String(sc._id).startsWith('claim_seed_'))
+      .forEach((sc) => {
+        const existing = map.get(sc._id);
+        if (!existing) {
+          // Only keep optimistic local claims created within the last 15 seconds
+          const createdMs = sc.createdAt ? new Date(sc.createdAt).getTime() : 0;
+          if (createdMs && nowMs - createdMs < 15000) {
+            map.set(sc._id, sc);
+          }
+        } else {
+          const mergedComments =
+            (sc.comments?.length || 0) >= (existing.comments?.length || 0)
+              ? sc.comments
+              : existing.comments;
+          map.set(sc._id, {
+            ...sc,
+            ...existing,
+            comments: mergedComments || [],
+          });
+        }
+      });
     return Array.from(map.values());
   } catch {
     return serverClaims;
@@ -241,8 +254,9 @@ export default function ReimbursementsPage() {
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
+    async function loadData(showLoader = true) {
+      if (showLoader) setLoading(true);
+      purgeLegacyClaims();
       const res = await fetchReimbursementsAction();
       const merged = mergeClaimsWithStorage(res || []);
       setClaims(merged);
@@ -255,9 +269,15 @@ export default function ReimbursementsPage() {
       });
       setCategoriesList(Array.from(setCats));
 
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
-    loadData();
+    loadData(true);
+
+    const onRefresh = () => {
+      loadData(false);
+    };
+    window.addEventListener('ambizcon_workspace_refresh', onRefresh);
+    return () => window.removeEventListener('ambizcon_workspace_refresh', onRefresh);
   }, []);
 
   // Listen for notification clicks to open specific claim notes
@@ -325,18 +345,75 @@ export default function ReimbursementsPage() {
 
   const handleFileUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    // File size check: warn if file exceeds 4.5MB
+    if (file.size > 4.5 * 1024 * 1024) {
+      toast.error(`File "${file.name}" is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB)`, {
+        description: 'Maximum attachment size is 4.5 MB. Please select a smaller receipt or document.',
+      });
+      return;
+    }
+
+    // Client-side image compression for receipts (reduces large phone photos from 5MB+ to ~200KB)
+    if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = () => {
-        const result = reader.result as string;
-        const updated = [...items];
-        updated[index].receiptName = file.name;
-        updated[index].receiptUrl = result;
-        setItems(updated);
-        toast.success(`Attached file: ${file.name}`);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxDim = 1600;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedUrl = canvas.toDataURL('image/jpeg', 0.8);
+              const updated = [...items];
+              updated[index].receiptName = file.name;
+              updated[index].receiptUrl = compressedUrl;
+              setItems(updated);
+              toast.success(`Attached & optimized: ${file.name}`);
+              return;
+            }
+          } catch {
+            // fallback if canvas context fails
+          }
+          const updated = [...items];
+          updated[index].receiptName = file.name;
+          updated[index].receiptUrl = reader.result as string;
+          setItems(updated);
+          toast.success(`Attached file: ${file.name}`);
+        };
+        img.src = reader.result as string;
       };
       reader.readAsDataURL(file);
+      return;
     }
+
+    // Non-image documents (PDFs, docs, spreadsheets)
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const updated = [...items];
+      updated[index].receiptName = file.name;
+      updated[index].receiptUrl = result;
+      setItems(updated);
+      toast.success(`Attached document: ${file.name}`);
+    };
+    reader.readAsDataURL(file);
   };
 
   const totalCalculatedAmount = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -380,7 +457,6 @@ export default function ReimbursementsPage() {
           ? `${items[0].description} (+${items.length - 1} more items)`
           : items[0].description;
       const primaryReceipt = items[0].receiptName.trim() || 'expense_receipt.pdf';
-      const primaryReceiptUrl = items[0].receiptUrl || '';
 
       const formattedItems: ExpenseItem[] = items.map((it, idx) => {
         const catName =
@@ -399,7 +475,7 @@ export default function ReimbursementsPage() {
         };
       });
 
-      const created = await submitReimbursementAction({
+      const submissionPayload = {
         userId: currentUser._id,
         userName: currentUser.name,
         userTeam: currentUser.team,
@@ -410,10 +486,37 @@ export default function ReimbursementsPage() {
         date: items[0].date,
         description: primaryDesc,
         receiptName: primaryReceipt,
-        receiptUrl: primaryReceiptUrl,
         items: formattedItems,
         isDraft,
-      });
+      };
+
+      let created: ReimbursementClaim | null = null;
+
+      // 1. Try submission via /api/reimbursements/submit (robust against Server Action RPC size limits)
+      try {
+        const res = await fetch('/api/reimbursements/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(submissionPayload),
+        });
+        if (res.ok) {
+          const resJson = await res.json();
+          if (resJson && resJson.claim) {
+            created = resJson.claim;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('API submission failed, attempting Server Action fallback:', apiErr);
+      }
+
+      // 2. Fallback to Server Action if API route didn't return a claim
+      if (!created) {
+        created = await submitReimbursementAction(submissionPayload);
+      }
+
+      if (!created) {
+        throw new Error('Unable to create claim record');
+      }
 
       const nextClaims = [created, ...claims];
       setClaims(nextClaims);
@@ -437,8 +540,11 @@ export default function ReimbursementsPage() {
           receiptUrl: '',
         },
       ]);
-    } catch (err) {
-      toast.error('Failed to submit claim');
+    } catch (err: any) {
+      console.error('Submit reimbursement error:', err);
+      toast.error(err?.message || 'Failed to submit claim', {
+        description: 'Please ensure attachments are under 4.5 MB and try again.',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -674,12 +780,18 @@ export default function ReimbursementsPage() {
   const activeValidTimeClaims = timeScopedBranchClaims.filter(
     (c) => c.status !== 'Cancelled' && c.status !== 'Draft'
   );
+  const approvedTimeClaims = activeValidTimeClaims.filter(
+    (c) => c.status === 'Approved' || c.adminStatus === 'approved' || c.isPaid || c.status === 'Paid'
+  );
   const paidTimeClaims = activeValidTimeClaims.filter((c) => c.isPaid || c.status === 'Paid');
   const pendingTimeClaims = activeValidTimeClaims.filter(
-    (c) => c.status === 'Pending Approval' || (c.status === 'Approved' && !c.isPaid)
+    (c) =>
+      c.status === 'Pending Approval' ||
+      (c.status as string) === 'Pending TL' ||
+      (c.status as string) === 'Pending CEO'
   );
   const approvedUnpaidTimeClaims = activeValidTimeClaims.filter(
-    (c) => c.status === 'Approved' && !c.isPaid
+    (c) => (c.status === 'Approved' || c.adminStatus === 'approved') && !c.isPaid && c.status !== 'Paid'
   );
   const myTimeClaims = activeValidTimeClaims.filter(
     (c) => c.userId === currentUser._id || c.userName === currentUser.name
@@ -688,15 +800,18 @@ export default function ReimbursementsPage() {
   // Dynamic KPI Totals for Selected Time Range (All Time / Daily / Weekly / Monthly / Custom)
   const totalOrgClaimedAmount = activeValidTimeClaims.reduce((acc, c) => acc + c.amount, 0);
   const totalOrgClaimsCount = activeValidTimeClaims.length;
+  const totalOrgApprovedAmount = approvedTimeClaims.reduce((acc, c) => acc + c.amount, 0);
+  const totalOrgApprovedCount = approvedTimeClaims.length;
   const totalOrgPaidAmount = paidTimeClaims.reduce((acc, c) => acc + c.amount, 0);
   const totalOrgPaidCount = paidTimeClaims.length;
   const totalOrgPendingAmount = pendingTimeClaims.reduce((acc, c) => acc + c.amount, 0);
   const totalOrgPendingCount = pendingTimeClaims.length;
   const totalOrgApprovedUnpaidAmount = approvedUnpaidTimeClaims.reduce((acc, c) => acc + c.amount, 0);
+  const totalOrgApprovedUnpaidCount = approvedUnpaidTimeClaims.length;
   const myActiveClaimsCount = myTimeClaims.length;
   const myActiveClaimsAmount = myTimeClaims.reduce((acc, c) => acc + c.amount, 0);
   const mySettledAmount = myTimeClaims
-    .filter((c) => c.isPaid || c.status === 'Paid')
+    .filter((c) => c.isPaid || c.status === 'Paid' || c.status === 'Approved' || c.adminStatus === 'approved')
     .reduce((acc, c) => acc + c.amount, 0);
 
   const TIME_RANGE_DISPLAY_LABELS: Record<'All Time' | 'Today' | 'This Week' | 'This Month' | 'Custom', string> = {
@@ -720,7 +835,17 @@ export default function ReimbursementsPage() {
       }
 
       // Status Filter
-      if (selectedStatusFilter !== 'All' && c.status !== selectedStatusFilter) return false;
+      if (selectedStatusFilter !== 'All') {
+        if (selectedStatusFilter === 'Approved') {
+          const isApproved =
+            c.status === 'Approved' || c.adminStatus === 'approved' || c.status === 'Paid' || c.isPaid;
+          if (!isApproved) return false;
+        } else if (selectedStatusFilter === 'Paid') {
+          if (!c.isPaid && c.status !== 'Paid') return false;
+        } else if (c.status !== selectedStatusFilter) {
+          return false;
+        }
+      }
 
       // Category Filter
       if (selectedCategoryFilter !== 'All' && c.category !== selectedCategoryFilter) return false;
@@ -907,17 +1032,17 @@ export default function ReimbursementsPage() {
         <Card className="p-4 border border-emerald-500/30 bg-emerald-500/[0.02] relative overflow-hidden">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
-              Paid &amp; Settled
+              Approved &amp; Settled
             </span>
             <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300">
               {activeTimeRangeBadgeText}
             </span>
           </div>
           <div className="text-2xl font-extrabold text-emerald-500 mt-1">
-            ₹{totalOrgPaidAmount.toLocaleString('en-IN')}
+            ₹{totalOrgApprovedAmount.toLocaleString('en-IN')}
           </div>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
-            {totalOrgPaidCount} Disbursed Vouchers • Settled
+            {totalOrgApprovedCount} Approved by Admin • ₹{totalOrgPaidAmount.toLocaleString('en-IN')} ({totalOrgPaidCount}) Paid Out
           </span>
         </Card>
 
@@ -934,8 +1059,8 @@ export default function ReimbursementsPage() {
             ₹{totalOrgPendingAmount.toLocaleString('en-IN')}
           </div>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
-            {totalOrgPendingCount} Claims Awaiting Payout Signoff
-            {totalOrgApprovedUnpaidAmount > 0 ? ` (₹${totalOrgApprovedUnpaidAmount.toLocaleString('en-IN')} Approved)` : ''}
+            {totalOrgPendingCount} Claims Awaiting Admin Approval
+            {totalOrgApprovedUnpaidCount > 0 ? ` • ${totalOrgApprovedUnpaidCount} Approved (₹${totalOrgApprovedUnpaidAmount.toLocaleString('en-IN')})` : ''}
           </span>
         </Card>
 
@@ -955,7 +1080,7 @@ export default function ReimbursementsPage() {
             </span>
           </div>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
-            Submitted by You • ₹{mySettledAmount.toLocaleString('en-IN')} Settled
+            Submitted by You • ₹{mySettledAmount.toLocaleString('en-IN')} Approved/Settled
           </span>
         </Card>
       </div>
@@ -1038,6 +1163,9 @@ export default function ReimbursementsPage() {
               Total Claimed: <span className="text-brand-500">₹{totalOrgClaimedAmount.toLocaleString('en-IN')}</span> ({totalOrgClaimsCount})
             </span>
             <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2.5 py-1 border border-emerald-500/25 font-bold text-emerald-600 dark:text-emerald-400">
+              ✓ Approved: ₹{totalOrgApprovedAmount.toLocaleString('en-IN')} ({totalOrgApprovedCount})
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1 border border-blue-500/25 font-bold text-blue-600 dark:text-blue-400">
               Paid &amp; Settled: ₹{totalOrgPaidAmount.toLocaleString('en-IN')} ({totalOrgPaidCount})
             </span>
             <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-2.5 py-1 border border-amber-500/25 font-bold text-amber-600 dark:text-amber-400">
@@ -1302,27 +1430,27 @@ export default function ReimbursementsPage() {
                         <Badge className="bg-zinc-500/20 text-zinc-600 dark:text-zinc-400 border-zinc-500/30 font-bold">
                           DRAFT SAVED
                         </Badge>
-                      ) : claim.status === 'Approved' ? (
-                        <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-extrabold">
-                          ✓ APPROVED BY ADMIN
-                        </Badge>
+                      ) : claim.status === 'Approved' ||
+                        claim.adminStatus === 'approved' ||
+                        claim.isPaid ||
+                        claim.status === 'Paid' ? (
+                        <>
+                          <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-extrabold">
+                            ✓ APPROVED BY ADMIN
+                          </Badge>
+                          {(claim.isPaid || claim.status === 'Paid') && (
+                            <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold">
+                              PAID OUT
+                            </Badge>
+                          )}
+                        </>
                       ) : claim.status === 'Rejected' ? (
                         <Badge className="bg-rose-500/20 text-rose-600 border-rose-500/30 font-extrabold">
                           ✗ REJECTED
                         </Badge>
-                      ) : claim.status === 'Paid' ? (
-                        <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold">
-                          PAID OUT
-                        </Badge>
                       ) : (
                         <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 font-bold">
                           ... PENDING ADMIN APPROVAL
-                        </Badge>
-                      )}
-
-                      {claim.isPaid && (
-                        <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold">
-                          PAID OUT
                         </Badge>
                       )}
                     </div>
@@ -1356,12 +1484,6 @@ export default function ReimbursementsPage() {
                           <CreditCard className="h-3.5 w-3.5" />
                           Mark as Paid
                         </Button>
-                      )}
-
-                      {claim.isPaid && (
-                        <span className="font-extrabold text-blue-600 dark:text-blue-400 text-xs border-2 border-blue-500 rounded-lg px-2.5 py-1 rotate-[-4deg]">
-                          PAID OUT
-                        </span>
                       )}
                     </div>
                   </div>
@@ -1637,18 +1759,24 @@ export default function ReimbursementsPage() {
               </div>
 
               <div className="flex items-center gap-4">
-                <div>
-                  {selectedClaimDetail.status === 'Approved' ? (
-                    <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-extrabold text-xs">
-                      ✓ APPROVED BY ADMIN
-                    </Badge>
+                <div className="flex items-center gap-2">
+                  {selectedClaimDetail.status === 'Approved' ||
+                  selectedClaimDetail.adminStatus === 'approved' ||
+                  selectedClaimDetail.isPaid ||
+                  selectedClaimDetail.status === 'Paid' ? (
+                    <>
+                      <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 font-extrabold text-xs">
+                        ✓ APPROVED BY ADMIN
+                      </Badge>
+                      {(selectedClaimDetail.isPaid || selectedClaimDetail.status === 'Paid') && (
+                        <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold text-xs">
+                          PAID OUT
+                        </Badge>
+                      )}
+                    </>
                   ) : selectedClaimDetail.status === 'Rejected' ? (
                     <Badge className="bg-rose-500/20 text-rose-600 border-rose-500/30 font-extrabold text-xs">
                       ✗ REJECTED
-                    </Badge>
-                  ) : selectedClaimDetail.status === 'Paid' ? (
-                    <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30 font-extrabold text-xs">
-                      PAID OUT
                     </Badge>
                   ) : selectedClaimDetail.status === 'Draft' ? (
                     <Badge className="bg-zinc-500/20 text-zinc-600 dark:text-zinc-400 border-zinc-500/30 font-bold text-xs">

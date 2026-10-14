@@ -7,7 +7,23 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { getPriorityBadgeColor, formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
-import { ChevronDown, X, Calendar, AlertCircle, Building2, Tag, Paperclip, MessageSquare, ExternalLink, Edit3, Lock } from 'lucide-react';
+import {
+  ChevronDown,
+  X,
+  Calendar,
+  AlertCircle,
+  Building2,
+  Tag,
+  Paperclip,
+  MessageSquare,
+  ExternalLink,
+  Edit3,
+  Lock,
+  Footprints,
+  ArrowRight,
+  CheckCircle2,
+  RotateCcw,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
 import { TaskEditModal } from '@/components/tasks/TaskEditModal';
@@ -135,6 +151,22 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
               🏢 {task.clientName}
             </span>
           )}
+          {(() => {
+            const extraHrs =
+              task.extraHours ??
+              (task.timeEntries || []).reduce(
+                (sum, te) => sum + (te.isExtraHours ? Number(te.hoursLogged || 0) : 0),
+                0
+              );
+            return extraHrs > 0 ? (
+              <span
+                className="text-[9px] font-mono font-extrabold text-amber-600 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 rounded"
+                title={`Worked ${extraHrs} Extra Hours (Overtime)`}
+              >
+                ⚡ +{extraHrs}h Extra Hr
+              </span>
+            ) : null;
+          })()}
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -145,10 +177,68 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
           <Avatar
             src={task.assignedUser?.avatar}
             name={task.assignedUser?.name || 'Unassigned'}
+            userId={task.assignedUser?._id || task.assignedTo}
+            email={task.assignedUser?.email}
             size="sm"
           />
         </div>
       </div>
+
+      {/* Review Footprint Trail Banner (Mem -> TL -> Mem) */}
+      {(() => {
+        const hasReviewInfo =
+          task.assignedReviewerName ||
+          task.status === 'Review' ||
+          task.reviewStatus === 'changes_requested' ||
+          task.reviewNote ||
+          (task.status === 'Done' && task.approvedBy);
+
+        if (!hasReviewInfo) return null;
+
+        const memberName = task.assignedUser?.name || 'Member';
+        const reviewerName = task.assignedReviewerName || 'Team Lead';
+
+        return (
+          <div
+            onClick={handleCardClick}
+            className={`mt-2 p-1.5 rounded-xl border text-[10px] cursor-pointer transition-all hover:opacity-90 space-y-1 ${
+              task.status === 'Done'
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                : task.reviewStatus === 'changes_requested'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300'
+                : 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-1 font-bold">
+              <div className="flex items-center gap-1 truncate">
+                <Footprints className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  {task.status === 'Done' && task.approvedBy ? (
+                    `Approved by ${task.approvedBy}`
+                  ) : task.reviewStatus === 'changes_requested' ? (
+                    `TL → ${memberName} (Changes Req)`
+                  ) : (
+                    `${memberName} → ${reviewerName}`
+                  )}
+                </span>
+              </div>
+              <span className="text-[9px] uppercase tracking-wider shrink-0 font-extrabold px-1 py-0.2 rounded bg-background/80">
+                {task.status === 'Done'
+                  ? 'Completed'
+                  : task.reviewStatus === 'changes_requested'
+                  ? 'Feedback'
+                  : 'Review'}
+              </span>
+            </div>
+
+            {task.reviewNote && (
+              <p className="line-clamp-1 italic text-[9.5px] opacity-90">
+                &ldquo;{task.reviewNote}&rdquo;
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Expandable "Know More" Drawer */}
       <AnimatePresence>
@@ -174,8 +264,18 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
                   </span>
                 )}
                 {task.assignedReviewerName && (
-                  <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 font-medium text-purple-600 dark:text-purple-400">
-                    🔍 Reviewer: {task.assignedReviewerName}
+                  <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 font-bold text-purple-600 dark:text-purple-400">
+                    👣 Reviewer: {task.assignedReviewerName}
+                  </span>
+                )}
+                {task.reviewNote && (
+                  <span className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-bold text-amber-700 dark:text-amber-300">
+                    💬 Msg: {task.reviewNote}
+                  </span>
+                )}
+                {task.approvedBy && task.status === 'Done' && (
+                  <span className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-bold text-emerald-600 dark:text-emerald-400">
+                    ✅ Approved by {task.approvedBy}
                   </span>
                 )}
                 {Array.isArray(task.labels) &&

@@ -138,6 +138,7 @@ export interface TimeEntry {
   userName: string;
   userAvatar?: string;
   hoursLogged: number;
+  isExtraHours?: boolean;
   workDescription: string;
   date: string;
   createdAt: string;
@@ -217,6 +218,7 @@ export interface Task {
   dueDate: string;
   estimatedHours?: number;
   actualHours?: number;
+  extraHours?: number;
   timeEntries?: TimeEntry[];
   progressPct?: number;
   subtasks?: SubtaskItem[];

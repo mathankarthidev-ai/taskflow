@@ -2,12 +2,18 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import {
+  playNotificationChime,
+  resolveNotificationSoundType,
+} from '@/lib/audio-chime';
 
 export interface AppNotification {
   id: string;
   type:
     | 'assigned'
     | 'updated'
+    | 'task_update'
+    | 'system'
     | 'due_date_reminder'
     | 'overdue'
     | 'comment'
@@ -37,123 +43,112 @@ export interface AppNotification {
 
 interface NotificationState {
   notifications: AppNotification[];
-  addNotification: (notif: Omit<AppNotification, 'id' | 'time' | 'unread'>) => void;
+  popupAlerts: AppNotification[];
+  addNotification: (notif: Omit<AppNotification, 'id' | 'time' | 'unread'> & { id?: string }) => void;
+  dismissPopupAlert: (id: string) => void;
+  dismissAllPopupAlerts: () => void;
   markAllRead: () => void;
   markAsRead: (id: string) => void;
+  markChatChannelRead: (channelId?: string) => void;
   clearAll: () => void;
 }
 
-const INITIAL_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'notif_1',
-    type: 'assigned',
-    category: 'Task Assigned',
-    title: '📌 Task Assigned to You',
-    text: 'Deva Priya assigned "Redesign SaaS Dashboard & Component Library" to your workload.',
-    time: '5m ago',
-    unread: true,
-    color: 'bg-blue-500',
-  },
-  {
-    id: 'notif_2',
-    type: 'updated',
-    category: 'Task Updated',
-    title: '✏️ Task Updated',
-    text: 'Priority raised to Critical for "Setup Next.js 15 App Router & Auth Provider".',
-    time: '18m ago',
-    unread: true,
-    color: 'bg-indigo-500',
-  },
-  {
-    id: 'notif_3',
-    type: 'due_date_reminder',
-    category: 'Due Date Reminder',
-    title: '⏰ Due Date Reminder',
-    text: '"Figma Component System UI Kit" is due today by 5:00 PM IST.',
-    time: '45m ago',
-    unread: true,
-    color: 'bg-amber-500',
-  },
-  {
-    id: 'notif_4',
-    type: 'overdue',
-    category: 'Overdue Notification',
-    title: '🚨 Overdue Task Alert',
-    text: '"Mobile App Wireframes & Interactive Prototypes" has passed its due date!',
-    time: '1h ago',
-    unread: true,
-    color: 'bg-rose-500',
-  },
-  {
-    id: 'notif_5',
-    type: 'comment',
-    category: 'Comment / Mention',
-    title: '💬 Comment & @Mention',
-    text: 'Aravind Kalaivanan mentioned you in "API Integration & Auth Middleware".',
-    time: '2h ago',
-    unread: true,
-    color: 'bg-purple-500',
-  },
-  {
-    id: 'notif_6',
-    type: 'task_completed',
-    category: 'Task Completed',
-    title: '✅ Task Completed',
-    text: 'Kennath Franklin marked "SEO Meta & Schema Tags Audit" as Completed & Done!',
-    time: '3h ago',
-    unread: false,
-    color: 'bg-emerald-500',
-  },
-  {
-    id: 'notif_7',
-    type: 'task_approval',
-    category: 'Task Approval Request',
-    title: '🛡️ Member Task Pending Approval',
-    text: 'Member Mathankarthidev created "New Landing Page Redesign". Requires TL approval.',
-    time: '4h ago',
-    unread: true,
-    color: 'bg-amber-600',
-  },
-  {
-    id: 'notif_8',
-    type: 'review_assigned',
-    category: 'Reviewer Assignment',
-    title: '🔍 Assigned as Task Reviewer',
-    text: 'You were assigned as Reviewer for "Database Schema Migration & Indexes".',
-    time: '5h ago',
-    unread: false,
-    color: 'bg-purple-600',
-  },
-];
+const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
 export const useNotificationStore = create<NotificationState>()(
   persist(
     (set) => ({
       notifications: INITIAL_NOTIFICATIONS,
+      popupAlerts: [],
       addNotification: (notif) =>
+        set((state) => {
+          const isInsideChatPage =
+            typeof window !== 'undefined' && window.location.pathname.startsWith('/chat');
+
+          // If user is already inside /chat, do NOT create chat notifications or right-side chat popups
+          if (notif.type === 'chat_message' && isInsideChatPage) {
+            return {
+              notifications: (Array.isArray(state.notifications) ? state.notifications : []).filter(
+                (n) => n && n.type !== 'chat_message'
+              ),
+              popupAlerts: (Array.isArray(state.popupAlerts) ? state.popupAlerts : []).filter(
+                (p) => p && p.type !== 'chat_message'
+              ),
+            };
+          }
+
+          const newEntry: AppNotification = {
+            ...notif,
+            id: notif.id || `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            time: 'Just now',
+            unread: true,
+          };
+          const currentNotifs = Array.isArray(state.notifications) ? state.notifications : [];
+          const currentPopups = Array.isArray(state.popupAlerts) ? state.popupAlerts : [];
+
+          const existsInNotifs = currentNotifs.some((n) => n && n.id === newEntry.id);
+          const existsInPopups = currentPopups.some((p) => p && p.id === newEntry.id);
+
+          // Automatically play distinct notification sound for non-chat notifications
+          // (chat sound is played by the chat receiver listener so senders don't hear their own outgoing msg)
+          if (!existsInNotifs && newEntry.type !== 'chat_message' && typeof window !== 'undefined') {
+            const soundType = resolveNotificationSoundType(newEntry);
+            playNotificationChime(soundType);
+          }
+
+          return {
+            notifications: existsInNotifs ? currentNotifs : [newEntry, ...currentNotifs],
+            popupAlerts: existsInPopups ? currentPopups : [newEntry, ...currentPopups].slice(0, 6),
+          };
+        }),
+      dismissPopupAlert: (id) =>
         set((state) => ({
-          notifications: [
-            {
-              ...notif,
-              id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-              time: 'Just now',
-              unread: true,
-            },
-            ...state.notifications,
-          ],
+          popupAlerts: (Array.isArray(state.popupAlerts) ? state.popupAlerts : []).filter(
+            (p) => p && p.id !== id
+          ),
         })),
+      dismissAllPopupAlerts: () => set({ popupAlerts: [] }),
       markAllRead: () =>
         set((state) => ({
-          notifications: state.notifications.map((n) => ({ ...n, unread: false })),
+          notifications: (Array.isArray(state.notifications) ? state.notifications : []).map((n) => ({
+            ...n,
+            unread: false,
+          })),
+          popupAlerts: [],
         })),
       markAsRead: (id) =>
         set((state) => ({
-          notifications: state.notifications.map((n) => (n.id === id ? { ...n, unread: false } : n)),
+          notifications: (Array.isArray(state.notifications) ? state.notifications : []).map((n) =>
+            n.id === id ? { ...n, unread: false } : n
+          ),
+          popupAlerts: (Array.isArray(state.popupAlerts) ? state.popupAlerts : []).filter(
+            (p) => p && p.id !== id
+          ),
         })),
-      clearAll: () => set({ notifications: [] }),
+      markChatChannelRead: (channelId) =>
+        set((state) => ({
+          // Remove chat notifications from Notification Bell and Right-Side Pop-up Alerts when user views chat
+          notifications: (Array.isArray(state.notifications) ? state.notifications : []).filter((n) => {
+            if (!n) return false;
+            if (n.type !== 'chat_message') return true;
+            if (!channelId || !n.channelId || n.channelId === channelId) {
+              return false;
+            }
+            return true;
+          }),
+          popupAlerts: (Array.isArray(state.popupAlerts) ? state.popupAlerts : []).filter((p) => {
+            if (!p) return false;
+            if (p.type !== 'chat_message') return true;
+            if (!channelId || !p.channelId || p.channelId === channelId) {
+              return false;
+            }
+            return true;
+          }),
+        })),
+      clearAll: () => set({ notifications: [], popupAlerts: [] }),
     }),
     {
-      name: 'taskflow_notifications_v2',
+      name: 'taskflow_notifications_v3',
     }
   )
 );

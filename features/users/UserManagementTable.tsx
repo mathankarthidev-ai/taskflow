@@ -165,9 +165,15 @@ export function UserManagementTable() {
   const fetchUsers = async () => {
     setLoading(true);
     const data = await fetchAllUsersAction();
+    if (Array.isArray(data)) {
+      const { syncUsersAvatarsToLocalStore } = await import('@/lib/avatar-store');
+      syncUsersAvatarsToLocalStore(data);
+    }
     setUsers(data);
     setLoading(false);
   };
+
+  const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -303,8 +309,6 @@ export function UserManagementTable() {
       toast.success(`Role updated to ${role}`);
     }
   };
-
-  const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const handleDeleteUser = (userId: string, userName: string) => {
     if (userId === currentUser._id) {
@@ -591,7 +595,7 @@ export function UserManagementTable() {
                   <tr key={u._id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <Avatar src={u.avatar} name={u.name} size="sm" />
+                        <Avatar src={u.avatar} name={u.name} userId={u._id} email={u.email} size="sm" />
                         <span className="font-semibold text-foreground">{u.name}</span>
                       </div>
                     </td>
@@ -734,7 +738,7 @@ export function UserManagementTable() {
                     className="flex flex-wrap items-center justify-between p-3 rounded-xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-zinc-900/40 text-xs gap-3"
                   >
                     <div className="flex items-center gap-3">
-                      <Avatar src={u.avatar} name={u.name} size="sm" />
+                      <Avatar src={u.avatar} name={u.name} userId={u._id} email={u.email} size="sm" />
                       <div>
                         <span className="font-bold text-foreground block">{u.name}</span>
                         <span className="text-[10px] text-muted-foreground">{u.email} · {u.team} Team</span>

@@ -50,10 +50,10 @@ export function resolveEffectiveCompany(record?: {
 } | null): CompanyBranch {
   if (!record) return 'Ambizcon Health - India';
 
-  const email = (record.email || record.userEmail || '').trim().toLowerCase();
-  const uid = (record.userId || record._id || record.id || '').trim();
-  const rawName = (record.name || record.userName || '').trim().toLowerCase();
-  const role = (record.role || '').trim();
+  const email = String(record.email || record.userEmail || '').trim().toLowerCase();
+  const uid = String(record.userId || record._id || record.id || '').trim();
+  const rawName = String(record.name || record.userName || '').trim().toLowerCase();
+  const role = String(record.role || '').trim();
 
   // 1. Check Australia-specific identity first (handles legacy DB rows before company field existed)
   if (
@@ -179,10 +179,11 @@ export function isTaskInCompany(
     // If assignee is 'India & Australia' (Super Admin), fall through to creator/client check
   } else if (task.assignedTo) {
     // Check raw assignedTo ID/email if user object wasn't populated
+    const assignedStr = String(task.assignedTo || '');
     const rawAssigneeCompany = resolveEffectiveCompany({
-      userId: task.assignedTo,
-      email: task.assignedTo.includes('@') ? task.assignedTo : undefined,
-      name: task.assignedTo,
+      userId: assignedStr,
+      email: assignedStr.includes('@') ? assignedStr : undefined,
+      name: assignedStr,
     });
     if (rawAssigneeCompany === 'Ambizcon') {
       return selectedCompany === 'Ambizcon';

@@ -35,6 +35,7 @@ interface TaskEditModalProps {
 }
 
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { isUserInCompany } from '@/lib/company-filter';
 
 export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModalProps) {
@@ -188,6 +189,24 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
         setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
         setSelectedTask(updated);
         if (onUpdated) onUpdated(updated);
+        useNotificationStore.getState().addNotification({
+          type: 'task_update',
+          category: updated.status === 'Done' ? 'Task Completed' : isReminder ? 'Reminder Updated' : 'Task Updated',
+          title:
+            updated.status === 'Done'
+              ? `✅ ${isReminder ? 'Reminder' : 'Task'} Completed: ${updated.title}`
+              : `✏️ ${isReminder ? 'Reminder' : 'Task'} Updated: ${updated.title}`,
+          text:
+            updated.status === 'Done'
+              ? `${currentUser.name} marked "${updated.title}" as Completed (Done).`
+              : `${currentUser.name} updated "${updated.title}" (Status: ${updated.status}).`,
+          color: updated.status === 'Done' ? 'bg-emerald-500' : 'bg-blue-500',
+          link: isReminder ? '/reminders' : '/kanban',
+          taskId: updated._id,
+          senderName: currentUser.name,
+          senderRole: currentUser.role,
+          targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+        });
         toast.success(`${isReminder ? 'Reminder' : 'Task'} updated successfully!`);
         onClose();
       }
@@ -297,43 +316,67 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
               disabled={!canEdit}
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60"
             >
-              <option value="Backlog">Backlog</option>
               <option value="Todo">To Do</option>
               <option value="In Progress">In Progress</option>
               <option value="Review">Review / Testing</option>
-              <option value="Support">Support</option>
               <option value="Done">Completed</option>
             </select>
           </div>
         </div>
 
-        {/* Team & Assignee */}
+        {/* Team & Assignee (Handled by TL for own team, or Admin for all teams) */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="font-bold text-foreground block mb-1">Team</label>
+            <label className="font-bold text-foreground block mb-1">
+              Team {currentUser?.role === 'Team Lead' && <span className="text-[10px] text-blue-500 font-normal">(Your Team Only)</span>}
+            </label>
             <select
               value={team}
               onChange={(e) => setTeam(e.target.value as TeamName)}
-              disabled={!canEdit}
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60"
+              disabled={!canEdit || !isSuperAdmin}
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <option value="Creative">Creative</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Development">Development</option>
+              {isSuperAdmin ? (
+                <>
+                  <option value="Creative">Creative</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Development">Development</option>
+                </>
+              ) : (
+                <option value={currentUser?.team || team}>{currentUser?.team || team}</option>
+              )}
             </select>
           </div>
 
           <div>
-            <label className="font-bold text-foreground block mb-1">Assignee</label>
+            <label className="font-bold text-foreground block mb-1">
+              Assignee {currentUser?.role === 'Team Member' && <span className="text-[10px] text-amber-500 font-normal">(Handled by TL)</span>}
+            </label>
             <select
               value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              disabled={!canEdit}
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60"
+              onChange={(e) => {
+                const newId = e.target.value;
+                setAssignedTo(newId);
+                if (isSuperAdmin && newId) {
+                  const chosen = users.find((u) => u._id === newId);
+                  if (chosen?.team && chosen.role !== 'Super Admin') {
+                    setTeam(chosen.team);
+                  }
+                }
+              }}
+              disabled={!canEdit || (currentUser?.role !== 'Super Admin' && currentUser?.role !== 'Admin' && currentUser?.role !== 'Team Lead')}
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="">Unassigned</option>
               {users
-                .filter((u) => isUserInCompany(u, activeCompanyScope))
+                .filter((u) => {
+                  if (!isUserInCompany(u, activeCompanyScope)) return false;
+                  if (isSuperAdmin) return true;
+                  if (currentUser?.role === 'Team Lead') {
+                    return u.team === currentUser.team && u.role !== 'Super Admin';
+                  }
+                  return u._id === assignedTo || u._id === currentUser?._id;
+                })
                 .map((u) => (
                   <option key={u._id} value={u._id}>
                     {u.name} ({u.team} • {u.role})
@@ -454,15 +497,61 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Trigger Time</label>
-                <input
-                  type="text"
-                  value={reminderTime}
-                  onChange={(e) => setReminderTime(e.target.value)}
-                  disabled={!canEdit}
-                  placeholder="09:30 AM"
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring disabled:opacity-60"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-muted-foreground">Trigger Time (Editable)</label>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const h = now.getHours();
+                        const m = String(now.getMinutes()).padStart(2, '0');
+                        const p = h >= 12 ? 'PM' : 'AM';
+                        const h12 = String(h % 12 === 0 ? 12 : h % 12).padStart(2, '0');
+                        setReminderTime(`${h12}:${m} ${p}`);
+                      }}
+                      className="text-[10px] font-bold text-brand-600 dark:text-brand-400 hover:underline"
+                    >
+                      ⚡ Now
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="time"
+                    value={(() => {
+                      const clean = (reminderTime || '').trim();
+                      if (/^\d{2}:\d{2}$/.test(clean)) return clean;
+                      const match = clean.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+                      if (!match) return '09:30';
+                      let h = parseInt(match[1], 10);
+                      const m = match[2];
+                      const p = match[3].toUpperCase();
+                      if (p === 'PM' && h < 12) h += 12;
+                      if (p === 'AM' && h === 12) h = 0;
+                      return `${String(h).padStart(2, '0')}:${m}`;
+                    })()}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val || !val.includes(':')) return;
+                      const [hStr, mStr] = val.split(':');
+                      const h = parseInt(hStr, 10);
+                      const p = h >= 12 ? 'PM' : 'AM';
+                      const h12 = String(h % 12 === 0 ? 12 : h % 12).padStart(2, '0');
+                      setReminderTime(`${h12}:${mStr.slice(0, 2)} ${p}`);
+                    }}
+                    disabled={!canEdit}
+                    className="w-[105px] shrink-0 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2 py-1.5 text-xs font-mono font-bold focus-ring disabled:opacity-60 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="09:30 AM"
+                    className="flex-1 min-w-0 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs font-semibold focus-ring disabled:opacity-60"
+                  />
+                </div>
               </div>
 
               <div>

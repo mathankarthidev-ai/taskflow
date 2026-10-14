@@ -50,6 +50,7 @@ export async function updateUserAction(
 export async function updateUserProfileSectionAction(
   userId: string,
   profileData: {
+    email?: string;
     name?: string;
     avatar?: string;
     phone?: string;
@@ -66,6 +67,8 @@ export async function updateUserProfileSectionAction(
 ) {
   const updated = await updateUserProfile(userId, profileData);
   revalidatePath('/profile');
+  revalidatePath('/dashboard');
+  revalidatePath('/kanban');
   revalidatePath('/users');
   return updated;
 }

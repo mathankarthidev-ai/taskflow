@@ -6,17 +6,38 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { TaskPriority, TaskStatus, TeamName, User } from '@/types';
+import { TaskPriority, TaskStatus, TeamName, User, TaskTypeTemplate } from '@/types';
 import { createTaskAction } from '@/actions/taskActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { toast } from 'sonner';
 
 import { getStoredClients, addClient } from '@/lib/client-db';
-import { Paperclip, Plus, Building2, UploadCloud, AlertCircle } from 'lucide-react';
+import { Paperclip, Plus, Building2, UploadCloud, AlertCircle, Trash2, Sparkles, CheckSquare } from 'lucide-react';
 
 import { SEED_TASK_TYPES, SEED_PROJECTS } from '@/lib/seed-data';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { isUserInCompany } from '@/lib/company-filter';
+
+const CUSTOM_TEMPLATES_KEY = 'ambizcon_custom_task_templates';
+
+function getStoredCustomTemplates(): TaskTypeTemplate[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_TEMPLATES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomTemplatesToStorage(templates: TaskTypeTemplate[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(templates));
+  } catch (e) {
+    console.error('Failed to save custom templates:', e);
+  }
+}
 
 export function TaskCreateModal() {
   const { isCreateModalOpen, setCreateModalOpen, setTasks, tasks } = useTaskStore();
@@ -46,6 +67,15 @@ export function TaskCreateModal() {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [estimatedHours, setEstimatedHours] = useState<number>(8);
 
+  // Repetitive Task Templates State
+  const [customTemplates, setCustomTemplates] = useState<TaskTypeTemplate[]>([]);
+  const [isAddingCustomTemplate, setIsAddingCustomTemplate] = useState(false);
+  const [newTmplName, setNewTmplName] = useState('');
+  const [newTmplCategory, setNewTmplCategory] = useState<string>('Creative');
+  const [newTmplEstimatedHours, setNewTmplEstimatedHours] = useState<number>(4);
+  const [newTmplDescription, setNewTmplDescription] = useState('');
+  const [newTmplChecklistText, setNewTmplChecklistText] = useState('');
+
   // Client Selection State
   const [clients, setClients] = useState(getStoredClients());
   const [selectedClient, setSelectedClient] = useState<string>('Apollo Hospitals');
@@ -65,22 +95,106 @@ export function TaskCreateModal() {
     }
     fetchAllUsersAction().then(setUsers);
     setClients(getStoredClients());
+    setCustomTemplates(getStoredCustomTemplates());
   }, [currentUser, isCreateModalOpen]);
 
+  const allTemplates = [...customTemplates, ...SEED_TASK_TYPES];
+
   const handleSelectTemplate = (templateId: string) => {
+    if (templateId === '__new_custom__') {
+      setIsAddingCustomTemplate(true);
+      return;
+    }
     setSelectedTaskType(templateId);
-    const tmpl = SEED_TASK_TYPES.find((t) => t.id === templateId);
+    if (!templateId) return;
+
+    const tmpl = allTemplates.find((t) => t.id === templateId);
     if (tmpl) {
       setTitle(tmpl.name);
-      setDescription(`${tmpl.description}\n\nAutomated Checklist:\n${tmpl.defaultChecklist.map((c) => `- [ ] ${c}`).join('\n')}`);
+      const checklistFormatted =
+        tmpl.defaultChecklist && tmpl.defaultChecklist.length > 0
+          ? `\n\nChecklist:\n${tmpl.defaultChecklist.map((c) => `[ ] ${c}`).join('\n')}`
+          : '';
+      setDescription(`${tmpl.description}${checklistFormatted}`);
       setEstimatedHours(tmpl.defaultEstimatedHours);
-      if (tmpl.category === 'Development' || tmpl.category === 'Marketing' || tmpl.category === 'Creative') {
-        setTargetTeam(tmpl.category as TeamName);
+      if (tmpl.category.includes('Development')) {
+        setTargetTeam('Development');
+      } else if (tmpl.category.includes('Marketing')) {
+        setTargetTeam('Marketing');
+      } else if (tmpl.category.includes('Creative')) {
+        setTargetTeam('Creative');
       }
       toast.info(`Applied Task Template: "${tmpl.name}"`, {
-        description: `Auto-populated checklist (${tmpl.defaultChecklist.length} items) and ${tmpl.defaultEstimatedHours} estimated hours.`,
+        description: `Auto-populated description & checklist (${tmpl.defaultChecklist.length} items).`,
       });
     }
+  };
+
+  const handleSaveCustomTemplate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTmplName.trim()) {
+      toast.error('Please enter a template name');
+      return;
+    }
+    if (!newTmplDescription.trim()) {
+      toast.error('Please enter a description for this repetitive task');
+      return;
+    }
+
+    const parsedChecklist = newTmplChecklistText
+      .split('\n')
+      .map((line) => line.replace(/^(\[\s*\]|-|\*|•|\d+\.)\s*/i, '').trim())
+      .filter(Boolean);
+
+    const newTmpl: TaskTypeTemplate = {
+      id: `custom_tmpl_${Date.now()}`,
+      name: newTmplName.trim(),
+      category: newTmplCategory,
+      description: newTmplDescription.trim(),
+      defaultEstimatedHours: Number(newTmplEstimatedHours) || 4,
+      defaultChecklist: parsedChecklist,
+    };
+
+    const updated = [newTmpl, ...customTemplates];
+    setCustomTemplates(updated);
+    saveCustomTemplatesToStorage(updated);
+
+    // Auto-apply this new template to current task form
+    setTitle(newTmpl.name);
+    const checklistFormatted =
+      newTmpl.defaultChecklist.length > 0
+        ? `\n\nChecklist:\n${newTmpl.defaultChecklist.map((c) => `[ ] ${c}`).join('\n')}`
+        : '';
+    setDescription(`${newTmpl.description}${checklistFormatted}`);
+    setEstimatedHours(newTmpl.defaultEstimatedHours);
+    setSelectedTaskType(newTmpl.id);
+    if (newTmpl.category.includes('Development')) {
+      setTargetTeam('Development');
+    } else if (newTmpl.category.includes('Marketing')) {
+      setTargetTeam('Marketing');
+    } else if (newTmpl.category.includes('Creative')) {
+      setTargetTeam('Creative');
+    }
+
+    setIsAddingCustomTemplate(false);
+    setNewTmplName('');
+    setNewTmplDescription('');
+    setNewTmplChecklistText('');
+    setNewTmplEstimatedHours(4);
+
+    toast.success(`Repetitive Task Template "${newTmpl.name}" saved!`, {
+      description: 'You can now select this template anytime from Quick Start.',
+    });
+  };
+
+  const handleDeleteCustomTemplate = (id: string, name: string) => {
+    const updated = customTemplates.filter((t) => t.id !== id);
+    setCustomTemplates(updated);
+    saveCustomTemplatesToStorage(updated);
+    if (selectedTaskType === id) {
+      setSelectedTaskType('');
+    }
+    toast.info(`Template "${name}" deleted.`);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,22 +355,208 @@ export function TaskCreateModal() {
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
         {/* Task Type Template Selector */}
-        <div className="p-3 rounded-xl border border-brand-500/30 bg-brand-500/10 dark:bg-brand-500/5 space-y-1">
-          <label className="text-xs font-bold text-foreground block">
-            ⚡ Quick Start: Select Task Template (Auto-creates Checklists & Estimates)
-          </label>
-          <select
-            value={selectedTaskType}
-            onChange={(e) => handleSelectTemplate(e.target.value)}
-            className="w-full rounded-xl border border-brand-500/40 bg-background px-3 py-2 text-xs font-semibold focus-ring"
-          >
-            <option value="">-- Custom Task / No Template --</option>
-            {SEED_TASK_TYPES.map((tmpl) => (
-              <option key={tmpl.id} value={tmpl.id}>
-                {tmpl.name} ({tmpl.category} · {tmpl.defaultEstimatedHours}h estimate · {tmpl.defaultChecklist.length} checklist items)
-              </option>
-            ))}
-          </select>
+        <div className="p-3.5 rounded-2xl border border-brand-500/30 bg-brand-500/10 dark:bg-brand-500/5 space-y-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <span>⚡ Quick Start: Select Task Template (Auto-creates Checklists & Estimates)</span>
+            </label>
+            {!isAddingCustomTemplate && (
+              <button
+                type="button"
+                onClick={() => setIsAddingCustomTemplate(true)}
+                className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="h-3 w-3" />
+                Add Repetitive Task & Description
+              </button>
+            )}
+          </div>
+
+          {!isAddingCustomTemplate ? (
+            <div className="space-y-2">
+              <select
+                value={selectedTaskType}
+                onChange={(e) => handleSelectTemplate(e.target.value)}
+                className="w-full rounded-xl border border-brand-500/40 bg-background px-3 py-2 text-xs font-semibold focus-ring"
+              >
+                <option value="">-- Custom Task / No Template --</option>
+
+                {customTemplates.length > 0 && (
+                  <optgroup label={`── 🌟 Your Saved Repetitive Tasks (${customTemplates.length}) ──`}>
+                    {customTemplates.map((tmpl) => (
+                      <option key={tmpl.id} value={tmpl.id}>
+                        ⭐ {tmpl.name} ({tmpl.category} · {tmpl.defaultEstimatedHours}h · {tmpl.defaultChecklist.length} checklist items)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                <optgroup label="── 🔄 Repetitive Creative & Marketing Tasks ──">
+                  {SEED_TASK_TYPES.filter((t) => !t.id.startsWith('tt_wp') && !t.id.startsWith('tt_speed')).map((tmpl) => (
+                    <option key={tmpl.id} value={tmpl.id}>
+                      📌 {tmpl.name} ({tmpl.category} · {tmpl.defaultEstimatedHours}h · {tmpl.defaultChecklist.length} checklist items)
+                    </option>
+                  ))}
+                </optgroup>
+
+                <optgroup label="── 💻 Development & Technical Tasks ──">
+                  {SEED_TASK_TYPES.filter((t) => t.id.startsWith('tt_wp') || t.id.startsWith('tt_speed')).map((tmpl) => (
+                    <option key={tmpl.id} value={tmpl.id}>
+                      🛠️ {tmpl.name} ({tmpl.category} · {tmpl.defaultEstimatedHours}h · {tmpl.defaultChecklist.length} checklist items)
+                    </option>
+                  ))}
+                </optgroup>
+
+                <option value="__new_custom__">+ Create New Repetitive Task & Description...</option>
+              </select>
+
+              {/* Template Selected Preview / Clear Banner */}
+              {selectedTaskType && (
+                (() => {
+                  const activeTmpl = allTemplates.find((t) => t.id === selectedTaskType);
+                  if (!activeTmpl) return null;
+                  const isCustom = customTemplates.some((t) => t.id === activeTmpl.id);
+                  return (
+                    <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-background border border-brand-500/30 text-xs shadow-sm">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="font-bold text-foreground truncate">
+                          Applied: {activeTmpl.name}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          ({activeTmpl.defaultChecklist.length} Checklist Items · {activeTmpl.defaultEstimatedHours}h)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isCustom && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomTemplate(activeTmpl.id, activeTmpl.name)}
+                            className="text-[10px] text-rose-500 hover:underline cursor-pointer"
+                          >
+                            Delete
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTaskType('');
+                            setTitle('');
+                            setDescription('');
+                          }}
+                          className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          ) : (
+            /* Inline Form to Add Repetitive Task & Description */
+            <div className="p-3 rounded-xl border border-brand-500/40 bg-background space-y-3">
+              <div className="flex items-center justify-between pb-1 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                <div>
+                  <h4 className="text-xs font-bold text-foreground">Add New Repetitive Task & Description</h4>
+                  <p className="text-[10px] text-muted-foreground">Save reusable task blueprint with description & checklist</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCustomTemplate(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">Task Template Name *</label>
+                  <input
+                    type="text"
+                    value={newTmplName}
+                    onChange={(e) => setNewTmplName(e.target.value)}
+                    placeholder="e.g. Weekly Email Campaign"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">Department</label>
+                  <select
+                    value={newTmplCategory}
+                    onChange={(e) => setNewTmplCategory(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
+                  >
+                    <option value="Creative">Creative</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Development">Development</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-foreground">Task Description *</label>
+                <textarea
+                  value={newTmplDescription}
+                  onChange={(e) => setNewTmplDescription(e.target.value)}
+                  placeholder="Regular description of this repetitive deliverable..."
+                  rows={2}
+                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-foreground flex items-center justify-between">
+                  <span>Checklist Items (One per line)</span>
+                  <span className="text-[10px] text-muted-foreground">Auto-converts to [ ] checkboxes</span>
+                </label>
+                <textarea
+                  value={newTmplChecklistText}
+                  onChange={(e) => setNewTmplChecklistText(e.target.value)}
+                  placeholder="Review brief&#10;Design initial drafts&#10;Internal review&#10;Client revisions & approval"
+                  rows={3}
+                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs font-mono focus-ring"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[11px] font-semibold text-foreground">Est. Hours:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={newTmplEstimatedHours}
+                    onChange={(e) => setNewTmplEstimatedHours(Number(e.target.value))}
+                    className="w-16 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2 py-1 text-xs text-center focus-ring font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsAddingCustomTemplate(false)}
+                    className="text-xs py-1 px-3"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSaveCustomTemplate}
+                    className="ambizcon-gradient text-white text-xs py-1 px-3 font-bold"
+                  >
+                    Save & Apply Template
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Title */}
@@ -425,36 +725,68 @@ export function TaskCreateModal() {
         {/* Team & Assignee Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-semibold text-foreground">Assigned Team</label>
+            <label className="text-xs font-semibold text-foreground">
+              Assigned Team {!isSuperAdmin && !isCrossTeam && <span className="text-[10px] text-blue-500 font-normal">(Your Team)</span>}
+            </label>
             <select
               value={targetTeam}
-              onChange={(e) => setTargetTeam(e.target.value as TeamName)}
-              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+              onChange={(e) => {
+                const nextTeam = e.target.value as TeamName;
+                setTargetTeam(nextTeam);
+                setAssignedTo('');
+              }}
+              disabled={!isSuperAdmin && !isCrossTeam}
+              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <option value="Creative">Creative Team</option>
-              <option value="Marketing">Marketing Team</option>
-              <option value="Development">Development Team</option>
+              {(isSuperAdmin || isCrossTeam) ? (
+                <>
+                  <option value="Creative">Creative Team</option>
+                  <option value="Marketing">Marketing Team</option>
+                  <option value="Development">Development Team</option>
+                </>
+              ) : (
+                <option value={currentUser.team}>{currentUser.team} Team</option>
+              )}
             </select>
           </div>
 
           <div>
             <label className="text-xs font-semibold text-foreground">
-              {isCrossTeam ? 'Assigned User (Lead Review)' : 'Assigned Member'}
+              {isCrossTeam
+                ? 'Assigned User (Lead Review)'
+                : currentUser.role === 'Team Member'
+                ? 'Assigned Member (Handled by TL)'
+                : 'Assigned Member'}
             </label>
             <select
-              value={assignedTo}
+              value={currentUser.role === 'Team Member' && !isCrossTeam ? currentUser._id : assignedTo}
               onChange={(e) => setAssignedTo(e.target.value)}
-              disabled={isCrossTeam}
-              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring disabled:opacity-50"
+              disabled={isCrossTeam || currentUser.role === 'Team Member'}
+              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <option value="">-- Auto-assign / Unassigned --</option>
-              {users
-                .filter((u) => u.team === targetTeam && isUserInCompany(u, activeCompanyScope))
-                .map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
+              {currentUser.role === 'Team Member' && !isCrossTeam ? (
+                <option value={currentUser._id}>
+                  {currentUser.name} ({currentUser.role})
+                </option>
+              ) : (
+                <>
+                  <option value="">-- Auto-assign / Unassigned --</option>
+                  {users
+                    .filter((u) => {
+                      if (!isUserInCompany(u, activeCompanyScope)) return false;
+                      if (isSuperAdmin) return u.team === targetTeam || u.role === 'Super Admin';
+                      if (currentUser.role === 'Team Lead') {
+                        return u.team === currentUser.team && u.role !== 'Super Admin';
+                      }
+                      return u._id === currentUser._id;
+                    })
+                    .map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.name} ({u.role})
+                      </option>
+                    ))}
+                </>
+              )}
             </select>
           </div>
         </div>

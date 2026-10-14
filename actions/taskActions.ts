@@ -90,3 +90,27 @@ export async function deleteTaskAction(taskId: string) {
   revalidatePath('/reminders');
   return success;
 }
+
+export async function logTaskTimeAction(
+  taskId: string,
+  updates: Pick<Task, 'actualHours' | 'extraHours' | 'timeEntries' | 'history'>
+) {
+  const updated = await updateTask(taskId, updates);
+  revalidatePath('/kanban');
+  revalidatePath('/dashboard');
+  revalidatePath('/reminders');
+  return updated;
+}
+
+export async function updateTaskReviewWorkflowAction(
+  taskId: string,
+  updates: Partial<Task>
+) {
+  const updated = await updateTask(taskId, updates);
+  revalidatePath('/kanban');
+  revalidatePath('/dashboard');
+  revalidatePath('/reminders');
+  return updated;
+}
+
+

@@ -27,6 +27,10 @@ import {
   Play,
   Square,
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   UserCheck,
   AlertTriangle,
   UserX,
@@ -41,6 +45,7 @@ import {
   Award,
   TrendingUp,
   CheckCircle2,
+  XCircle,
   BarChart3,
   History,
   MapPin,
@@ -71,7 +76,6 @@ import { supabase } from '@/lib/supabase';
 import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
 import { isUserInCompany } from '@/lib/company-filter';
 import { fetchAllUsersAction } from '@/actions/userActions';
-import { TeamPresenceOverviewPanel } from '@/components/dashboard/TeamPresenceOverviewPanel';
 import { FestivalAndLeaveAdminPanel } from '@/components/attendance/FestivalAndLeaveAdminPanel';
 
 export default function AttendancePage() {
@@ -98,6 +102,7 @@ export default function AttendancePage() {
 
   // Sub-Navigation Tab State
   const [activeTab, setActiveTab] = useState<'today' | 'muster' | 'approvals' | 'festivals' | 'permissions' | 'ledger' | 'reports'>('today');
+  const [approvalFilter, setApprovalFilter] = useState<'all' | 'leave' | 'wfh' | 'pending'>('all');
 
   // Daily Present & Hours Bar Chart Toggle State ('both' | 'present' | 'hours')
   const [attendanceBarMode, setAttendanceBarMode] = useState<'both' | 'present' | 'hours'>('both');
@@ -133,6 +138,9 @@ export default function AttendancePage() {
   // Audit Day-wise Filter State: 'all' | 'today' | 'yesterday' | 'day_before' | 'auto_clockout' | 'custom'
   const [auditFilterType, setAuditFilterType] = useState<'all' | 'today' | 'yesterday' | 'day_before' | 'auto_clockout' | 'custom'>('all');
   const [customAuditDate, setCustomAuditDate] = useState<string>(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+  // Audit Table Pagination State (10, 20, 50, 100)
+  const [auditPageSize, setAuditPageSize] = useState<number>(10);
+  const [auditCurrentPage, setAuditCurrentPage] = useState<number>(1);
   const [selectedMusterDate, setSelectedMusterDate] = useState<string>(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
   const [musterTableFilter, setMusterTableFilter] = useState<'all' | 'present' | 'absent'>('all');
 
@@ -497,6 +505,9 @@ export default function AttendancePage() {
     setIsBreakModalOpen(false);
   };
 
+  // Double Click Protection State
+  const [isSubmittingClock, setIsSubmittingClock] = useState(false);
+
   if (!currentUser) return null;
 
   // Format seconds into HH:MM:SS
@@ -548,7 +559,7 @@ export default function AttendancePage() {
   const monthlyShiftsCount = 21 + (isClockedIn ? 1 : 0);
 
   // Daily Present & Total Hours Bar Chart Analytics Data (Calculated dynamically)
-  const dailyAttendanceChartData = useMemo(() => {
+  const dailyAttendanceChartData = (() => {
     const baseDays = [
       { day: 'Mon', fullDay: 'Monday', basePresent: isAustralia ? 3 : 14, baseHrs: isAustralia ? 24.5 : 116.0 },
       { day: 'Tue', fullDay: 'Tuesday', basePresent: isAustralia ? 3 : 15, baseHrs: isAustralia ? 25.0 : 122.5 },
@@ -592,7 +603,7 @@ export default function AttendancePage() {
         isToday,
       };
     });
-  }, [isAustralia, isClockedIn, workedSeconds, currentDayOfWeek]);
+  })();
 
   // Calculate Days count dynamically for Leave Application
   const calculatedDays =
@@ -686,9 +697,6 @@ export default function AttendancePage() {
     }
     return item;
   });
-
-  // Double Click Protection State
-  const [isSubmittingClock, setIsSubmittingClock] = useState(false);
 
   // Clock In / Out Action with Server Timestamp & Double Click Protection
   const handleClockToggle = async () => {
@@ -980,6 +988,9 @@ export default function AttendancePage() {
   }
 
   // Team Hierarchy & Company Branch Filtering
+  // 1. Super Admin: sees all requests across company
+  // 2. Team Lead: sees their team requests only (+ own requests)
+  // 3. Member: sees ONLY their own data
   const scopedRequests = requests.filter((req) => {
     const matchesBranch = isUserInCompany(
       {
@@ -992,17 +1003,48 @@ export default function AttendancePage() {
     );
     if (!matchesBranch) return false;
 
+    // 1. Admin can see all
     if (isSuperAdmin) return true;
-    if (currentUser?.role === 'Team Lead') return req.empTeam === currentUser.team;
-    return req.empId === currentUser?._id;
+
+    const reqEmail = (req as any).empEmail?.toLowerCase();
+    const reqName = req.empName?.toLowerCase();
+    const currentEmail = currentUser?.email?.toLowerCase();
+    const currentName = currentUser?.name?.toLowerCase();
+
+    // Look up member in rosterUsers
+    const userInRoster = rosterUsers.find(
+      (u) =>
+        (req.empId && (u._id === req.empId || u.id === req.empId)) ||
+        (reqEmail && u.email?.toLowerCase() === reqEmail) ||
+        (reqName && u.name?.toLowerCase() === reqName)
+    );
+
+    const isOwn =
+      (Boolean(req.empId) && (req.empId === currentUser?._id || req.empId === (currentUser as any)?.id)) ||
+      (Boolean(reqEmail) && reqEmail === currentEmail) ||
+      (Boolean(reqName) && Boolean(currentName) && reqName === currentName) ||
+      (Boolean(userInRoster) && (userInRoster._id === currentUser?._id || userInRoster.email?.toLowerCase() === currentEmail));
+
+    // 2. Team Lead can see team only (+ own requests)
+    if (roleLower.includes('lead')) {
+      const effectiveTeam = (req.empTeam || userInRoster?.team || '').trim().toLowerCase();
+      const myTeam = (currentUser?.team || '').trim().toLowerCase();
+      const isTeamMatch = Boolean(effectiveTeam) && Boolean(myTeam) && effectiveTeam === myTeam;
+      return isTeamMatch || isOwn;
+    }
+
+    // 3. Regular member can see ONLY own data
+    return isOwn;
   });
 
   const scopedRegister = rosterUsers.filter((u) => {
     if (!isUserInCompany(u, activeCompanyScope)) return false;
 
     if (isSuperAdmin) return true;
-    if (currentUser?.role === 'Team Lead') return u.team === currentUser.team;
-    return u.email === currentUser?.email;
+    if (roleLower.includes('lead')) {
+      return Boolean(u.team) && Boolean(currentUser?.team) && u.team.trim().toLowerCase() === currentUser?.team.trim().toLowerCase();
+    }
+    return u.email?.toLowerCase() === currentUser?.email?.toLowerCase() || u._id === currentUser?._id;
   });
 
   // Real-time calculation of active floor presence from Supabase
@@ -1161,34 +1203,32 @@ export default function AttendancePage() {
   })();
 
   // IST Date Keys & Labels for Day-Wise Audit Presets
-  const todayKey = useMemo(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }), [chennaiTimeStr]);
-  const yesterdayKey = useMemo(() => {
+  const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const yesterdayKey = (() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  }, [chennaiTimeStr]);
-  const dayBeforeKey = useMemo(() => {
+  })();
+  const dayBeforeKey = (() => {
     const d = new Date();
     d.setDate(d.getDate() - 2);
     return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  }, [chennaiTimeStr]);
+  })();
 
-  const todayLabel = useMemo(() => {
-    return new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
-  }, [chennaiTimeStr]);
-  const yesterdayLabel = useMemo(() => {
+  const todayLabel = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+  const yesterdayLabel = (() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     return d.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
-  }, [chennaiTimeStr]);
-  const dayBeforeLabel = useMemo(() => {
+  })();
+  const dayBeforeLabel = (() => {
     const d = new Date();
     d.setDate(d.getDate() - 2);
     return d.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
-  }, [chennaiTimeStr]);
+  })();
 
   // Dynamic Daily Muster Roster with Present/Absent status per team member
-  const dailyMusterRoster = useMemo(() => {
+  const dailyMusterRoster = (() => {
     const isSelectedToday = selectedMusterDate === todayKey;
 
     return scopedRegister.map((u) => {
@@ -1258,18 +1298,18 @@ export default function AttendancePage() {
         workMode,
       };
     });
-  }, [scopedRegister, selectedMusterDate, todayKey, liveAttendanceRecords, isClockedIn, clockInTime, clockOutTime, workedSeconds, currentUser, isAustralia, requests]);
+  })();
 
-  const dailyMusterKPI = useMemo(() => {
+  const dailyMusterKPI = (() => {
     const total = dailyMusterRoster.length;
     const present = dailyMusterRoster.filter((r) => r.status === 'PRESENT').length;
     const absent = dailyMusterRoster.filter((r) => r.status === 'ABSENT').length;
     const onLeave = dailyMusterRoster.filter((r) => r.status === 'ON LEAVE').length;
     const wfh = dailyMusterRoster.filter((r) => r.status === 'WFH').length;
     return { total, present, absent, onLeave, wfh };
-  }, [dailyMusterRoster]);
+  })();
 
-  const filteredMusterRoster = useMemo(() => {
+  const filteredMusterRoster = (() => {
     if (musterTableFilter === 'present') {
       return dailyMusterRoster.filter((r) => r.status === 'PRESENT' || r.status === 'WFH');
     }
@@ -1277,7 +1317,7 @@ export default function AttendancePage() {
       return dailyMusterRoster.filter((r) => r.status === 'ABSENT' || r.status === 'ON LEAVE');
     }
     return dailyMusterRoster;
-  }, [dailyMusterRoster, musterTableFilter]);
+  })();
 
 
   const handleExportDailyAttendanceExcel = (targetDateKey?: string, filterMode: 'all' | 'present' | 'absent' = 'all') => {
@@ -1322,7 +1362,7 @@ export default function AttendancePage() {
 
 
   // Distinct dates grouped by month for month-wise / date-wise dropdown selector
-  const monthGroups = useMemo(() => {
+  const monthGroups = (() => {
     const dateMap = new Map<string, { dayKey: string; label: string; count: number; activeCount: number; dateObj: Date }>();
 
     displayHistory.forEach((item: any) => {
@@ -1371,9 +1411,9 @@ export default function AttendancePage() {
       });
 
     return Array.from(groupsMap.values());
-  }, [displayHistory]);
+  })();
 
-  const activeFilterLabel = useMemo(() => {
+  const activeFilterLabel = (() => {
     if (auditFilterType === 'all') return 'All Recorded Dates';
     if (auditFilterType === 'today') return `Today (${todayLabel})`;
     if (auditFilterType === 'yesterday') return `Yesterday (${yesterdayLabel})`;
@@ -1390,10 +1430,10 @@ export default function AttendancePage() {
       return customAuditDate;
     }
     return 'All Recorded Dates';
-  }, [auditFilterType, customAuditDate, todayLabel, yesterdayLabel, dayBeforeLabel]);
+  })();
 
   // Counts & active shifts for each day filter preset
-  const auditCounts = useMemo(() => {
+  const auditCounts = (() => {
     let today = 0;
     let yesterday = 0;
     let dayBefore = 0;
@@ -1439,10 +1479,10 @@ export default function AttendancePage() {
       custom,
       customActive,
     };
-  }, [displayHistory, todayKey, yesterdayKey, dayBeforeKey, customAuditDate]);
+  })();
 
   // Filtered audit history by selected day preset, auto-clockout, or custom date
-  const filteredAuditHistory = useMemo(() => {
+  const filteredAuditHistory = (() => {
     if (auditFilterType === 'all') return displayHistory;
     if (auditFilterType === 'today') return displayHistory.filter((item: any) => item.dayKey === todayKey);
     if (auditFilterType === 'yesterday') return displayHistory.filter((item: any) => item.dayKey === yesterdayKey);
@@ -1450,9 +1490,21 @@ export default function AttendancePage() {
     if (auditFilterType === 'auto_clockout') return displayHistory.filter((item: any) => item.isAutoClockOut);
     if (auditFilterType === 'custom') return displayHistory.filter((item: any) => item.dayKey === customAuditDate);
     return displayHistory;
-  }, [displayHistory, auditFilterType, todayKey, yesterdayKey, dayBeforeKey, customAuditDate]);
+  })();
 
-  const currentAuditKPI = useMemo(() => {
+  // Audit Table Pagination Computations (10, 20, 50, 100)
+  const totalAuditItems = filteredAuditHistory.length;
+  const totalAuditPages = Math.max(1, Math.ceil(totalAuditItems / auditPageSize));
+  const safeAuditPage = Math.min(Math.max(1, auditCurrentPage), totalAuditPages);
+  const startAuditIndex = totalAuditItems === 0 ? 0 : (safeAuditPage - 1) * auditPageSize;
+  const endAuditIndex = Math.min(startAuditIndex + auditPageSize, totalAuditItems);
+  const paginatedAuditHistory = filteredAuditHistory.slice(startAuditIndex, endAuditIndex);
+
+  useEffect(() => {
+    setAuditCurrentPage(1);
+  }, [auditFilterType, customAuditDate, auditPageSize]);
+
+  const currentAuditKPI = (() => {
     const list = filteredAuditHistory;
     const uniqueEmployees = new Set(list.map((i: any) => (i.userName || '').toLowerCase().trim())).size;
     const activeCount = list.filter((i: any) => i.status === 'Active Shift').length;
@@ -1474,7 +1526,7 @@ export default function AttendancePage() {
       mktgCount,
       creativeCount,
     };
-  }, [filteredAuditHistory]);
+  })();
 
   return (
     <div className="space-y-6">
@@ -1536,22 +1588,6 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          <div className="w-full sm:w-auto sm:border-l sm:border-zinc-200/60 dark:sm:border-zinc-800/60 sm:pl-4 flex">
-            <Button
-              type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('ambizcon_trigger_health_check'));
-                }
-              }}
-              variant="outline"
-              className="w-full sm:w-auto justify-center font-bold text-xs gap-2 px-3.5 py-2.5 rounded-xl border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-all"
-            >
-              <HeartPulse className="h-4 w-4 animate-pulse text-emerald-500" />
-              <span>👨‍💻 Quick Health Check</span>
-            </Button>
-          </div>
-
           {canAccessKiosk && (
             <div className="w-full sm:w-auto sm:border-l sm:border-zinc-200/60 dark:sm:border-zinc-800/60 sm:pl-4 flex">
               <Button
@@ -1611,6 +1647,7 @@ export default function AttendancePage() {
             ]
           : [
               { key: 'today', label: 'TODAY' },
+              { key: 'approvals', label: 'APPROVALS' },
               { key: 'festivals', label: '🎉 COMMON FESTIVAL LEAVES & MY BALANCE' },
             ]
         ).map((tab) => (
@@ -1852,93 +1889,85 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* TEAM PRESENCE OVERVIEW PANEL + WEEKLY & MONTHLY ATTENDANCE SUMMARY WIDGETS */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            {/* Column 1: Zoho-Style Team Presence Overview Panel (Strictly Scoped to Their Team Only) */}
-            <div className="lg:col-span-1">
-              <TeamPresenceOverviewPanel />
-            </div>
-
-            {/* Columns 2 & 3: Weekly & Monthly Attendance Summary */}
-            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Weekly Summary Widget */}
-              <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-                <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-                  <div>
-                    <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                      <CalendarIcon className="h-4 w-4 text-emerald-500" />
-                      This Week's Attendance Summary
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Daily breakdown of hours worked for current week</p>
-                  </div>
-                  <Badge variant="outline" className="text-xs font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-                    Mon – Fri
-                  </Badge>
+          {/* WEEKLY & MONTHLY ATTENDANCE SUMMARY WIDGETS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            {/* Weekly Summary Widget */}
+            <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4 text-emerald-500" />
+                    This Week's Attendance Summary
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Daily breakdown of hours worked for current week</p>
                 </div>
+                <Badge variant="outline" className="text-xs font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                  Mon – Fri
+                </Badge>
+              </div>
 
-                <div className="space-y-2 text-xs">
-                  {weeklyDayRows.map((d) => (
-                    <div key={d.name} className="flex justify-between items-center py-1.5 border-b border-zinc-100 dark:border-zinc-800/50">
-                      <span className={`font-semibold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground'}`}>
-                        {d.name} {d.isToday ? '(Today)' : ''}
-                      </span>
-                      <span className={`font-mono font-bold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
-                        {d.formattedStr}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between items-center pt-2 font-bold text-sm text-foreground">
-                    <span>Total Weekly Hours:</span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-extrabold">
-                      {formattedTotalWeekly}
+              <div className="space-y-2 text-xs">
+                {weeklyDayRows.map((d) => (
+                  <div key={d.name} className="flex justify-between items-center py-1.5 border-b border-zinc-100 dark:border-zinc-800/50">
+                    <span className={`font-semibold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground'}`}>
+                      {d.name} {d.isToday ? '(Today)' : ''}
+                    </span>
+                    <span className={`font-mono font-bold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
+                      {d.formattedStr}
                     </span>
                   </div>
+                ))}
+                <div className="flex justify-between items-center pt-2 font-bold text-sm text-foreground">
+                  <span>Total Weekly Hours:</span>
+                  <span className="font-mono text-emerald-600 dark:text-emerald-400 font-extrabold">
+                    {formattedTotalWeekly}
+                  </span>
                 </div>
-              </Card>
+              </div>
+            </Card>
 
-              {/* Monthly Summary Widget */}
-              <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-                <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-                  <div>
-                    <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                      <BarChart3 className="h-4 w-4 text-emerald-500" />
-                      Monthly Attendance Summary
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Aggregated metrics for current month (October 2026)</p>
-                  </div>
-                  <Badge variant="outline" className="text-xs font-mono">
-                    Monthly Stats
-                  </Badge>
+            {/* Monthly Summary Widget */}
+            <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-emerald-500" />
+                    Monthly Attendance Summary
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Aggregated metrics for current month (October 2026)</p>
                 </div>
+                <Badge variant="outline" className="text-xs font-mono">
+                  Monthly Stats
+                </Badge>
+              </div>
 
-                <div className="grid grid-cols-2 gap-4 py-2">
-                  <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Days Worked</span>
-                    <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
-                      {monthlyWorkedDays} Days
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Total Worked Hours</span>
-                    <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
-                      {monthlyTotalHoursStr}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Average / Day</span>
-                    <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
-                      {monthlyAvgDayStr}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                    <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Completed Shifts</span>
-                    <span className="text-2xl font-extrabold text-brand-500 font-mono mt-1 block">
-                      {monthlyShiftsCount} Shifts
-                    </span>
-                  </div>
+              <div className="grid grid-cols-2 gap-4 py-2">
+                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Days Worked</span>
+                  <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
+                    {monthlyWorkedDays} Days
+                  </span>
                 </div>
-              </Card>
-            </div>
+                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Total Worked Hours</span>
+                  <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
+                    {monthlyTotalHoursStr}
+                  </span>
+                </div>
+                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Average / Day</span>
+                  <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
+                    {monthlyAvgDayStr}
+                  </span>
+                </div>
+                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Completed Shifts</span>
+                  <span className="text-2xl font-extrabold text-brand-500 font-mono mt-1 block">
+                    {monthlyShiftsCount} Shifts
+                  </span>
+                </div>
+              </div>
+            </Card>
           </div>
 
           {/* DAILY PRESENT & HOURS BAR CHART ANALYTICS CARD */}
@@ -2468,7 +2497,7 @@ export default function AttendancePage() {
                           </td>
                         </tr>
                       ) : (
-                        filteredAuditHistory.map((item) => (
+                        paginatedAuditHistory.map((item) => (
                           <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors">
                             {/* Employee Name */}
                             <td className="px-4 py-3">
@@ -2587,6 +2616,128 @@ export default function AttendancePage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Audit Table Pagination Bar (10, 20, 50, 100) */}
+                {totalAuditItems > 0 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/40 rounded-b-2xl mt-1">
+                    {/* Left: Rows Per Page Selector & Session Range */}
+                    <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">Show per page:</span>
+                        <div className="flex items-center gap-1 bg-zinc-200/70 dark:bg-zinc-800/90 p-1 rounded-xl">
+                          {[10, 20, 50, 100].map((size) => (
+                            <button
+                              key={size}
+                              onClick={() => {
+                                setAuditPageSize(size);
+                                setAuditCurrentPage(1);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                auditPageSize === size
+                                  ? 'ambizcon-gradient text-white shadow-sm'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-zinc-300/50 dark:hover:bg-zinc-700/50'
+                              }`}
+                            >
+                              {size}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <span className="hidden sm:inline-block text-zinc-300 dark:text-zinc-700">|</span>
+
+                      <span className="font-medium text-xs">
+                        Showing <span className="font-bold text-foreground">{startAuditIndex + 1}</span>–<span className="font-bold text-foreground">{endAuditIndex}</span> of{' '}
+                        <span className="font-bold text-foreground">{totalAuditItems}</span> sessions
+                      </span>
+                    </div>
+
+                    {/* Right: Page Navigation Buttons */}
+                    <div className="flex items-center gap-1.5">
+                      {/* First Page */}
+                      <button
+                        onClick={() => setAuditCurrentPage(1)}
+                        disabled={safeAuditPage <= 1}
+                        title="First Page"
+                        className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </button>
+
+                      {/* Previous Page */}
+                      <button
+                        onClick={() => setAuditCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={safeAuditPage <= 1}
+                        title="Previous Page"
+                        className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1 mx-1">
+                        {Array.from({ length: totalAuditPages }, (_, i) => i + 1)
+                          .filter((p) => {
+                            if (p === 1 || p === totalAuditPages) return true;
+                            if (Math.abs(p - safeAuditPage) <= 1) return true;
+                            return false;
+                          })
+                          .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
+                              acc.push('...');
+                            }
+                            acc.push(p);
+                            return acc;
+                          }, [])
+                          .map((item, idx) =>
+                            typeof item === 'string' ? (
+                              <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground font-bold">
+                                …
+                              </span>
+                            ) : (
+                              <button
+                                key={item}
+                                onClick={() => setAuditCurrentPage(item)}
+                                className={`min-w-[28px] h-7 px-2 rounded-lg text-xs font-bold transition-all ${
+                                  safeAuditPage === item
+                                    ? 'ambizcon-gradient text-white shadow-sm'
+                                    : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground border border-zinc-200/60 dark:border-zinc-800/60'
+                                }`}
+                              >
+                                {item}
+                              </button>
+                            )
+                          )}
+                      </div>
+
+                      {/* Next Page */}
+                      <button
+                        onClick={() => setAuditCurrentPage((p) => Math.min(totalAuditPages, p + 1))}
+                        disabled={safeAuditPage >= totalAuditPages}
+                        title="Next Page"
+                        className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+
+                      {/* Last Page */}
+                      <button
+                        onClick={() => setAuditCurrentPage(totalAuditPages)}
+                        disabled={safeAuditPage >= totalAuditPages}
+                        title="Last Page"
+                        className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                      </button>
+
+                      {/* Page Info */}
+                      <span className="text-xs text-muted-foreground ml-2 whitespace-nowrap">
+                        Page <span className="font-bold text-foreground">{safeAuditPage}</span> of{' '}
+                        <span className="font-bold text-foreground">{totalAuditPages}</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
           </Card>
         </div>
       )}
@@ -2951,11 +3102,19 @@ export default function AttendancePage() {
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-bold text-foreground">Approved & Success Register + Pending Queue</h3>
                   <Badge variant="outline" className="text-[10px] font-mono">
-                    {isSuperAdmin ? 'All Teams (CEO / Executive Queue)' : `${currentUser.team} Team Queue`}
+                    {isSuperAdmin
+                      ? 'All Teams (CEO / Executive Queue)'
+                      : roleLower.includes('lead')
+                      ? `${currentUser?.team || 'My'} Team Queue`
+                      : 'My Leave & WFH Requests (Track Status)'}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Approval Flow: Member submits $\rightarrow$ Team Leader Signoff $\rightarrow$ CEO Final Approval
+                  {isSuperAdmin
+                    ? 'Approval Flow: Member submits → Team Leader Signoff → CEO Final Approval'
+                    : roleLower.includes('lead')
+                    ? 'Approval Flow: Review your team requests → TL Signoff → Advances to CEO Final Approval'
+                    : 'Track your submitted Leave & Work From Home (WFH) requests and approval status'}
                 </p>
               </div>
               <Badge variant="default" className="bg-emerald-600 text-white text-xs">
@@ -2963,105 +3122,220 @@ export default function AttendancePage() {
               </Badge>
             </div>
 
+            {/* Quick Filter Pills for Leaves, WFH, and Pending */}
+            <div className="flex items-center gap-2 flex-wrap mb-5">
+              <button
+                onClick={() => setApprovalFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  approvalFilter === 'all'
+                    ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                    : 'bg-zinc-100 dark:bg-zinc-800/80 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All ({scopedRequests.length})
+              </button>
+              <button
+                onClick={() => setApprovalFilter('leave')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  approvalFilter === 'leave'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-zinc-100 dark:bg-zinc-800/80 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                🍃 Leaves ({scopedRequests.filter((r) => !((r.type as any) === 'Work From Home' || (r.type as any) === 'WFH' || r.reason?.toLowerCase().includes('wfh'))).length})
+              </button>
+              <button
+                onClick={() => setApprovalFilter('wfh')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  approvalFilter === 'wfh'
+                    ? 'bg-sky-600 text-white shadow-sm'
+                    : 'bg-zinc-100 dark:bg-zinc-800/80 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                🏠 WFH ({scopedRequests.filter((r) => (r.type as any) === 'Work From Home' || (r.type as any) === 'WFH' || r.reason?.toLowerCase().includes('wfh')).length})
+              </button>
+              <button
+                onClick={() => setApprovalFilter('pending')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  approvalFilter === 'pending'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'bg-zinc-100 dark:bg-zinc-800/80 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                ⏳ Pending ({scopedRequests.filter((r) => r.ceo === null || r.tl === null).length})
+              </button>
+            </div>
+
             {scopedRequests.length === 0 ? (
               <div className="py-12 text-center text-xs text-muted-foreground">
-                No active leave or WFH requests pending in your team queue.
+                {isSuperAdmin
+                  ? 'No active leave or WFH requests in company queue.'
+                  : roleLower.includes('lead')
+                  ? 'No active leave or WFH requests pending in your team queue.'
+                  : 'You have not submitted any Leave or WFH requests yet. Apply from the Today tab!'}
               </div>
             ) : (
               <div className="space-y-4">
-                {scopedRequests.map((req) => {
-                  const isPendingTL = req.tl === null;
-                  const isPendingCEO = req.tl === 'approved' && req.ceo === null;
+                {scopedRequests
+                  .filter((req) => {
+                    const isWfh =
+                      (req.type as any) === 'Work From Home' ||
+                      (req.type as any) === 'WFH' ||
+                      req.reason?.toLowerCase().includes('wfh') ||
+                      req.reason?.toLowerCase().includes('work from home');
+                    if (approvalFilter === 'leave') return !isWfh;
+                    if (approvalFilter === 'wfh') return isWfh;
+                    if (approvalFilter === 'pending') return req.ceo === null || req.tl === null;
+                    return true;
+                  })
+                  .map((req) => {
+                    const isPendingTL = req.tl === null;
+                    const isPendingCEO = req.tl === 'approved' && req.ceo === null;
+                    const isWfh =
+                      (req.type as any) === 'Work From Home' ||
+                      (req.type as any) === 'WFH' ||
+                      req.reason?.toLowerCase().includes('wfh') ||
+                      req.reason?.toLowerCase().includes('work from home');
 
-                  return (
-                    <div
-                      key={req.id}
-                      className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40"
-                    >
-                      <div className="flex items-center gap-3.5 min-w-[260px]">
-                        <Avatar name={req.empName || 'Employee'} size="md" />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm text-foreground">{req.empName}</span>
-                            <Badge variant="outline" className="text-[10px] font-mono">
-                              {req.id}
-                            </Badge>
-                            <span className="text-[10px] font-mono text-muted-foreground">[{req.empTeam}]</span>
-                          </div>
-                          <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                            {req.type} Leave ({req.days} Day) • {req.from} to {req.to}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5 italic">"{req.reason}"</p>
-                        </div>
-                      </div>
+                    const reqUser = rosterUsers.find(
+                      (u) =>
+                        (req.empId && (u._id === req.empId || u.id === req.empId)) ||
+                        (Boolean((req as any).empEmail) && u.email?.toLowerCase() === (req as any).empEmail?.toLowerCase()) ||
+                        (req.empName && u.name?.toLowerCase() === req.empName?.toLowerCase())
+                    );
 
-                      {/* 2-Step Badges */}
-                      <div className="flex items-center gap-2 text-xs">
-                        <Badge
-                          className={
-                            req.tl === 'approved'
-                              ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30'
-                              : req.tl === 'rejected'
-                              ? 'bg-rose-500/20 text-rose-600 border-rose-500/30'
-                              : 'bg-amber-500/20 text-amber-600 border-amber-500/30'
-                          }
-                        >
-                          TL: {req.tl === 'approved' ? '✓ Approved' : req.tl === 'rejected' ? '✗ Rejected' : 'Pending'}
-                        </Badge>
+                    const isOwnRequest =
+                      (Boolean(req.empId) && (req.empId === currentUser?._id || req.empId === (currentUser as any)?.id)) ||
+                      (Boolean((req as any).empEmail) && (req as any).empEmail?.toLowerCase() === currentUser?.email?.toLowerCase()) ||
+                      (Boolean(req.empName) && Boolean(currentUser?.name) && req.empName?.toLowerCase() === currentUser?.name?.toLowerCase());
 
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    const displayReason = req.reason ? req.reason.replace(/^\[WFH Request\]\s*/i, '').trim() : '';
 
-                        <Badge
-                          className={
-                            req.ceo === 'approved'
-                              ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30'
-                              : req.ceo === 'rejected'
-                              ? 'bg-rose-500/20 text-rose-600 border-rose-500/30'
-                              : 'bg-amber-500/20 text-amber-600 border-amber-500/30'
-                          }
-                        >
-                          CEO: {req.ceo === 'approved' ? '✓ Granted Success' : req.ceo === 'rejected' ? '✗ Rejected' : 'Pending'}
-                        </Badge>
-                      </div>
-
-                      {/* Action Controls */}
-                      <div className="flex items-center gap-2">
-                        {isTeamLead && isPendingTL && (
-                          <div className="flex items-center gap-1">
-                            <Button onClick={() => handleApproveTL(req.id)} size="sm" className="bg-emerald-600 text-white text-xs py-1">
-                              TL Approve
-                            </Button>
-                            <Button onClick={() => handleReject(req.id, 'tl')} size="sm" variant="ghost" className="text-rose-500 text-xs py-1">
-                              Reject
-                            </Button>
-                          </div>
-                        )}
-
-                        {isSuperAdmin && req.ceo !== 'approved' && (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              onClick={async () => {
-                                if (req.tl !== 'approved') {
-                                  await handleApproveTL(req.id);
-                                }
-                                await handleApproveCEO(req.id);
-                              }}
-                              size="sm"
-                              className="ambizcon-gradient text-white text-xs py-1 shadow-glow"
-                            >
-                              Grant Leave (Admin/CEO)
-                            </Button>
-                            {req.ceo !== 'rejected' && (
-                              <Button onClick={() => handleReject(req.id, 'ceo')} size="sm" variant="ghost" className="text-rose-500 text-xs py-1">
-                                Reject
-                              </Button>
+                    return (
+                      <div
+                        key={req.id}
+                        className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-[260px]">
+                          <Avatar
+                            name={req.empName || reqUser?.name || 'Employee'}
+                            userId={req.empId || reqUser?._id}
+                            email={(req as any).empEmail || reqUser?.email}
+                            src={reqUser?.avatar}
+                            size="md"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-foreground">{req.empName || reqUser?.name || 'Employee'}</span>
+                              <Badge variant="outline" className="text-[10px] font-mono">
+                                {req.id}
+                              </Badge>
+                              {(req.empTeam || reqUser?.team) && (
+                                <span className="text-[10px] font-mono text-muted-foreground">[{req.empTeam || reqUser?.team}]</span>
+                              )}
+                              {isWfh && (
+                                <Badge className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20 text-[10px] py-0 px-1.5 font-bold">
+                                  🏠 WFH
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                              {isWfh ? 'Work From Home (WFH)' : `${req.type} Leave`} ({req.days} Day{req.days > 1 ? 's' : ''}) • {req.from} {req.to && req.to !== req.from ? `to ${req.to}` : ''}
+                            </p>
+                            {displayReason && (
+                              <p className="text-[11px] text-muted-foreground mt-0.5 italic">"{displayReason}"</p>
                             )}
                           </div>
-                        )}
+                        </div>
+
+                        {/* 2-Step Badges */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <Badge
+                            className={
+                              req.tl === 'approved'
+                                ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30'
+                                : req.tl === 'rejected'
+                                ? 'bg-rose-500/20 text-rose-600 border-rose-500/30'
+                                : 'bg-amber-500/20 text-amber-600 border-amber-500/30'
+                            }
+                          >
+                            TL: {req.tl === 'approved' ? '✓ Approved' : req.tl === 'rejected' ? '✗ Rejected' : 'Pending'}
+                          </Badge>
+
+                          <ArrowRight className="h-3 w-3 text-muted-foreground" />
+
+                          <Badge
+                            className={
+                              req.ceo === 'approved'
+                                ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30'
+                                : req.ceo === 'rejected'
+                                ? 'bg-rose-500/20 text-rose-600 border-rose-500/30'
+                                : 'bg-amber-500/20 text-amber-600 border-amber-500/30'
+                            }
+                          >
+                            CEO: {req.ceo === 'approved' ? '✓ Granted Success' : req.ceo === 'rejected' ? '✗ Rejected' : 'Pending'}
+                          </Badge>
+                        </div>
+
+                        {/* Action Controls */}
+                        <div className="flex items-center gap-2">
+                          {/* TL can approve pending requests for team (not their own request) */}
+                          {roleLower.includes('lead') && !isSuperAdmin && !isOwnRequest && isPendingTL && (
+                            <div className="flex items-center gap-1">
+                              <Button onClick={() => handleApproveTL(req.id)} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-1">
+                                TL Approve
+                              </Button>
+                              <Button onClick={() => handleReject(req.id, 'tl')} size="sm" variant="ghost" className="text-rose-500 hover:text-rose-600 text-xs py-1">
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Admin / CEO can grant final approval across all */}
+                          {isSuperAdmin && req.ceo !== 'approved' && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                onClick={async () => {
+                                  if (req.tl !== 'approved') {
+                                    await handleApproveTL(req.id);
+                                  }
+                                  await handleApproveCEO(req.id);
+                                }}
+                                size="sm"
+                                className="ambizcon-gradient text-white text-xs py-1 shadow-glow hover:opacity-95"
+                              >
+                                {isWfh ? 'Grant WFH (Admin/CEO)' : 'Grant Leave (Admin/CEO)'}
+                              </Button>
+                              {req.ceo !== 'rejected' && (
+                                <Button onClick={() => handleReject(req.id, 'ceo')} size="sm" variant="ghost" className="text-rose-500 hover:text-rose-600 text-xs py-1">
+                                  Reject
+                                </Button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Member or TL viewing own request: tracking chip */}
+                          {(!roleLower.includes('lead') && !isSuperAdmin || isOwnRequest) && !isSuperAdmin && (
+                            <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 px-2.5 py-1 rounded-lg">
+                              {req.ceo === 'approved' ? (
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Granted
+                                </span>
+                              ) : req.ceo === 'rejected' || req.tl === 'rejected' ? (
+                                <span className="text-rose-500 font-bold flex items-center gap-1">
+                                  <XCircle className="h-3.5 w-3.5" /> Rejected
+                                </span>
+                              ) : (
+                                <span className="text-amber-500 font-medium flex items-center gap-1">
+                                  <Clock className="h-3.5 w-3.5" /> In Review
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             )}
           </Card>

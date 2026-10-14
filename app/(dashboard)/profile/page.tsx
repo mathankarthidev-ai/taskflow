@@ -161,7 +161,11 @@ export default function ProfilePage() {
       };
       setCurrentUser(updatedUser);
 
-      await updateUserProfileSectionAction(currentUser._id, { avatar: dataUrl }).catch(() => {});
+      await updateUserProfileSectionAction(currentUser._id, {
+        email: currentUser.email,
+        name: currentUser.name,
+        avatar: dataUrl,
+      }).catch(() => {});
       toast.success('Profile picture uploaded! Now displayed in Navbar, Sidebar & Overview.');
     } catch (err) {
       toast.error('Failed to process profile picture');
@@ -178,7 +182,11 @@ export default function ProfilePage() {
       avatar: '',
     };
     setCurrentUser(updatedUser);
-    await updateUserProfileSectionAction(currentUser._id, { avatar: '' }).catch(() => {});
+    await updateUserProfileSectionAction(currentUser._id, {
+      email: currentUser.email,
+      name: currentUser.name,
+      avatar: '',
+    }).catch(() => {});
     toast.info('Custom profile picture removed.');
   };
 
@@ -239,6 +247,8 @@ export default function ProfilePage() {
     setIsSaving(true);
 
     const nonSensitiveUpdates = {
+      email: currentUser.email,
+      name: currentUser.name,
       avatar: avatarUrl,
       phone,
       emergencyContact,

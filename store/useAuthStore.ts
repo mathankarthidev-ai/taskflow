@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { User } from '@/types';
 import { getUserByEmailAction } from '@/actions/userActions';
-import { getCustomUserAvatar } from '@/lib/avatar-store';
+import { getCustomUserAvatar, isCustomUploadedAvatarUrl, saveCustomUserAvatar } from '@/lib/avatar-store';
 
 interface AuthState {
   currentUser: User | null;
@@ -20,6 +20,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const user = await getUserByEmailAction(email);
       if (user) {
+        if (isCustomUploadedAvatarUrl(user.avatar)) {
+          saveCustomUserAvatar(user, user.avatar);
+        }
         const customAvatar = getCustomUserAvatar({
           userId: user._id,
           email: user.email,
@@ -34,7 +37,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         if (typeof window !== 'undefined') {
           localStorage.setItem('taskflow_user_email', email);
           // Avoid storing huge base64 strings inside cookie; keep lightweight user in cookie
-          const cookieUser = { ...mergedUser, avatar: user.avatar };
+          const safeCookieAvatar =
+            mergedUser.avatar && mergedUser.avatar.startsWith('data:image/')
+              ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(mergedUser.name)}`
+              : mergedUser.avatar;
+          const cookieUser = { ...mergedUser, avatar: safeCookieAvatar };
           document.cookie = `taskflow_user=${encodeURIComponent(JSON.stringify(cookieUser))}; path=/; max-age=864000`;
         }
         return true;

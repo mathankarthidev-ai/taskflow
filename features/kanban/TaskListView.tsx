@@ -20,11 +20,9 @@ interface TaskListViewProps {
 }
 
 const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
-  { label: 'Backlog', value: 'Backlog', color: 'text-slate-600 dark:text-slate-400' },
   { label: 'To Do', value: 'Todo', color: 'text-zinc-600 dark:text-zinc-400' },
   { label: 'In Progress', value: 'In Progress', color: 'text-blue-600 dark:text-blue-400' },
   { label: 'Review / Testing', value: 'Review', color: 'text-purple-600 dark:text-purple-400' },
-  { label: 'Support', value: 'Support', color: 'text-orange-600 dark:text-orange-400' },
   { label: 'Completed', value: 'Done', color: 'text-emerald-600 dark:text-emerald-400' },
 ];
 
@@ -116,19 +114,35 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
                       </div>
                     </td>
 
-                    {/* Status Dropdown */}
+                        {/* Status Dropdown */}
                     <td className="py-3 px-3">
-                      <select
-                        value={task.status}
-                        onChange={(e) => onStatusChange(task._id, e.target.value as TaskStatus)}
-                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1 text-xs font-semibold focus-ring cursor-pointer"
-                      >
-                        {STATUS_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const isTLOrAdmin =
+                          currentUser?.role === 'Super Admin' ||
+                          currentUser?.role === 'Admin' ||
+                          currentUser?.role === 'Team Lead';
+                        return (
+                          <select
+                            value={task.status}
+                            onChange={(e) => onStatusChange(task._id, e.target.value as TaskStatus)}
+                            className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1 text-xs font-semibold focus-ring cursor-pointer"
+                          >
+                            {STATUS_OPTIONS.map((opt) => {
+                              const isDoneRestricted =
+                                opt.value === 'Done' && !isTLOrAdmin && task.status !== 'Done';
+                              return (
+                                <option
+                                  key={opt.value}
+                                  value={opt.value}
+                                  disabled={isDoneRestricted}
+                                >
+                                  {isDoneRestricted ? 'Completed (TL/Admin Only 🔒)' : opt.label}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        );
+                      })()}
                     </td>
 
                     {/* Team */}
@@ -159,6 +173,8 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
                         <Avatar
                           src={task.assignedUser?.avatar}
                           name={task.assignedUser?.name || 'Unassigned'}
+                          userId={task.assignedUser?._id || task.assignedTo}
+                          email={task.assignedUser?.email}
                           size="sm"
                         />
                         <span className="truncate max-w-[100px] text-xs font-medium text-foreground">
@@ -237,8 +253,18 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
                             </span>
                           )}
                           {task.assignedReviewerName && (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-medium text-purple-600 dark:text-purple-400">
-                              🔍 Reviewer: {task.assignedReviewerName}
+                            <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-bold text-purple-600 dark:text-purple-400">
+                              👣 Footprint: {task.assignedUser?.name || 'Member'} → {task.assignedReviewerName}
+                            </span>
+                          )}
+                          {task.reviewNote && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                              💬 Msg: {task.reviewNote}
+                            </span>
+                          )}
+                          {task.approvedBy && task.status === 'Done' && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                              ✅ Approved by {task.approvedBy}
                             </span>
                           )}
                           {Array.isArray(task.labels) &&

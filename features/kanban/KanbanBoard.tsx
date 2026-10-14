@@ -5,6 +5,7 @@ import { Task, TaskPriority, TaskStatus, TeamName, User } from '@/types';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { isUserInCompany, isTaskInCompany } from '@/lib/company-filter';
 import {
   CompletedPeriod,
@@ -17,18 +18,24 @@ import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
 import { CompletedTasksExplorerModal } from '@/components/tasks/CompletedTasksExplorerModal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { updateTaskStatusAction, fetchTasksAction, createTaskAction, deleteTaskAction } from '@/actions/taskActions';
+import { syncUsersAvatarsToLocalStore } from '@/lib/avatar-store';
+import {
+  updateTaskStatusAction,
+  updateTaskReviewWorkflowAction,
+  fetchTasksAction,
+  createTaskAction,
+  deleteTaskAction,
+} from '@/actions/taskActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield, List, Calendar, CheckCircle2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 const KANBAN_COLUMNS: { title: string; status: TaskStatus; accent: string; bg: string }[] = [
-  { title: 'Backlog', status: 'Backlog', accent: 'bg-slate-500', bg: 'hover:border-slate-400/50' },
   { title: 'To Do', status: 'Todo', accent: 'bg-zinc-500', bg: 'hover:border-zinc-400/50' },
   { title: 'In Progress', status: 'In Progress', accent: 'bg-blue-500', bg: 'hover:border-blue-500/50' },
   { title: 'Review / Testing', status: 'Review', accent: 'bg-purple-500', bg: 'hover:border-purple-500/50' },
-  { title: 'Support', status: 'Support', accent: 'bg-orange-500', bg: 'hover:border-orange-500/50' },
   { title: 'Completed', status: 'Done', accent: 'bg-emerald-500', bg: 'hover:border-emerald-500/50' },
 ];
 
@@ -61,7 +68,7 @@ function KanbanBoardContent() {
   const [creationTrackingFilter, setCreationTrackingFilter] = useState<'all' | 'created_by_me' | 'assigned_to_me'>('all');
   const [tlMemberFilter, setTlMemberFilter] = useState<string>('team_all');
 
-  // Completed Tasks View Options State (Daily: 5/mem, Weekly: 10/mem, Monthly: 40/mem, Yearly: 105/mem)
+  // Completed Tasks View Options State
   const [completedPeriod, setCompletedPeriod] = useState<CompletedPeriod>('daily');
   const [completedVisibleLimit, setCompletedVisibleLimit] = useState<number>(15);
   const [isCompletedExplorerOpen, setIsCompletedExplorerOpen] = useState<boolean>(false);
@@ -70,7 +77,7 @@ function KanbanBoardContent() {
   const [reviewTaskTarget, setReviewTaskTarget] = useState<Task | null>(null);
   const [isReviewerModalOpen, setIsReviewerModalOpen] = useState(false);
 
-  const isSuperAdmin = currentUser?.role === 'Super Admin';
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
   const isTeamLead = currentUser?.role === 'Team Lead' || isSuperAdmin;
   const activeCompanyScope = isSuperAdmin
     ? selectedCompany
@@ -79,31 +86,31 @@ function KanbanBoardContent() {
     : 'Ambizcon Health - India';
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      let [fetchedTasks, userList] = await Promise.all([
+    async function loadData(showLoader = true) {
+      if (showLoader) setLoading(true);
+      const [fetchedTasks, userList] = await Promise.all([
         fetchTasksAction(),
         fetchAllUsersAction(),
       ]);
 
-      if (!fetchedTasks || fetchedTasks.length === 0) {
-        try {
-          await fetch('/api/seed', { method: 'POST' });
-          fetchedTasks = await fetchTasksAction();
-        } catch {
-          // fallback
-        }
+      if (Array.isArray(userList)) {
+        syncUsersAvatarsToLocalStore(userList);
       }
-
       setTasks(fetchedTasks || []);
       setUsers(userList || []);
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
-    loadData();
+    loadData(true);
 
     if (currentUser && !isSuperAdmin) {
       setSelectedTeam(currentUser.team);
     }
+
+    const onRefresh = () => {
+      loadData(false);
+    };
+    window.addEventListener('ambizcon_workspace_refresh', onRefresh);
+    return () => window.removeEventListener('ambizcon_workspace_refresh', onRefresh);
   }, [setTasks, currentUser, setSelectedTeam, isSuperAdmin]);
 
   // Team Users Filter List (Scoped by Company Branch)
@@ -111,17 +118,15 @@ function KanbanBoardContent() {
     (u) => u && isUserInCompany(u, activeCompanyScope) && (isSuperAdmin || u.team === currentUser?.team)
   );
 
-  // Generate completed tasks for each member based on active completedPeriod (Daily: 5, Weekly: 10, Monthly: 40, Yearly: 105)
-  const generatedCompletedTasks = useMemo(
-    () => generateAllMembersCompletedTasks(teamMembersList, completedPeriod),
-    [teamMembersList, completedPeriod]
-  );
-
-  // Combine active non-Done tasks with the member completed tasks for the selected period
+  // Use real workspace tasks (mapping legacy Backlog -> Todo and Support -> Review so no task is lost)
   const combinedTasks = useMemo(() => {
-    const activeNonDone = (tasks || []).filter((t) => t && t.status !== 'Done');
-    return [...activeNonDone, ...generatedCompletedTasks];
-  }, [tasks, generatedCompletedTasks]);
+    return (tasks || []).map((t) => {
+      if (!t) return t;
+      if (t.status === 'Backlog') return { ...t, status: 'Todo' as TaskStatus };
+      if (t.status === 'Support') return { ...t, status: 'Review' as TaskStatus };
+      return t;
+    });
+  }, [tasks]);
 
   // Filter tasks with strict role scoping, company branch, and tracking options
   const filteredTasks = (combinedTasks || []).filter((t) => {
@@ -182,12 +187,23 @@ function KanbanBoardContent() {
     if (task && task.status !== targetStatus) {
       const canMove =
         currentUser?.role === 'Super Admin' ||
+        currentUser?.role === 'Admin' ||
         currentUser?.role === 'Team Lead' ||
         task.assignedTo === currentUser?._id ||
         task.createdBy === currentUser?._id;
 
       if (!canMove) {
         toast.error('Permission Restricted: Only Team Lead, Admin, or assigned member can move task status.');
+        return;
+      }
+
+      // Strict Rule: Only TL or Admin can approve a task to be Done (Completed)
+      if (targetStatus === 'Done' && !isTeamLead) {
+        toast.error(
+          'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
+        );
+        setReviewTaskTarget(task);
+        setIsReviewerModalOpen(true);
         return;
       }
 
@@ -203,26 +219,81 @@ function KanbanBoardContent() {
         ...historyLog,
         {
           id: `hist_${Date.now()}`,
-          action: `Status moved from ${task.status} to ${targetStatus}`,
+          action:
+            targetStatus === 'Done'
+              ? `[Footprint: ${currentUser?.name || 'User'} (${currentUser?.role}) Approved → Completed] Task approved & marked Done`
+              : `Status moved from ${task.status} to ${targetStatus}`,
           performedBy: currentUser?.name || 'User',
           performedRole: currentUser?.role,
           timestamp: new Date().toISOString(),
         },
       ];
 
+      const isApprovingDone = targetStatus === 'Done';
+
       // Optimistic update
       const updatedTasks = tasks.map((t) =>
-        t._id === taskId ? { ...t, status: targetStatus, history: newHistory, updatedAt: new Date().toISOString() } : t
+        t._id === taskId
+          ? {
+              ...t,
+              status: targetStatus,
+              ...(isApprovingDone
+                ? {
+                    reviewStatus: 'approved' as const,
+                    approvedBy: currentUser?.name || 'TL / Admin',
+                    approvalStatus: 'approved' as const,
+                  }
+                : {}),
+              history: newHistory,
+              updatedAt: new Date().toISOString(),
+            }
+          : t
       );
       setTasks(updatedTasks);
-      toast.success(`Moved "${task.title}" to ${targetStatus}`);
+
+      if (targetStatus === 'Done') {
+        useNotificationStore.getState().addNotification({
+          id: `notif_done_${task._id}_${Date.now()}`,
+          type: 'task_completed',
+          category: 'Task Completed',
+          title: '✅ Approved to Completed (Done)',
+          text: `${currentUser?.name || 'User'} (${currentUser?.role}) approved "${task.title}" (${task.team} Team) as Completed!`,
+          color: 'bg-emerald-500',
+          taskId: task._id,
+        });
+      } else {
+        useNotificationStore.getState().addNotification({
+          type: 'updated',
+          category: 'Task Status Updated',
+          title: `🔄 Moved to ${targetStatus}`,
+          text: `${currentUser?.name || 'User'} moved "${task.title}" to ${targetStatus}.`,
+          color: 'bg-blue-500',
+          taskId: task._id,
+        });
+      }
+
+      toast.success(
+        targetStatus === 'Done'
+          ? `Approved "${task.title}" to Completed!`
+          : `Moved "${task.title}" to ${targetStatus}`
+      );
 
       // Server update
-      await updateTaskStatusAction(taskId, targetStatus);
+      await updateTaskReviewWorkflowAction(taskId, {
+        status: targetStatus,
+        ...(isApprovingDone
+          ? {
+              reviewStatus: 'approved',
+              approvedBy: currentUser?.name || 'TL / Admin',
+              approvalStatus: 'approved',
+            }
+          : {}),
+        history: newHistory,
+      });
     }
   };
 
-  const handleConfirmReviewer = async (reviewer: User) => {
+  const handleConfirmReviewer = async (reviewer: User, submissionNote?: string) => {
     if (!reviewTaskTarget) return;
 
     const historyLog = reviewTaskTarget.history || [];
@@ -230,12 +301,19 @@ function KanbanBoardContent() {
       ...historyLog,
       {
         id: `hist_${Date.now()}`,
-        action: `Moved to Review & Assigned Reviewer: ${reviewer.name} (${reviewer.role})`,
+        action: `[Footprint: ${currentUser?.name || 'User'} (${currentUser?.role}) → ${reviewer.name} (${reviewer.role})] Moved to Review${
+          submissionNote ? ` — "${submissionNote}"` : ''
+        }`,
         performedBy: currentUser?.name || 'User',
         performedRole: currentUser?.role,
         timestamp: new Date().toISOString(),
+        note: submissionNote || undefined,
       },
     ];
+
+    const updatedNote = submissionNote
+      ? `${currentUser?.name || 'Member'} → ${reviewer.name}: ${submissionNote}`
+      : reviewTaskTarget.reviewNote;
 
     const updatedTasks = tasks.map((t) =>
       t._id === reviewTaskTarget._id
@@ -245,6 +323,7 @@ function KanbanBoardContent() {
             assignedReviewerId: reviewer._id,
             assignedReviewerName: reviewer.name,
             reviewStatus: 'pending_review' as const,
+            reviewNote: updatedNote,
             history: newHistory,
             updatedAt: new Date().toISOString(),
           }
@@ -252,8 +331,25 @@ function KanbanBoardContent() {
     );
 
     setTasks(updatedTasks);
-    toast.success(`Task submitted for review! Assigned Reviewer: ${reviewer.name}`);
-    await updateTaskStatusAction(reviewTaskTarget._id, 'Review');
+    useNotificationStore.getState().addNotification({
+      type: 'review_assigned',
+      category: 'Reviewer Assignment',
+      title: `🔍 Moved to Review (${currentUser?.name || 'Member'} → ${reviewer.name})`,
+      text: `${currentUser?.name || 'User'} submitted "${reviewTaskTarget.title}" for review to ${reviewer.name}${
+        submissionNote ? `: "${submissionNote}"` : '.'
+      }`,
+      color: 'bg-purple-600',
+      taskId: reviewTaskTarget._id,
+    });
+    toast.success(`Footprint saved: ${currentUser?.name || 'Member'} → ${reviewer.name} (Moved to Review)`);
+    await updateTaskReviewWorkflowAction(reviewTaskTarget._id, {
+      status: 'Review',
+      assignedReviewerId: reviewer._id,
+      assignedReviewerName: reviewer.name,
+      reviewStatus: 'pending_review',
+      reviewNote: updatedNote,
+      history: newHistory,
+    });
     setReviewTaskTarget(null);
   };
 
@@ -289,6 +385,14 @@ function KanbanBoardContent() {
       const created = await createTaskAction(newTaskData as any);
       if (created) {
         setTasks([created, ...tasks]);
+        useNotificationStore.getState().addNotification({
+          type: 'assigned',
+          category: 'Task Created',
+          title: '📌 New Task Created',
+          text: `${currentUser?.name || 'User'} created "${titleToUse}" in ${targetTeam} Team.`,
+          color: 'bg-blue-500',
+          taskId: created._id,
+        });
         toast.success(`Task "${titleToUse}" created in To Do!`);
       }
     } catch {
@@ -307,10 +411,92 @@ function KanbanBoardContent() {
   };
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
-    const updated = tasks.map((t) => (t._id === taskId ? { ...t, status: newStatus } : t));
+    const targetTask = tasks.find((t) => t._id === taskId);
+    if (!targetTask) return;
+
+    if (newStatus === 'Done' && !isTeamLead) {
+      toast.error(
+        'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
+      );
+      setReviewTaskTarget(targetTask);
+      setIsReviewerModalOpen(true);
+      return;
+    }
+
+    if (newStatus === 'Review') {
+      setReviewTaskTarget(targetTask);
+      setIsReviewerModalOpen(true);
+      return;
+    }
+
+    const newHistory = [
+      ...(targetTask.history || []),
+      {
+        id: `hist_${Date.now()}`,
+        action:
+          newStatus === 'Done'
+            ? `[Footprint: ${currentUser?.name || 'User'} (${currentUser?.role}) Approved → Completed] Task approved & marked Done`
+            : `Status moved from ${targetTask.status} to ${newStatus}`,
+        performedBy: currentUser?.name || 'User',
+        performedRole: currentUser?.role,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const isApprovingDone = newStatus === 'Done';
+    const updated = tasks.map((t) =>
+      t._id === taskId
+        ? {
+            ...t,
+            status: newStatus,
+            ...(isApprovingDone
+              ? {
+                  reviewStatus: 'approved' as const,
+                  approvedBy: currentUser?.name || 'TL / Admin',
+                  approvalStatus: 'approved' as const,
+                }
+              : {}),
+            history: newHistory,
+          }
+        : t
+    );
     setTasks(updated);
-    toast.success(`Updated status to ${newStatus}`);
-    await updateTaskStatusAction(taskId, newStatus);
+    if (newStatus === 'Done') {
+      useNotificationStore.getState().addNotification({
+        id: `notif_done_${targetTask._id}_${Date.now()}`,
+        type: 'task_completed',
+        category: 'Task Completed',
+        title: '✅ Approved to Completed (Done)',
+        text: `${currentUser?.name || 'User'} (${currentUser?.role}) approved "${targetTask.title}" as Completed!`,
+        color: 'bg-emerald-500',
+        taskId: targetTask._id,
+      });
+    } else {
+      useNotificationStore.getState().addNotification({
+        type: 'updated',
+        category: 'Task Status Updated',
+        title: `🔄 Status Updated to ${newStatus}`,
+        text: `${currentUser?.name || 'User'} updated "${targetTask.title}" to ${newStatus}.`,
+        color: 'bg-blue-500',
+        taskId: targetTask._id,
+      });
+    }
+    toast.success(
+      newStatus === 'Done'
+        ? `Approved "${targetTask.title}" to Completed!`
+        : `Updated status to ${newStatus}`
+    );
+    await updateTaskReviewWorkflowAction(taskId, {
+      status: newStatus,
+      ...(isApprovingDone
+        ? {
+            reviewStatus: 'approved',
+            approvedBy: currentUser?.name || 'TL / Admin',
+            approvalStatus: 'approved',
+          }
+        : {}),
+      history: newHistory,
+    });
   };
 
   const handleCreateTaskForDate = async (dateStr: string, title: string) => {
@@ -416,29 +602,6 @@ function KanbanBoardContent() {
             </Button>
           </form>
 
-          {filteredTasks.length === 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                setLoading(true);
-                try {
-                  await fetch('/api/seed', { method: 'POST' });
-                  const fetchedTasks = await fetchTasksAction();
-                  setTasks(fetchedTasks);
-                  toast.success('Populated 18 Ambizcon tasks across all 6 columns!');
-                } catch (e) {
-                  toast.error('Failed to populate tasks');
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              className="gap-1.5 border-teal-500/40 text-teal-600 dark:text-teal-400 hover:bg-teal-500/10"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Populate Tasks
-            </Button>
-          )}
           <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 ambizcon-gradient text-white shadow-glow">
             <Plus className="h-4 w-4" />
             Create Task
@@ -447,67 +610,85 @@ function KanbanBoardContent() {
       </div>
 
       {/* Top Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 glass-panel space-y-2 sm:space-y-0">
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-3.5 glass-panel">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
           {/* Search Input */}
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by title, label (e.g. Figma, Mobile)..."
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background py-1.5 pl-9 pr-3 text-xs focus-ring"
+              placeholder="Search tasks..."
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background py-1.5 pl-8 pr-3 text-xs focus-ring"
             />
           </div>
 
           {/* Task Creation & History Tracking Dropdown */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase text-muted-foreground hidden sm:inline">Track Mode:</span>
+            <span className="text-[10px] font-bold uppercase text-muted-foreground hidden sm:inline">Track:</span>
             <select
               value={creationTrackingFilter}
               onChange={(e) => setCreationTrackingFilter(e.target.value as any)}
-              className="rounded-xl border border-brand-500/40 bg-brand-500/10 text-brand-600 dark:text-brand-300 font-bold px-3 py-1.5 text-xs focus-ring"
+              className="rounded-xl border border-brand-500/40 bg-brand-500/10 text-brand-600 dark:text-brand-300 font-bold px-2.5 py-1.5 text-xs focus-ring"
             >
-              <option value="all">All Workspace Tasks ({tasks.length})</option>
-              <option value="created_by_me">Tasks Created By Me ({myCreatedCount})</option>
-              <option value="assigned_to_me">Tasks Assigned To Me ({myAssignedCount})</option>
+              <option value="all">All Tasks ({tasks.length})</option>
+              <option value="created_by_me">Created By Me ({myCreatedCount})</option>
+              <option value="assigned_to_me">Assigned To Me ({myAssignedCount})</option>
             </select>
           </div>
 
           {/* Team Lead (TL) Member Workload Filter Dropdown */}
-          {isTeamLead && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase text-muted-foreground hidden sm:inline">TL Workload View:</span>
-              <select
-                value={tlMemberFilter}
-                onChange={(e) => setTlMemberFilter(e.target.value)}
-                className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-3 py-1.5 text-xs focus-ring"
-              >
-                <option value="team_all">Whole Team Tasks</option>
-                <option value="my_own">My Personal Tasks</option>
-                <optgroup label="Filter By Team Member">
-                  {teamMembersList.map((m) => (
-                    <option key={m._id} value={m._id}>
-                      {m.name} ({m.role})
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-            </div>
-          )}
+          {isTeamLead && (() => {
+            const activeTlMember =
+              tlMemberFilter === 'my_own'
+                ? currentUser
+                : tlMemberFilter !== 'team_all'
+                ? teamMembersList.find((m) => m._id === tlMemberFilter) || null
+                : null;
+            return (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground hidden sm:inline">View:</span>
+                {activeTlMember && (
+                  <Avatar
+                    src={activeTlMember.avatar}
+                    name={activeTlMember.name}
+                    userId={activeTlMember._id}
+                    email={activeTlMember.email}
+                    size="xs"
+                    className="ring-1 ring-emerald-500/40"
+                  />
+                )}
+                <select
+                  value={tlMemberFilter}
+                  onChange={(e) => setTlMemberFilter(e.target.value)}
+                  className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-2.5 py-1.5 text-xs focus-ring"
+                >
+                  <option value="team_all">Whole Team Tasks</option>
+                  <option value="my_own">My Personal Tasks</option>
+                  <optgroup label="Filter By Team Member">
+                    {teamMembersList.map((m) => (
+                      <option key={m._id} value={m._id}>
+                        {m.name} ({m.role})
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+            );
+          })()}
 
           {/* Team Filter */}
           {isSuperAdmin && (
             <select
               value={selectedTeam}
               onChange={(e) => setSelectedTeam(e.target.value as TeamName | 'All')}
-              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
             >
-              <option value="All">All Workspace Teams</option>
-              <option value="Creative">Creative Team</option>
-              <option value="Marketing">Marketing Team</option>
-              <option value="Development">Development Team</option>
+              <option value="All">All Teams</option>
+              <option value="Creative">Creative</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Development">Development</option>
             </select>
           )}
 
@@ -515,7 +696,7 @@ function KanbanBoardContent() {
           <select
             value={selectedPriority}
             onChange={(e) => setSelectedPriority(e.target.value as TaskPriority | 'All')}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
           >
             <option value="All">All Priorities</option>
             <option value="Urgent">Urgent 🔥</option>
@@ -544,155 +725,14 @@ function KanbanBoardContent() {
         </div>
       </div>
 
-      {/* Quick Label Preset Filters */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider text-[10px] mr-1">
-          Quick Label Filters:
-        </span>
-        <button
-          onClick={() => {
-            setCreationTrackingFilter('assigned_to_me');
-          }}
-          className={`rounded-full px-3 py-1 text-xs font-semibold border transition-all ${
-            creationTrackingFilter === 'assigned_to_me'
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          ⚡ Assigned to Me
-        </button>
-        <button
-          onClick={() => {
-            setCreationTrackingFilter('created_by_me');
-          }}
-          className={`rounded-full px-3 py-1 text-xs font-semibold border transition-all ${
-            creationTrackingFilter === 'created_by_me'
-              ? 'border-brand-500 bg-brand-500/10 text-brand-400'
-              : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          📝 Created By Me ({myCreatedCount})
-        </button>
-
-        {['Figma', 'UI/UX', 'Mobile', 'Wireframes', 'SEO', 'API'].map((labelTag) => (
-          <button
-            key={labelTag}
-            onClick={() => setSearchQuery(labelTag)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-all flex items-center gap-1 ${
-              searchQuery === labelTag
-                ? 'border-brand-500 bg-brand-500/10 text-brand-400'
-                : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Tag className="h-3 w-3 opacity-60" />
-            {labelTag}
-          </button>
-        ))}
-      </div>
-
-      {/* Completed Tasks View Options Bar (Per Member: Daily 5, Weekly 10, Monthly 40, Yearly 100+) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-extrabold text-xs uppercase tracking-wider">
-            <CheckCircle2 className="h-4 w-4" />
-            <span>Completed Task View Options:</span>
-          </div>
-
-          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-emerald-500/30 bg-background/80 p-1">
-            {(
-              [
-                { id: 'daily', label: 'Daily (5 / mem)' },
-                { id: 'weekly', label: 'Weekly (10 / mem)' },
-                { id: 'monthly', label: 'Monthly (40 / mem)' },
-                { id: 'yearly', label: 'Yearly (100+ / mem)' },
-              ] as { id: CompletedPeriod; label: string }[]
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => {
-                  setCompletedPeriod(opt.id);
-                  setCompletedVisibleLimit(15);
-                }}
-                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
-                  completedPeriod === opt.id
-                    ? 'bg-emerald-500 text-white shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Member Selector for Completed Tasks */}
-          <select
-            value={tlMemberFilter}
-            onChange={(e) => {
-              setTlMemberFilter(e.target.value);
-              setCompletedVisibleLimit(15);
-            }}
-            className="rounded-xl border border-emerald-500/30 bg-background px-3 py-1.5 text-xs font-bold text-foreground focus-ring"
-          >
-            <option value="team_all">
-              All Members ({teamMembersList.length} Members •{' '}
-              {(completedPeriod === 'daily'
-                ? 5
-                : completedPeriod === 'weekly'
-                ? 10
-                : completedPeriod === 'monthly'
-                ? 40
-                : 105) * teamMembersList.length}{' '}
-              Completed)
-            </option>
-            <option value="my_own">
-              My Completed Tasks (
-              {completedPeriod === 'daily'
-                ? '5 Daily'
-                : completedPeriod === 'weekly'
-                ? '10 Weekly'
-                : completedPeriod === 'monthly'
-                ? '40 Monthly'
-                : '105 Yearly'}
-              )
-            </option>
-            <optgroup label="Select Member (5D / 10W / 40M / 105Y)">
-              {teamMembersList.map((m) => (
-                <option key={m._id} value={m._id}>
-                  {m.name} ({m.team}) —{' '}
-                  {completedPeriod === 'daily'
-                    ? '5 Daily'
-                    : completedPeriod === 'weekly'
-                    ? '10 Weekly'
-                    : completedPeriod === 'monthly'
-                    ? '40 Monthly'
-                    : '105 Yearly'}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        </div>
-
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => setIsCompletedExplorerOpen(true)}
-          className="gap-1.5 text-xs font-bold border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
-        >
-          <Eye className="h-3.5 w-3.5" />
-          Open Completed Tasks Explorer (5D • 10W • 40M • 100+Y)
-        </Button>
-      </div>
-
-      {/* Main View: List or Board */}
+      {/* Main View: List, Calendar, or Crisp 4-Column Board */}
       {loading ? (
-        <div className="flex xl:grid xl:grid-cols-6 overflow-x-auto pb-4 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="w-[285px] sm:w-[320px] xl:w-full shrink-0 xl:shrink space-y-3">
-              <Skeleton className="h-10 w-full rounded-xl" />
-              <Skeleton className="h-36 w-full rounded-2xl" />
-              <Skeleton className="h-36 w-full rounded-2xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="w-full space-y-2.5">
+              <Skeleton className="h-9 w-full rounded-xl" />
+              <Skeleton className="h-32 w-full rounded-2xl" />
+              <Skeleton className="h-32 w-full rounded-2xl" />
             </div>
           ))}
         </div>
@@ -717,7 +757,7 @@ function KanbanBoardContent() {
           onCreateTaskForDate={handleCreateTaskForDate}
         />
       ) : (
-        <div className="flex xl:grid xl:grid-cols-6 overflow-x-auto pb-4 gap-4 items-start snap-x snap-mandatory">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-start">
           {KANBAN_COLUMNS.map((column) => {
             const columnTasks = (filteredTasks || []).filter(
               (t) => t && (t.status === column.status || (t.status || '').toLowerCase() === column.status.toLowerCase())
@@ -732,59 +772,26 @@ function KanbanBoardContent() {
                 key={column.status}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, column.status)}
-                className={`flex flex-col rounded-3xl border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 p-3.5 min-h-[500px] lg:min-h-[600px] w-[285px] sm:w-[320px] lg:w-full shrink-0 lg:shrink snap-center transition-all ${column.bg}`}
+                className={`flex flex-col rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/60 dark:bg-zinc-900/40 p-3 min-h-[420px] w-full transition-all ${column.bg}`}
               >
                 {/* Column Header */}
-                <div className="flex flex-col gap-2 pb-3 px-1 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
-                        {column.title}
-                      </h3>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] font-mono px-2 py-0.5 ${
-                        isCompletedCol
-                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
-                          : ''
-                      }`}
-                    >
-                      {columnTasks.length}
-                    </Badge>
+                <div className="flex items-center justify-between pb-2.5 px-1 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                      {column.title}
+                    </h3>
                   </div>
-
-                  {/* Mini Period Switcher inside Completed Column Header */}
-                  {isCompletedCol && (
-                    <div className="grid grid-cols-4 gap-1 pt-0.5">
-                      {(
-                        [
-                          { id: 'daily', short: '5/D' },
-                          { id: 'weekly', short: '10/W' },
-                          { id: 'monthly', short: '40/M' },
-                          { id: 'yearly', short: '100+Y' },
-                        ] as { id: CompletedPeriod; short: string }[]
-                      ).map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            setCompletedPeriod(p.id);
-                            setCompletedVisibleLimit(15);
-                          }}
-                          className={`rounded-md py-1 text-[10px] font-extrabold font-mono transition-all ${
-                            completedPeriod === p.id
-                              ? 'bg-emerald-500 text-white shadow-sm'
-                              : 'bg-zinc-200/70 dark:bg-zinc-800 text-muted-foreground hover:text-foreground'
-                          }`}
-                          title={`Switch Completed column to ${p.id} view`}
-                        >
-                          {p.short}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] font-mono px-2 py-0.5 ${
+                      isCompletedCol
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
+                        : ''
+                    }`}
+                  >
+                    {columnTasks.length}
+                  </Badge>
                 </div>
 
                 {/* Column Cards List */}

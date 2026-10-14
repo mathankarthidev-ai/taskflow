@@ -40,12 +40,14 @@ export function GlobalSearchModal() {
         fetchTasksAction({ search: query }),
         fetchAllUsersAction(),
       ]).then(([taskList, userList]) => {
-        setTasks(taskList);
-        const filteredUsers = userList.filter(
+        setTasks(taskList || []);
+        const qLower = query.toLowerCase();
+        const filteredUsers = (userList || []).filter(
           (u) =>
-            u.name.toLowerCase().includes(query.toLowerCase()) ||
-            u.email.toLowerCase().includes(query.toLowerCase()) ||
-            u.role.toLowerCase().includes(query.toLowerCase())
+            u &&
+            ((u.name || '').toLowerCase().includes(qLower) ||
+              (u.email || '').toLowerCase().includes(qLower) ||
+              (u.role || '').toLowerCase().includes(qLower))
         );
         setUsers(filteredUsers);
         setLoading(false);

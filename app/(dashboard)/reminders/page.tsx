@@ -42,6 +42,7 @@ import { toast } from 'sonner';
 import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
 import { TaskEditModal } from '@/components/tasks/TaskEditModal';
 import { useCompanyStore } from '@/store/useCompanyStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { isTaskInCompany } from '@/lib/company-filter';
 
 const ITEMS_PER_PAGE = 4;
@@ -123,35 +124,13 @@ export default function RemindersPage() {
     });
   }, [setTasks]);
 
-  const getTaskReminder = (t: Task, index: number): ReminderSettings => {
-    if (t.reminderSettings) return t.reminderSettings;
-
-    // Distribute among Daily, Weekly, Monthly, Yearly, Custom for full test coverage
-    const frequencies: ('Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom')[] = [
-      'Daily',
-      'Weekly',
-      'Monthly',
-      'Yearly',
-      'Custom',
-    ];
-    const freq = frequencies[index % 5];
-
-    return {
-      enabled: true,
-      frequency: freq,
-      reminderDate: t.dueDate ? t.dueDate.split('T')[0] : '2026-10-15',
-      reminderTime: ['09:30 AM', '11:00 AM', '02:30 PM', '05:00 PM'][index % 4],
-      remindBeforeDays: freq === 'Custom' ? 14 : freq === 'Yearly' ? 30 : 7,
-      repeatEndsOption: 'never',
-      summaryText: `Automated ${freq} schedule notification.`,
-    };
-  };
-
   const tasksWithReminders: TaskWithReminder[] = useMemo(() => {
-    return (tasks || []).map((t, idx) => ({
-      task: t,
-      reminder: getTaskReminder(t, idx),
-    }));
+    return (tasks || [])
+      .filter((t) => t?.reminderSettings && t.reminderSettings.enabled)
+      .map((t) => ({
+        task: t,
+        reminder: t.reminderSettings!,
+      }));
   }, [tasks]);
 
   // Filter out dismissed tasks, branch scope, and search term
@@ -195,12 +174,36 @@ export default function RemindersPage() {
 
   const handleDismiss = (taskId: string, title: string) => {
     setDismissedReminders((prev) => ({ ...prev, [taskId]: true }));
+    useNotificationStore.getState().addNotification({
+      type: 'system',
+      category: 'Due Reminder Completed',
+      title: `✅ Reminder Completed: ${title}`,
+      text: `${currentUser?.name || 'User'} marked reminder "${title}" as Completed.`,
+      color: 'bg-emerald-500',
+      link: '/reminders',
+      taskId,
+      senderName: currentUser?.name,
+      senderRole: currentUser?.role,
+      targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+    });
     toast.success(`Marked reminder for "${title}" as completed!`, {
       description: 'Notification dismissed from your active schedule.',
     });
   };
 
   const handleSnooze = (taskId: string, title: string) => {
+    useNotificationStore.getState().addNotification({
+      type: 'system',
+      category: 'Reminder Snoozed',
+      title: `⏰ Reminder Snoozed: ${title}`,
+      text: `Reminder "${title}" snoozed by 24 hours (until tomorrow at 10:00 AM).`,
+      color: 'bg-amber-500',
+      link: '/reminders',
+      taskId,
+      senderName: currentUser?.name,
+      senderRole: currentUser?.role,
+      targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+    });
     toast.info(`Snoozed reminder for "${title}" by 24 hours.`, {
       description: 'Alert rescheduled to tomorrow at 10:00 AM.',
     });
@@ -1077,8 +1080,7 @@ export default function RemindersPage() {
         </div>
       )}
 
-      {/* Modals for Task Detail & Dedicated Reminder Creation */}
-      <TaskDetailModal />
+      {/* Modals for Dedicated Reminder Creation & Task Edit */}
       <ReminderCreateModal
         isOpen={isReminderModalOpen}
         onClose={() => setIsReminderModalOpen(false)}

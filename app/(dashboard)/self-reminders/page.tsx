@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import {
   SelfReminder,
   SelfReminderRepeat,
@@ -14,25 +15,10 @@ import {
   to24HourTime,
 } from '@/lib/self-reminders-store';
 import { Card } from '@/components/ui/Card';
+import { playNotificationChime } from '@/lib/audio-chime';
 
 function playAlertSound() {
-  if (typeof window === 'undefined') return;
-  try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.14); // A5
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.45);
-  } catch (e) {}
+  playNotificationChime('self_reminder');
 }
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -103,7 +89,7 @@ export default function SelfRemindersPage() {
     return () => window.removeEventListener('ambizcon_self_reminders_updated', handleSync);
   }, [currentUser?.email]);
 
-  // Live Clock Watcher to Trigger Audio & Toast Alert when Reminder Time Matches
+  // Live Clock Watcher to Trigger Audio, Notification Bell & Right-Side Alert Pop-up
   useEffect(() => {
     if (!currentUser || reminders.length === 0) return;
 
@@ -113,32 +99,84 @@ export default function SelfRemindersPage() {
       const todayKey = now.toLocaleDateString('en-CA');
 
       reminders.forEach((rem) => {
-        if (rem.is_completed || !rem.is_active) return;
+        if (!rem) return;
         const rem24 = to24HourTime(rem.reminder_time);
-        if (rem24 === nowTime24) {
-          const firedKey = `self_rem_fired_${rem.id}_${todayKey}_${nowTime24}`;
-          if (!sessionStorage.getItem(firedKey)) {
-            sessionStorage.setItem(firedKey, '1');
+
+        if (rem.is_completed) {
+          const doneKey = `self_rem_done_notified_${rem.id}`;
+          if (!localStorage.getItem(doneKey)) {
+            localStorage.setItem(doneKey, '1');
+            useNotificationStore.getState().addNotification({
+              id: `notif_self_done_${rem.id}`,
+              type: 'task_completed',
+              category: 'Self Reminder Completed',
+              title: `✅ Self Reminder Completed: ${rem.title}`,
+              text: `"${rem.title}" (${rem.day_name} • ${rem.reminder_time}) is marked as Completed.`,
+              color: 'bg-emerald-500',
+              link: '/self-reminders',
+            });
+          }
+          return;
+        }
+
+        if (!rem.is_active) return;
+
+        // Trigger if reminder time matches or has already passed today
+        if (rem24 <= nowTime24) {
+          const firedKey = `self_rem_fired_${rem.id}_${todayKey}_${rem24}`;
+          if (!localStorage.getItem(firedKey)) {
+            localStorage.setItem(firedKey, '1');
             try {
               playAlertSound();
             } catch (e) {}
-            toast.success(`🔔 Self Reminder: ${rem.title}`, {
-              description: `${rem.day_name} • ${rem.reminder_time} (${rem.repeat_type})`,
+            useNotificationStore.getState().addNotification({
+              id: `notif_self_due_${rem.id}_${todayKey}`,
+              type: 'due_date_reminder',
+              category: 'Self Reminder Alert',
+              title: `🔔 Self Reminder: ${rem.title}`,
+              text: `${rem.note ? `${rem.note} — ` : ''}Scheduled for ${rem.day_name} at ${rem.reminder_time} (${rem.repeat_type}).`,
+              color: 'bg-amber-500',
+              link: '/self-reminders',
             });
           }
         }
       });
     };
 
-    const interval = setInterval(checkDueReminders, 20000);
+    checkDueReminders();
+    const interval = setInterval(checkDueReminders, 15000);
     return () => clearInterval(interval);
   }, [reminders, currentUser]);
+
+  const filteredReminders = useMemo(() => {
+    return (reminders || []).filter((r) => {
+      if (!r) return false;
+      if (activeFilter === 'Active' && r.is_completed) return false;
+      if (activeFilter === 'Completed' && !r.is_completed) return false;
+      if (activeFilter === 'Once' && r.repeat_type !== 'Once') return false;
+      if (activeFilter === 'Daily' && r.repeat_type !== 'Daily' && r.repeat_type !== 'Weekdays (Mon–Fri)') return false;
+      if (activeFilter === 'Weekly' && r.repeat_type !== 'Weekly') return false;
+      if (activeFilter === 'Monthly' && r.repeat_type !== 'Monthly' && r.repeat_type !== 'Yearly') return false;
+      if (activeFilter === 'Custom Days' && r.repeat_type !== 'Custom Days') return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          (r.title || '').toLowerCase().includes(q) ||
+          (r.note || '').toLowerCase().includes(q) ||
+          (r.day_name || '').toLowerCase().includes(q) ||
+          (r.repeat_type || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [reminders, activeFilter, searchQuery]);
 
   if (!currentUser) return null;
 
   const handleDateChange = (newDate: string) => {
     setReminderDate(newDate);
-    if (repeatType !== 'Daily' && repeatType !== 'Weekdays (Mon–Fri)') {
+    if (newDate) {
       setDayName(getDayOfWeekFromDate(newDate));
     }
   };
@@ -183,7 +221,7 @@ export default function SelfRemindersPage() {
         ? 'Monday – Friday'
         : dayName;
 
-    await createSelfReminder({
+    const created = await createSelfReminder({
       user_id: currentUser._id,
       user_email: currentUser.email,
       user_name: currentUser.name,
@@ -196,6 +234,16 @@ export default function SelfRemindersPage() {
       custom_days: repeatType === 'Custom Days' ? selectedCustomDays.join(', ') : effectiveDay,
       is_completed: false,
       is_active: true,
+    });
+
+    useNotificationStore.getState().addNotification({
+      id: `notif_self_created_${created.id}`,
+      type: 'due_date_reminder',
+      category: 'Self Reminder Scheduled',
+      title: `🔔 Self Reminder Scheduled: ${created.title}`,
+      text: `Scheduled for ${effectiveDay} at ${formatTime12Hour(reminderTime)} (${repeatType}).`,
+      color: 'bg-amber-500',
+      link: '/self-reminders',
     });
 
     setTitle('');
@@ -212,6 +260,18 @@ export default function SelfRemindersPage() {
     await updateSelfReminder(item.id, currentUser.email, {
       is_completed: nextCompleted,
     });
+    if (nextCompleted) {
+      localStorage.setItem(`self_rem_done_notified_${item.id}`, '1');
+      useNotificationStore.getState().addNotification({
+        id: `notif_self_done_${item.id}_${Date.now()}`,
+        type: 'task_completed',
+        category: 'Self Reminder Completed',
+        title: `✅ Self Reminder Completed`,
+        text: `You marked "${item.title}" (${item.day_name} • ${item.reminder_time}) as Completed!`,
+        color: 'bg-emerald-500',
+        link: '/self-reminders',
+      });
+    }
     toast.success(
       nextCompleted ? `Marked "${item.title}" as Done!` : `Re-activated "${item.title}"`
     );
@@ -228,6 +288,15 @@ export default function SelfRemindersPage() {
     try {
       playAlertSound();
     } catch (e) {}
+    useNotificationStore.getState().addNotification({
+      id: `notif_self_test_${item.id}_${Date.now()}`,
+      type: 'due_date_reminder',
+      category: 'Self Reminder Alert',
+      title: `🔔 Reminder Alert: ${item.title}`,
+      text: `${item.note ? `${item.note} — ` : ''}${item.day_name} • ${item.reminder_time} (${item.repeat_type})`,
+      color: 'bg-amber-500',
+      link: '/self-reminders',
+    });
     toast.success(`🔔 Alert Preview: ${item.title}`, {
       description: `Date: ${item.reminder_date} • Day: ${item.day_name} • Time: ${item.reminder_time} • Repeat: ${item.repeat_type}`,
     });
@@ -275,29 +344,6 @@ export default function SelfRemindersPage() {
     setEditingItem(null);
     await loadData();
   };
-
-  const filteredReminders = useMemo(() => {
-    return reminders.filter((r) => {
-      if (activeFilter === 'Active' && r.is_completed) return false;
-      if (activeFilter === 'Completed' && !r.is_completed) return false;
-      if (activeFilter === 'Once' && r.repeat_type !== 'Once') return false;
-      if (activeFilter === 'Daily' && r.repeat_type !== 'Daily' && r.repeat_type !== 'Weekdays (Mon–Fri)') return false;
-      if (activeFilter === 'Weekly' && r.repeat_type !== 'Weekly') return false;
-      if (activeFilter === 'Monthly' && r.repeat_type !== 'Monthly' && r.repeat_type !== 'Yearly') return false;
-      if (activeFilter === 'Custom Days' && r.repeat_type !== 'Custom Days') return false;
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return (
-          r.title.toLowerCase().includes(q) ||
-          (r.note || '').toLowerCase().includes(q) ||
-          r.day_name.toLowerCase().includes(q) ||
-          r.repeat_type.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [reminders, activeFilter, searchQuery]);
 
   const activeCount = reminders.filter((r) => !r.is_completed).length;
   const completedCount = reminders.filter((r) => r.is_completed).length;
@@ -411,99 +457,117 @@ export default function SelfRemindersPage() {
             </div>
           </div>
 
-          {/* Row 2: DATE, DAY, TIME, HOW REPETITIVE */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* 1. DATE */}
-            <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40">
-              <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <CalendarIcon className="h-3.5 w-3.5 text-emerald-500" />
-                1. Date
-              </label>
-              <input
-                type="date"
-                value={reminderDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-mono font-bold focus-ring"
-                required
-              />
-            </div>
-
-            {/* 2. DAY */}
-            <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40">
-              <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5 text-blue-500" />
-                2. Day
-              </label>
-              <select
-                value={dayName}
-                onChange={(e) => setDayName(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-bold focus-ring"
-              >
-                <option value="Every Day">Every Day (Mon – Sun)</option>
-                <option value="Monday – Friday">Weekdays (Mon – Fri)</option>
-                {ALL_WEEK_DAYS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 3. TIME */}
-            <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40">
-              <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 text-amber-500" />
-                3. Time
-              </label>
-              <input
-                type="time"
-                value={reminderTime}
-                onChange={(e) => setReminderTime(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-mono font-bold focus-ring"
-                required
-              />
-              <div className="flex items-center gap-1 mt-2 flex-wrap">
-                {[
-                  { label: '9:30 AM', val: '09:30' },
-                  { label: '11:00 AM', val: '11:00' },
-                  { label: '2:00 PM', val: '14:00' },
-                  { label: '5:00 PM', val: '17:00' },
-                ].map((preset) => (
-                  <button
-                    key={preset.val}
-                    type="button"
-                    onClick={() => setReminderTime(preset.val)}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-colors ${
-                      reminderTime === preset.val
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-zinc-200/70 dark:bg-zinc-800 text-muted-foreground hover:text-foreground'
-                    }`}
+          {/* Row 2: 1. DATE & DAY (2 in 1), 2. TIME, 3. HOW REPETITIVE */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 1. DATE & DAY (Combined 2-in-1 Div) */}
+            <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 flex flex-col justify-between">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <CalendarIcon className="h-3.5 w-3.5 text-emerald-500" />
+                  1. Date &amp; Day
+                </label>
+                <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  ⚡ Auto Day
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground block mb-1">Pick Date</span>
+                  <input
+                    type="date"
+                    value={reminderDate}
+                    onChange={(e) => handleDateChange(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-2 text-xs font-mono font-bold focus-ring"
+                    required
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground block mb-1">Day of Week</span>
+                  <select
+                    value={dayName}
+                    onChange={(e) => setDayName(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-2 text-xs font-bold focus-ring"
                   >
-                    {preset.label}
-                  </button>
-                ))}
+                    <option value="Every Day">Every Day (Mon – Sun)</option>
+                    <option value="Monday – Friday">Weekdays (Mon – Fri)</option>
+                    {ALL_WEEK_DAYS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
-            {/* 4. HOW REPETITIVE */}
-            <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40">
-              <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Repeat className="h-3.5 w-3.5 text-purple-500" />
-                4. How Repetitive?
+            {/* 2. TIME */}
+            <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 flex flex-col justify-between">
+              <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <Clock className="h-3.5 w-3.5 text-amber-500" />
+                2. Time
               </label>
-              <select
-                value={repeatType}
-                onChange={(e) => handleRepeatTypeChange(e.target.value as SelfReminderRepeat)}
-                className="mt-2 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-bold focus-ring"
-              >
-                <option value="Once">One-Time Only (Once)</option>
-                <option value="Daily">Daily (Every Day)</option>
-                <option value="Weekdays (Mon–Fri)">Every Weekday (Mon–Fri)</option>
-                <option value="Weekly">Weekly (Every {getDayOfWeekFromDate(reminderDate)})</option>
-                <option value="Monthly">Monthly (Every Month on this Date)</option>
-                <option value="Yearly">Yearly (Annually on this Date)</option>
-                <option value="Custom Days">Custom Days (Pick Days)</option>
-              </select>
+              <div>
+                <input
+                  type="time"
+                  value={reminderTime}
+                  onChange={(e) => setReminderTime(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-mono font-bold focus-ring"
+                  required
+                />
+                <div className="flex items-center gap-1 mt-2 flex-wrap">
+                  {[
+                    { label: '9:30 AM', val: '09:30' },
+                    { label: '11:00 AM', val: '11:00' },
+                    { label: '2:00 PM', val: '14:00' },
+                    { label: '5:00 PM', val: '17:00' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.val}
+                      type="button"
+                      onClick={() => setReminderTime(preset.val)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-colors ${
+                        reminderTime === preset.val
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-zinc-200/70 dark:bg-zinc-800 text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. HOW REPETITIVE */}
+            <div className="p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 flex flex-col justify-between">
+              <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <Repeat className="h-3.5 w-3.5 text-purple-500" />
+                3. How Repetitive?
+              </label>
+              <div className="space-y-1.5">
+                <select
+                  value={repeatType}
+                  onChange={(e) => handleRepeatTypeChange(e.target.value as SelfReminderRepeat)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-bold focus-ring"
+                >
+                  <option value="Once">One-Time Only (Once)</option>
+                  <option value="Daily">Daily (Every Day)</option>
+                  <option value="Weekdays (Mon–Fri)">Every Weekday (Mon–Fri)</option>
+                  <option value="Weekly">Weekly (Every {getDayOfWeekFromDate(reminderDate)})</option>
+                  <option value="Monthly">Monthly (Every Month on this Date)</option>
+                  <option value="Yearly">Yearly (Annually on this Date)</option>
+                  <option value="Custom Days">Custom Days (Pick Days)</option>
+                </select>
+                <div className="text-[10px] text-muted-foreground font-medium">
+                  {repeatType === 'Once' && 'Fires once on the chosen date.'}
+                  {repeatType === 'Daily' && 'Fires every day at the chosen time.'}
+                  {repeatType === 'Weekdays (Mon–Fri)' && 'Fires Monday through Friday.'}
+                  {repeatType === 'Weekly' && `Fires every ${getDayOfWeekFromDate(reminderDate)}.`}
+                  {repeatType === 'Monthly' && `Fires each month on day ${reminderDate.split('-')[2] || 'chosen date'}.`}
+                  {repeatType === 'Yearly' && 'Fires once a year on this exact date.'}
+                  {repeatType === 'Custom Days' && 'Fires on your selected days below.'}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -785,44 +849,56 @@ export default function SelfRemindersPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-foreground">1. Date *</label>
-                <input
-                  type="date"
-                  value={editDate}
-                  onChange={(e) => {
-                    setEditDate(e.target.value);
-                    if (editRepeat !== 'Daily' && editRepeat !== 'Weekdays (Mon–Fri)') {
-                      setEditDay(getDayOfWeekFromDate(e.target.value));
-                    }
-                  }}
-                  className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm font-mono focus-ring"
-                  required
-                />
+            {/* 1. Date & Day (Combined 2-in-1 Div) */}
+            <div className="p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <CalendarIcon className="h-3.5 w-3.5 text-emerald-500" />
+                  1. Date &amp; Day *
+                </label>
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                  ⚡ Auto Day
+                </span>
               </div>
-
-              <div>
-                <label className="text-xs font-semibold text-foreground">2. Day</label>
-                <select
-                  value={editDay}
-                  onChange={(e) => setEditDay(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
-                >
-                  <option value="Every Day">Every Day (Mon – Sun)</option>
-                  <option value="Monday – Friday">Weekdays (Mon – Fri)</option>
-                  {ALL_WEEK_DAYS.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-muted-foreground block mb-0.5">Date</span>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => {
+                      const newD = e.target.value;
+                      setEditDate(newD);
+                      if (newD) {
+                        setEditDay(getDayOfWeekFromDate(newD));
+                      }
+                    }}
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm font-mono focus-ring"
+                    required
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block mb-0.5">Day of Week</span>
+                  <select
+                    value={editDay}
+                    onChange={(e) => setEditDay(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+                  >
+                    <option value="Every Day">Every Day (Mon – Sun)</option>
+                    <option value="Monday – Friday">Weekdays (Mon – Fri)</option>
+                    {ALL_WEEK_DAYS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-foreground">3. Time *</label>
+                <label className="text-xs font-semibold text-foreground">2. Time *</label>
                 <input
                   type="time"
                   value={editTime}
@@ -833,7 +909,7 @@ export default function SelfRemindersPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-foreground">4. How Repetitive?</label>
+                <label className="text-xs font-semibold text-foreground">3. How Repetitive?</label>
                 <select
                   value={editRepeat}
                   onChange={(e) => setEditRepeat(e.target.value as SelfReminderRepeat)}

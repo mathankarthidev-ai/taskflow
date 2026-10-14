@@ -8,7 +8,7 @@ import { isUserInCompany } from '@/lib/company-filter';
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { supabase } from '@/lib/supabase';
 import { TeamName } from '@/types';
-import { getCustomUserAvatar } from '@/lib/avatar-store';
+import { getCustomUserAvatar, syncUsersAvatarsToLocalStore } from '@/lib/avatar-store';
 import { formatSessionDateIST } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -67,6 +67,7 @@ function getPortraitAvatar(email?: string, fallbackAvatar?: string, name?: strin
     userId,
     email,
     name,
+    fallbackSrc: fallbackAvatar,
   });
   if (custom) return custom;
   if (email && PORTRAIT_AVATARS[email.toLowerCase()]) {
@@ -114,6 +115,7 @@ export function TeamPresenceOverviewPanel() {
 
   const isSuperAdmin =
     currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const isTeamLead = !isSuperAdmin && currentUser?.role === 'Team Lead';
   const isAustralia = isSuperAdmin
     ? selectedCompany === 'Ambizcon'
     : currentUser?.company === 'Ambizcon';
@@ -129,7 +131,8 @@ export function TeamPresenceOverviewPanel() {
   const [adminViewOption, setAdminViewOption] = useState<
     'all' | 'present' | 'absent' | 'leads_only' | 'members_only'
   >('all');
-  const [, setAvatarTick] = useState<number>(0);
+  const [tlSelectedMemberEmail, setTlSelectedMemberEmail] = useState<string>('all');
+  const [avatarTick, setAvatarTick] = useState<number>(0);
 
   // Strictly scoped to the logged-in user's own team for non-admins; Admin can switch via dropdown
   const myTeam: TeamName = currentUser?.team || 'Development';
@@ -147,7 +150,11 @@ export function TeamPresenceOverviewPanel() {
   useEffect(() => {
     const onAvatarChange = () => setAvatarTick((t) => t + 1);
     window.addEventListener('ambizcon_avatar_updated', onAvatarChange);
-    return () => window.removeEventListener('ambizcon_avatar_updated', onAvatarChange);
+    window.addEventListener('storage', onAvatarChange);
+    return () => {
+      window.removeEventListener('ambizcon_avatar_updated', onAvatarChange);
+      window.removeEventListener('storage', onAvatarChange);
+    };
   }, []);
 
   const fetchAttendance = useCallback(async () => {
@@ -165,13 +172,19 @@ export function TeamPresenceOverviewPanel() {
     }
   }, []);
 
-  useEffect(() => {
+  const loadUsersFromDb = useCallback(() => {
     fetchAllUsersAction()
       .then((res) => {
-        if (res && res.length > 0) setAllUsers(res);
+        if (res && res.length > 0) {
+          syncUsersAvatarsToLocalStore(res);
+          setAllUsers(res);
+        }
       })
       .catch(() => {});
+  }, []);
 
+  useEffect(() => {
+    loadUsersFromDb();
     fetchAttendance();
 
     const channel = supabase
@@ -179,18 +192,31 @@ export function TeamPresenceOverviewPanel() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
         fetchAttendance();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        loadUsersFromDb();
+      })
       .subscribe();
 
     const onLocalAttendanceEvent = () => {
       fetchAttendance();
+      loadUsersFromDb();
     };
     window.addEventListener('ambizcon_attendance_updated', onLocalAttendanceEvent);
+    window.addEventListener('ambizcon_workspace_refresh', onLocalAttendanceEvent);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchAttendance();
+      }
+    }, 5000);
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
       window.removeEventListener('ambizcon_attendance_updated', onLocalAttendanceEvent);
+      window.removeEventListener('ambizcon_workspace_refresh', onLocalAttendanceEvent);
     };
-  }, [fetchAttendance]);
+  }, [fetchAttendance, loadUsersFromDb]);
 
   // Sync current user's clock-in state and live timer from Supabase attendance + localStorage
   useEffect(() => {
@@ -386,94 +412,7 @@ export function TeamPresenceOverviewPanel() {
         modeText,
       };
     });
-  }, [allUsers, effectiveTeamScope, activeCompanyScope, isAustralia, liveAttendance, currentUser, isCheckedIn]);
-
-  // All Team Leads / Reporting Managers strictly within the active company branch (Ambizcon AU vs India)
-  const allTeamLeads = useMemo(() => {
-    const todayDateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    const todayFormattedIst = formatSessionDateIST(new Date());
-
-    const companyScoped = allUsers.filter(
-      (u) => u && isUserInCompany(u, activeCompanyScope)
-    );
-    const leads = isAustralia
-      ? companyScoped
-      : companyScoped.filter((u) => u.role === 'Team Lead');
-
-    return leads.map((lead, idx) => {
-      const emailLower = (lead.email || '').toLowerCase();
-      const isMe = currentUser && emailLower === currentUser.email?.toLowerCase();
-      const todayRec = findTodayAttendanceForUser(
-        lead,
-        liveAttendance,
-        todayDateKey,
-        todayFormattedIst
-      );
-      const isPresent = isMe
-        ? isCheckedIn
-        : Boolean(
-            todayRec &&
-              todayRec.status === 'working' &&
-              (!todayRec.clock_out || todayRec.clock_out === '—')
-          );
-
-      return {
-        ...lead,
-        hrmCode: getHrmCode(emailLower, idx + 2),
-        displayName: DISPLAY_NAME_OVERRIDES[emailLower] || lead.name,
-        portrait: getPortraitAvatar(emailLower, lead.avatar, lead.name, lead._id),
-        isPresent,
-      };
-    });
-  }, [allUsers, activeCompanyScope, isAustralia, liveAttendance, currentUser, isCheckedIn]);
-
-  // Reporting Manager / Team Lead strictly scoped to activeCompanyScope
-  const reportingManager = useMemo(() => {
-    const todayDateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    const todayFormattedIst = formatSessionDateIST(new Date());
-
-    const companyScoped = allUsers.filter(
-      (u) => u && isUserInCompany(u, activeCompanyScope)
-    );
-    const targetTeam = effectiveTeamScope === 'All' ? (isAustralia ? 'Marketing' : 'Development') : effectiveTeamScope;
-
-    const lead = isAustralia
-      ? departmentMembers.find((m) => m.email?.toLowerCase() === 'adriana@ambizcon.com') ||
-        departmentMembers.find((m) => m.team === targetTeam) ||
-        companyScoped.find((u) => u.email?.toLowerCase() === 'mathan@ambizcon.com') ||
-        departmentMembers[0]
-      : departmentMembers.find((m) => m.team === targetTeam && m.role === 'Team Lead') ||
-        companyScoped.find((u) => u.team === targetTeam && u.role === 'Team Lead') ||
-        departmentMembers[0];
-
-    if (!lead) return null;
-    const emailLower = (lead.email || '').toLowerCase();
-    const isMe = currentUser && emailLower === currentUser.email?.toLowerCase();
-    const todayRec = findTodayAttendanceForUser(
-      lead,
-      liveAttendance,
-      todayDateKey,
-      todayFormattedIst
-    );
-    const computedPresent =
-      lead.isPresent !== undefined
-        ? lead.isPresent
-        : isMe
-        ? isCheckedIn
-        : Boolean(
-            todayRec &&
-              todayRec.status === 'working' &&
-              (!todayRec.clock_out || todayRec.clock_out === '—')
-          );
-
-    return {
-      ...lead,
-      hrmCode: getHrmCode(emailLower, 2),
-      displayName: DISPLAY_NAME_OVERRIDES[emailLower] || lead.name,
-      portrait: getPortraitAvatar(emailLower, lead.avatar, lead.name, lead._id),
-      isPresent: computedPresent,
-    };
-  }, [departmentMembers, allUsers, effectiveTeamScope, activeCompanyScope, isAustralia, liveAttendance, currentUser, isCheckedIn]);
+  }, [allUsers, effectiveTeamScope, activeCompanyScope, isAustralia, liveAttendance, currentUser, isCheckedIn, avatarTick]);
 
   const filteredDepartmentMembers = useMemo(() => {
     let list = departmentMembers;
@@ -491,6 +430,13 @@ export function TeamPresenceOverviewPanel() {
       }
     }
 
+    // Apply Team Lead member filter if selected
+    if (isTeamLead && tlSelectedMemberEmail && tlSelectedMemberEmail !== 'all') {
+      list = list.filter(
+        (m) => (m.email || '').toLowerCase() === tlSelectedMemberEmail.toLowerCase()
+      );
+    }
+
     // Apply quick pill status filter
     if (statusFilter === 'present') {
       return list.filter((m) => m.isPresent);
@@ -499,7 +445,7 @@ export function TeamPresenceOverviewPanel() {
       return list.filter((m) => !m.isPresent);
     }
     return list;
-  }, [departmentMembers, statusFilter, isSuperAdmin, adminViewOption]);
+  }, [departmentMembers, statusFilter, isSuperAdmin, adminViewOption, isTeamLead, tlSelectedMemberEmail]);
 
   if (!currentUser) return null;
 
@@ -592,8 +538,8 @@ export function TeamPresenceOverviewPanel() {
         </div>
       </div>
 
-      {/* 2. Middle Card: Reporting Manager / Admin Team & View Selector Dropdowns */}
-      {isSuperAdmin ? (
+      {/* 2. Middle Card: Admin Team & View Selector Dropdowns */}
+      {isSuperAdmin && (
         <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-brand-600 dark:text-brand-400">
@@ -665,116 +611,7 @@ export function TeamPresenceOverviewPanel() {
               </select>
             </div>
           </div>
-
-          {/* Selected Team's Reporting Manager / Team Lead Preview */}
-          {effectiveTeamScope === 'All' ? (
-            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
-              <p className="text-[11px] font-bold text-slate-500 dark:text-zinc-400">
-                {isAustralia ? 'Ambizcon Australia Roster:' : 'Team Reporting Managers (Click to switch team):'}
-              </p>
-              <div className="space-y-2">
-                {allTeamLeads.map((tl) => (
-                  <button
-                    key={tl.email}
-                    type="button"
-                    onClick={() => setAdminSelectedTeam(tl.team as TeamName)}
-                    className="w-full flex items-center gap-3 p-2 rounded-xl border border-zinc-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-all text-left"
-                  >
-                    <img
-                      src={tl.portrait}
-                      alt={tl.displayName}
-                      className="h-10 w-10 rounded-xl object-cover shrink-0 border border-zinc-200 dark:border-zinc-700"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold uppercase text-brand-600 dark:text-brand-400">
-                        {isAustralia ? `${tl.team} • ${tl.role}` : `${tl.team} Team Lead (Reporting Manager)`}
-                      </p>
-                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 truncate">
-                        <span className="font-normal text-slate-500">{tl.hrmCode} - </span>
-                        {tl.displayName}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-[10px] font-bold shrink-0 ${
-                        tl.isPresent
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-rose-500 dark:text-rose-400'
-                      }`}
-                    >
-                      {tl.isPresent ? 'Clocked In (Present)' : 'Absent'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            reportingManager && (
-              <div className="pt-2.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-3.5">
-                <div className="h-14 w-14 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shrink-0 bg-slate-100 dark:bg-zinc-800">
-                  <img
-                    src={reportingManager.portrait}
-                    alt={reportingManager.displayName}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-500 dark:text-zinc-400">
-                    {isAustralia ? 'Ambizcon Australia Member / Lead' : `${effectiveTeamScope} Reporting Manager (Team Lead)`}
-                  </p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-zinc-100 truncate mt-0.5">
-                    <span className="font-normal text-slate-500 dark:text-zinc-400">
-                      {reportingManager.hrmCode} -{' '}
-                    </span>
-                    {reportingManager.displayName}
-                  </p>
-                  <p
-                    className={`text-xs font-semibold mt-0.5 ${
-                      reportingManager.isPresent
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-rose-500 dark:text-rose-400'
-                    }`}
-                  >
-                    {reportingManager.isPresent ? 'Clocked In (Present)' : 'Absent'}
-                  </p>
-                </div>
-              </div>
-            )
-          )}
         </div>
-      ) : (
-        reportingManager && (
-          <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-            <div className="flex items-center gap-3.5">
-              <div className="h-14 w-14 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shrink-0 bg-slate-100 dark:bg-zinc-800">
-                <img
-                  src={reportingManager.portrait}
-                  alt={reportingManager.displayName}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-slate-500 dark:text-zinc-400">
-                  Reporting Manager
-                </p>
-                <p className="text-sm font-bold text-slate-900 dark:text-zinc-100 truncate mt-0.5">
-                  <span className="font-normal text-slate-500 dark:text-zinc-400">
-                    {reportingManager.hrmCode} -{' '}
-                  </span>
-                  {reportingManager.displayName}
-                </p>
-                <p
-                  className={`text-xs font-semibold mt-0.5 ${
-                    reportingManager.isPresent
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-rose-500 dark:text-rose-400'
-                  }`}
-                >
-                  {reportingManager.isPresent ? 'Clocked In (Present)' : 'Absent'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )
       )}
 
       {/* 3. Bottom Card: Department Members */}
@@ -837,6 +674,54 @@ export function TeamPresenceOverviewPanel() {
             </button>
           </div>
         </div>
+
+        {/* TL Quick Member Filter Pills for Team Lead */}
+        {isTeamLead && !isSuperAdmin && (
+          <div className="mb-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-600 dark:text-brand-400 mr-1">
+              TL Filter:
+            </span>
+            <button
+              type="button"
+              onClick={() => setTlSelectedMemberEmail('all')}
+              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all ${
+                tlSelectedMemberEmail === 'all'
+                  ? 'bg-brand-600 text-white border-brand-500 shadow-xs'
+                  : 'bg-slate-50 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
+              }`}
+            >
+              All
+            </button>
+            {departmentMembers.map((m) => {
+              const isSelected =
+                tlSelectedMemberEmail.toLowerCase() === (m.email || '').toLowerCase();
+              return (
+                <button
+                  key={m.email}
+                  type="button"
+                  onClick={() =>
+                    setTlSelectedMemberEmail(isSelected ? 'all' : m.email)
+                  }
+                  className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all ${
+                    isSelected
+                      ? 'bg-brand-600 text-white border-brand-500 shadow-xs'
+                      : 'bg-slate-50 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700 hover:border-brand-500/50'
+                  }`}
+                  title={`${m.hrmCode} - ${m.displayName}`}
+                >
+                  <img
+                    src={m.portrait}
+                    alt={m.displayName}
+                    className="h-5 w-5 rounded-full object-cover shrink-0 border border-white/30"
+                  />
+                  <span className="truncate max-w-[95px]">
+                    {m.displayName.split(' ')[0]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
           {filteredDepartmentMembers.length === 0 ? (

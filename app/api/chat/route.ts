@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { ChatMessage } from '@/types';
 import { supabase } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 declare global {
   // eslint-disable-next-line no-var
   var __ambizconChatStore: Record<string, ChatMessage[]> | undefined;

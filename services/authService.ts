@@ -110,6 +110,18 @@ export async function getAllUsers(): Promise<User[]> {
     if (!error && rows && rows.length > 0) {
       const dbUsers: User[] = rows.map(mapRowToUser);
 
+      // Sync any custom avatars from Supabase into in-memory mockStore.users & tasks
+      for (const dbU of dbUsers) {
+        const memU = mockStore.users.find(
+          (mu) =>
+            mu._id === dbU._id ||
+            mu.email.toLowerCase() === dbU.email.toLowerCase()
+        );
+        if (memU && dbU.avatar) {
+          memU.avatar = dbU.avatar;
+        }
+      }
+
       // Ensure all seed users exist in Supabase
       for (const seed of mockStore.users) {
         const exists = dbUsers.some(
@@ -309,6 +321,7 @@ export async function updateUser(
 export async function updateUserProfile(
   userId: string,
   profileData: {
+    email?: string;
     name?: string;
     avatar?: string;
     phone?: string;
@@ -323,7 +336,93 @@ export async function updateUserProfile(
     skills?: string[];
   }
 ): Promise<User | null> {
-  const dbUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+  const nowIso = new Date().toISOString();
+  const memMatch = mockStore.users.find(
+    (user) =>
+      user._id === userId ||
+      (profileData.email && user.email.toLowerCase() === profileData.email.toLowerCase().trim()) ||
+      (profileData.name && user.name.toLowerCase() === profileData.name.toLowerCase().trim())
+  );
+  const resolvedEmail = (profileData.email || memMatch?.email || '').toLowerCase().trim();
+
+  // 1. Update in-memory mockStore.users & tasks immediately
+  if (memMatch) {
+    const { email: _ignoreEmail, ...restProfile } = profileData;
+    Object.assign(memMatch, restProfile);
+    if (profileData.avatar !== undefined) {
+      for (const t of mockStore.tasks) {
+        if (
+          t.assignedTo === memMatch._id ||
+          t.assignedUser?._id === memMatch._id ||
+          t.assignedUser?.email?.toLowerCase() === memMatch.email.toLowerCase()
+        ) {
+          if (t.assignedUser) t.assignedUser.avatar = profileData.avatar;
+        }
+        if (
+          t.createdBy === memMatch._id ||
+          t.createdByUser?._id === memMatch._id ||
+          t.createdByUser?.email?.toLowerCase() === memMatch.email.toLowerCase()
+        ) {
+          if (t.createdByUser) t.createdByUser.avatar = profileData.avatar;
+        }
+      }
+    }
+  }
+
+  // 2. First perform a dedicated, guaranteed avatar update in Supabase (by id and/or email)
+  // so optional columns (education/experience) can never block avatar persistence
+  let latestRow: any = null;
+  if (profileData.avatar !== undefined) {
+    try {
+      const { data: byIdRows } = await supabase
+        .from('users')
+        .update({ avatar: profileData.avatar, updated_at: nowIso })
+        .eq('id', userId)
+        .select('*');
+
+      if (byIdRows && byIdRows.length > 0) {
+        latestRow = byIdRows[0];
+      } else if (resolvedEmail) {
+        const { data: byEmailRows } = await supabase
+          .from('users')
+          .update({ avatar: profileData.avatar, updated_at: nowIso })
+          .ilike('email', resolvedEmail)
+          .select('*');
+
+        if (byEmailRows && byEmailRows.length > 0) {
+          latestRow = byEmailRows[0];
+        } else if (memMatch) {
+          const { data: upserted } = await supabase
+            .from('users')
+            .upsert(
+              {
+                id: memMatch._id,
+                name: profileData.name || memMatch.name,
+                email: memMatch.email.toLowerCase(),
+                role: memMatch.role,
+                team: memMatch.team,
+                company: memMatch.company,
+                avatar: profileData.avatar,
+                birthday: profileData.birthday || memMatch.birthday,
+                dob: profileData.dob || memMatch.dob,
+                work_mode: profileData.workMode || memMatch.workMode || 'Work From Office',
+                skills: profileData.skills || memMatch.skills || [],
+                updated_at: nowIso,
+              },
+              { onConflict: 'email' }
+            )
+            .select('*')
+            .single();
+          if (upserted) latestRow = upserted;
+        }
+      }
+    } catch (e) {
+      console.error('Error persisting user avatar in Supabase:', e);
+    }
+  }
+
+  // 3. Also attempt full profile field update
+  const dbUpdates: Record<string, any> = { updated_at: nowIso };
   if (profileData.name !== undefined) dbUpdates.name = profileData.name;
   if (profileData.avatar !== undefined) dbUpdates.avatar = profileData.avatar;
   if (profileData.phone !== undefined) dbUpdates.phone = profileData.phone;
@@ -338,26 +437,29 @@ export async function updateUserProfile(
   if (profileData.skills !== undefined) dbUpdates.skills = profileData.skills;
 
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .update(dbUpdates)
-      .eq('id', userId)
-      .select('*')
-      .single();
+    let query = supabase.from('users').update(dbUpdates);
+    if (latestRow?.id) {
+      query = query.eq('id', latestRow.id);
+    } else if (resolvedEmail) {
+      query = query.ilike('email', resolvedEmail);
+    } else {
+      query = query.eq('id', userId);
+    }
+    const { data, error } = await query.select('*').single();
 
     if (!error && data) {
-      const u = mockStore.users.find((user) => user._id === userId);
-      if (u) Object.assign(u, profileData);
       return mapRowToUser(data);
     }
-  } catch (e) {
-    console.error('Error updating user profile in Supabase:', e);
+  } catch (_) {
+    // Optional profile columns may not exist in DB schema; avatar was already persisted in step 2
   }
 
-  const u = mockStore.users.find((user) => user._id === userId);
-  if (u) {
-    Object.assign(u, profileData);
-    return { ...u };
+  if (latestRow) {
+    return mapRowToUser(latestRow);
+  }
+
+  if (memMatch) {
+    return { ...memMatch };
   }
   return null;
 }

@@ -8,18 +8,26 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { TaskStatus, Comment, User } from '@/types';
-import { updateTaskStatusAction, assignTaskAction, deleteTaskAction } from '@/actions/taskActions';
+import {
+  updateTaskStatusAction,
+  assignTaskAction,
+  deleteTaskAction,
+  logTaskTimeAction,
+  updateTaskReviewWorkflowAction,
+} from '@/actions/taskActions';
 import { fetchCommentsAction, addCommentAction, deleteCommentAction } from '@/actions/commentActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
 import { getPriorityBadgeColor, getStatusBadgeColor, formatDate, formatTimeAgo } from '@/lib/utils';
-import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3 } from 'lucide-react';
+import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3, Zap, Footprints, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { SEED_CLIENTS_FULL } from '@/lib/seed-data';
 import { Copy, Lock, Globe, CheckCircle2, Shield, Timer } from 'lucide-react';
 import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
 import { TaskEditModal } from '@/components/tasks/TaskEditModal';
+import { saveWorkLogItem, formatMinutesToHHMM } from '@/lib/work-logs-store';
+import { useNotificationStore } from '@/store/useNotificationStore';
 
 export function TaskDetailModal() {
   const { selectedTask, isDetailModalOpen, setDetailModalOpen, setSelectedTask, setTasks, tasks } = useTaskStore();
@@ -36,6 +44,13 @@ export function TaskDetailModal() {
   // Time logging state
   const [hoursToLog, setHoursToLog] = useState<string>('');
   const [workDescription, setWorkDescription] = useState<string>('');
+  const [isExtraHoursLog, setIsExtraHoursLog] = useState<boolean>(false);
+
+  // In-App Div Modal States (No Native Browser Popups) — MUST be declared before early return
+  const [isRequestChangesModalOpen, setIsRequestChangesModalOpen] = useState(false);
+  const [requestChangesNote, setRequestChangesNote] = useState('');
+  const [isDeleteTaskModalOpen, setIsDeleteTaskModalOpen] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   useEffect(() => {
     fetchAllUsersAction().then(setWorkspaceUsers);
@@ -49,6 +64,11 @@ export function TaskDetailModal() {
 
   if (!selectedTask || !currentUser) return null;
 
+  const isTLOrAdmin =
+    currentUser.role === 'Super Admin' ||
+    currentUser.role === 'Admin' ||
+    currentUser.role === 'Team Lead';
+
   const handleLogTime = async (e: React.FormEvent) => {
     e.preventDefault();
     const hrs = parseFloat(hoursToLog);
@@ -56,6 +76,11 @@ export function TaskDetailModal() {
       toast.error('Please enter valid hours logged');
       return;
     }
+
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const descText =
+      workDescription.trim() ||
+      (isExtraHoursLog ? 'Worked extra hours (Overtime)' : 'Logged work time');
 
     const newEntry = {
       id: `te_${Date.now()}`,
@@ -65,35 +90,85 @@ export function TaskDetailModal() {
       userName: currentUser.name,
       userAvatar: currentUser.avatar,
       hoursLogged: hrs,
-      workDescription: workDescription || 'Logged work time',
-      date: new Date().toISOString().split('T')[0],
+      isExtraHours: isExtraHoursLog,
+      workDescription: descText,
+      date: todayStr,
       createdAt: new Date().toISOString(),
     };
 
     const updatedTimeEntries = [...(selectedTask.timeEntries || []), newEntry];
-    const totalActual = (selectedTask.actualHours || 0) + hrs;
+    const totalActual = Number(((selectedTask.actualHours || 0) + hrs).toFixed(2));
+    const totalExtra = Number(
+      updatedTimeEntries
+        .reduce((sum, te) => sum + (te.isExtraHours ? Number(te.hoursLogged || 0) : 0), 0)
+        .toFixed(2)
+    );
+
+    const newHistory = [
+      ...(selectedTask.history || []),
+      {
+        id: `hist_${Date.now()}`,
+        action: isExtraHoursLog
+          ? `Logged +${hrs} Extra Hrs (Overtime) — ${descText}`
+          : `Logged ${hrs} hours work (${descText})`,
+        performedBy: currentUser.name,
+        performedRole: currentUser.role,
+        timestamp: new Date().toISOString(),
+      },
+    ];
 
     const updated = {
       ...selectedTask,
       actualHours: totalActual,
+      extraHours: totalExtra,
       timeEntries: updatedTimeEntries,
-      history: [
-        ...(selectedTask.history || []),
-        {
-          id: `hist_${Date.now()}`,
-          action: `Logged ${hrs} hours work (${workDescription || 'Task progress'})`,
-          performedBy: currentUser.name,
-          performedRole: currentUser.role,
-          timestamp: new Date().toISOString(),
-        },
-      ],
+      history: newHistory,
     };
 
     setSelectedTask(updated);
     setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
     setHoursToLog('');
     setWorkDescription('');
-    toast.success(`Logged ${hrs} hours to task! Total: ${totalActual} hrs.`);
+    setIsExtraHoursLog(false);
+
+    // Persist to Supabase tasks table
+    logTaskTimeAction(selectedTask._id, {
+      actualHours: totalActual,
+      extraHours: totalExtra,
+      timeEntries: updatedTimeEntries,
+      history: newHistory,
+    }).catch(() => {});
+
+    // Also sync this logged work block into Overview Hourly Work Slots (work_logs)
+    const durationMins = Math.max(15, Math.round(hrs * 60));
+    const startMins = isExtraHoursLog ? 17 * 60 : 9 * 60;
+    const endMins = Math.min(23 * 60 + 55, startMins + durationMins);
+    saveWorkLogItem({
+      id: `WL-TASK-${Date.now()}`,
+      user_id: currentUser._id,
+      user_email: currentUser.email.toLowerCase(),
+      user_name: currentUser.name,
+      team: currentUser.team || selectedTask.team || 'Development',
+      company: currentUser.company || 'Ambizcon Health - India',
+      work_date: todayStr,
+      task_id: selectedTask._id,
+      task_title: isExtraHoursLog
+        ? `[Extra Hr] ${selectedTask.title} — ${descText}`
+        : `${selectedTask.title} — ${descText}`,
+      start_time: formatMinutesToHHMM(startMins),
+      end_time: formatMinutesToHHMM(endMins),
+      duration_minutes: durationMins,
+      color: isExtraHoursLog ? 'orange' : 'blue',
+      is_auto_in_progress: false,
+      is_extra_hours: isExtraHoursLog,
+      created_at: new Date().toISOString(),
+    }).catch(() => {});
+
+    toast.success(
+      isExtraHoursLog
+        ? `Logged +${hrs} Extra Hours (Overtime)! Total Extra: ${totalExtra}h`
+        : `Logged ${hrs} hours to task! Total: ${totalActual} hrs.`
+    );
   };
 
   const handleCopyClientApprovalLink = () => {
@@ -105,7 +180,7 @@ export function TaskDetailModal() {
     });
   };
 
-  const handleConfirmReviewerInModal = async (reviewer: User) => {
+  const handleConfirmReviewerInModal = async (reviewer: User, submissionNote?: string) => {
     if (!selectedTask) return;
 
     const historyLog = selectedTask.history || [];
@@ -113,12 +188,19 @@ export function TaskDetailModal() {
       ...historyLog,
       {
         id: `hist_${Date.now()}`,
-        action: `Submitted for review & Assigned Reviewer: ${reviewer.name} (${reviewer.role})`,
+        action: `[Footprint: ${currentUser.name} (${currentUser.role}) → ${reviewer.name} (${reviewer.role})] Moved to Review${
+          submissionNote ? ` — "${submissionNote}"` : ''
+        }`,
         performedBy: currentUser.name,
         performedRole: currentUser.role,
         timestamp: new Date().toISOString(),
+        note: submissionNote || undefined,
       },
     ];
+
+    const updatedNote = submissionNote
+      ? `${currentUser.name} → ${reviewer.name}: ${submissionNote}`
+      : selectedTask.reviewNote;
 
     const updated = {
       ...selectedTask,
@@ -126,27 +208,80 @@ export function TaskDetailModal() {
       assignedReviewerId: reviewer._id,
       assignedReviewerName: reviewer.name,
       reviewStatus: 'pending_review' as const,
+      reviewNote: updatedNote,
       history: newHistory,
       updatedAt: new Date().toISOString(),
     };
 
     setSelectedTask(updated);
     setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
-    toast.success(`Task submitted for review! Assigned Reviewer: ${reviewer.name}`);
-    await updateTaskStatusAction(selectedTask._id, 'Review');
+    useNotificationStore.getState().addNotification({
+      type: 'review_assigned',
+      category: 'Reviewer Assignment',
+      title: `🔍 Moved to Review (${currentUser.name} → ${reviewer.name})`,
+      text: `${currentUser.name} moved "${selectedTask.title}" to Review for ${reviewer.name}${
+        submissionNote ? `: "${submissionNote}"` : '.'
+      }`,
+      color: 'bg-purple-600',
+      taskId: selectedTask._id,
+    });
+    toast.success(`Footprint saved: ${currentUser.name} → ${reviewer.name} (Moved to Review)`);
+    await updateTaskReviewWorkflowAction(selectedTask._id, {
+      status: 'Review',
+      assignedReviewerId: reviewer._id,
+      assignedReviewerName: reviewer.name,
+      reviewStatus: 'pending_review',
+      reviewNote: updatedNote,
+      history: newHistory,
+    });
     setIsReviewerModalOpen(false);
   };
 
-  // In-App Div Modal States (No Native Browser Popups)
-  const [isRequestChangesModalOpen, setIsRequestChangesModalOpen] = useState(false);
-  const [requestChangesNote, setRequestChangesNote] = useState('');
-  const [isDeleteTaskModalOpen, setIsDeleteTaskModalOpen] = useState(false);
-
   const handleStatusChange = async (newStatus: TaskStatus) => {
-    const updated = await updateTaskStatusAction(selectedTask._id, newStatus);
+    if (newStatus === 'Done' && !isTLOrAdmin) {
+      toast.error(
+        'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
+      );
+      setIsReviewerModalOpen(true);
+      return;
+    }
+
+    if (newStatus === 'Review') {
+      setIsReviewerModalOpen(true);
+      return;
+    }
+
+    if (newStatus === 'Done' && isTLOrAdmin) {
+      await handleApproveReview();
+      return;
+    }
+
+    const newHistory = [
+      ...(selectedTask.history || []),
+      {
+        id: `hist_${Date.now()}`,
+        action: `Status moved from ${selectedTask.status} to ${newStatus}`,
+        performedBy: currentUser.name,
+        performedRole: currentUser.role,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const updated = await updateTaskReviewWorkflowAction(selectedTask._id, {
+      status: newStatus,
+      history: newHistory,
+    });
     if (updated) {
       setSelectedTask(updated);
       setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
+      useNotificationStore.getState().addNotification({
+        type: 'updated',
+        category: 'Task Status Updated',
+        title: `🔄 Status Changed to ${newStatus}`,
+        text: `${currentUser.name} moved "${selectedTask.title}" to ${newStatus}.`,
+        color: 'bg-blue-500',
+        taskId: selectedTask._id,
+      });
       toast.success(`Task status updated to ${newStatus}`);
     }
   };
@@ -173,6 +308,14 @@ export function TaskDetailModal() {
       const comment = await addCommentAction(selectedTask._id, currentUser._id, newComment);
       setComments([...comments, comment]);
       setNewComment('');
+      useNotificationStore.getState().addNotification({
+        type: 'comment',
+        category: 'Comment / Note',
+        title: '💬 New Task Comment',
+        text: `${currentUser.name} commented on "${selectedTask.title}": "${newComment.trim().slice(0, 60)}"`,
+        color: 'bg-purple-500',
+        taskId: selectedTask._id,
+      });
       toast.success('Comment added');
     } catch (e) {
       toast.error('Failed to add comment');
@@ -197,8 +340,6 @@ export function TaskDetailModal() {
     currentUser.role === 'Team Lead' ||
     selectedTask.createdBy === currentUser._id;
 
-  const isTLOrAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Team Lead';
-
   const handleApproveTask = () => {
     const updated = {
       ...selectedTask,
@@ -217,6 +358,14 @@ export function TaskDetailModal() {
     };
     setSelectedTask(updated);
     setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
+    useNotificationStore.getState().addNotification({
+      type: 'task_approval',
+      category: 'Task Approved',
+      title: '🛡️ Task Approved',
+      text: `${currentUser.name} (${currentUser.role}) approved task "${selectedTask.title}".`,
+      color: 'bg-emerald-600',
+      taskId: selectedTask._id,
+    });
     toast.success(`Task "${selectedTask.title}" approved!`);
   };
 
@@ -240,59 +389,109 @@ export function TaskDetailModal() {
     toast.error(`Task "${selectedTask.title}" rejected.`);
   };
 
-  const handleApproveReview = () => {
+  const handleApproveReview = async () => {
+    if (!isTLOrAdmin) {
+      toast.error('Only Team Lead or Admin can approve a task to be Done (Completed).');
+      return;
+    }
+
+    const newHistory = [
+      ...(selectedTask.history || []),
+      {
+        id: `hist_${Date.now()}`,
+        action: `[Footprint: ${currentUser.name} (${currentUser.role}) Approved → Completed] Review approved & marked Done`,
+        performedBy: currentUser.name,
+        performedRole: currentUser.role,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
     const updated = {
       ...selectedTask,
       status: 'Done' as const,
       reviewStatus: 'approved' as const,
-      history: [
-        ...(selectedTask.history || []),
-        {
-          id: `hist_${Date.now()}`,
-          action: `Review approved by ${currentUser.name} -> Moved to Done`,
-          performedBy: currentUser.name,
-          performedRole: currentUser.role,
-          timestamp: new Date().toISOString(),
-        },
-      ],
+      approvedBy: currentUser.name,
+      approvalStatus: 'approved' as const,
+      history: newHistory,
       updatedAt: new Date().toISOString(),
     };
     setSelectedTask(updated);
     setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
-    toast.success('Task approved by reviewer and marked Done!');
+    useNotificationStore.getState().addNotification({
+      id: `notif_done_${selectedTask._id}_${Date.now()}`,
+      type: 'task_completed',
+      category: 'Task Completed',
+      title: '✅ Approved to Completed (Done)',
+      text: `${currentUser.name} (${currentUser.role}) approved "${selectedTask.title}" and marked it Completed!`,
+      color: 'bg-emerald-500',
+      taskId: selectedTask._id,
+    });
+    toast.success(`Approved by ${currentUser.name} (${currentUser.role}) & marked Completed!`);
+    await updateTaskReviewWorkflowAction(selectedTask._id, {
+      status: 'Done',
+      reviewStatus: 'approved',
+      approvedBy: currentUser.name,
+      approvalStatus: 'approved',
+      history: newHistory,
+    });
   };
 
   const handleRequestChangesReview = () => {
-    setRequestChangesNote(selectedTask.reviewNote || '');
+    setRequestChangesNote('');
     setIsRequestChangesModalOpen(true);
   };
 
-  const handleConfirmRequestChanges = () => {
+  const handleConfirmRequestChanges = async () => {
     if (!selectedTask) return;
 
-    const note = requestChangesNote.trim();
+    const note = requestChangesNote.trim() || 'Please check and update as requested by TL.';
+    const targetMemberUser =
+      selectedTask.assignedUser ||
+      workspaceUsers.find((u) => u._id === selectedTask.assignedTo);
+    const targetMemberName = targetMemberUser?.name || 'Member';
+
+    const newHistory = [
+      ...(selectedTask.history || []),
+      {
+        id: `hist_${Date.now()}`,
+        action: `[Footprint: ${currentUser.name} (${currentUser.role}) → ${targetMemberName}] Sent back with specific msg: "${note}"`,
+        performedBy: currentUser.name,
+        performedRole: currentUser.role,
+        timestamp: new Date().toISOString(),
+        note: note,
+      },
+    ];
+
+    const formattedReviewNote = `${currentUser.name} (${currentUser.role}) → ${targetMemberName}: ${note}`;
+
     const updated = {
       ...selectedTask,
       status: 'In Progress' as const,
       reviewStatus: 'changes_requested' as const,
-      reviewNote: note,
-      history: [
-        ...(selectedTask.history || []),
-        {
-          id: `hist_${Date.now()}`,
-          action: `Changes requested by ${currentUser.name}: ${note || 'Revisions required'} -> Reverted to In Progress`,
-          performedBy: currentUser.name,
-          performedRole: currentUser.role,
-          timestamp: new Date().toISOString(),
-          note: note,
-        },
-      ],
+      reviewNote: formattedReviewNote,
+      history: newHistory,
       updatedAt: new Date().toISOString(),
     };
     setSelectedTask(updated);
     setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
     setIsRequestChangesModalOpen(false);
-    toast.info('Changes requested. Task automatically reverted to In Progress.');
+
+    useNotificationStore.getState().addNotification({
+      type: 'updated',
+      category: 'Review Feedback (TL → Member)',
+      title: `↩️ ${currentUser.name} → ${targetMemberName} (Changes Requested)`,
+      text: `Specific Msg on "${selectedTask.title}": "${note}"`,
+      color: 'bg-amber-600',
+      taskId: selectedTask._id,
+    });
+
+    toast.info(`Sent back to ${targetMemberName} with specific message!`);
+    await updateTaskReviewWorkflowAction(selectedTask._id, {
+      status: 'In Progress',
+      reviewStatus: 'changes_requested',
+      reviewNote: formattedReviewNote,
+      history: newHistory,
+    });
   };
 
   const handleModalFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -336,9 +535,6 @@ export function TaskDetailModal() {
       toast.success(`Attached ${newAtts.length} document(s) (< 5MB limit verified)`);
     }
   };
-
-
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   const handleToggleSubtask = (subtaskId: string) => {
     if (!selectedTask) return;
@@ -669,9 +865,15 @@ export function TaskDetailModal() {
             {/* Status & Assignee Card */}
             <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 space-y-3">
               <div>
-                <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">
-                  STATUS
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    STATUS
+                  </label>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 flex items-center gap-1">
+                    <ShieldCheck className="h-2.5 w-2.5" />
+                    TL / Admin Approves Done
+                  </span>
+                </div>
                 <select
                   value={selectedTask.status}
                   onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
@@ -679,31 +881,178 @@ export function TaskDetailModal() {
                 >
                   <option value="Todo">To Do</option>
                   <option value="In Progress">In Progress</option>
-                  <option value="Review">Review</option>
-                  <option value="Support">Support</option>
-                  <option value="Done">Done</option>
+                  <option value="Review">Review / Testing (Submit to TL)</option>
+                  <option value="Done" disabled={!isTLOrAdmin && selectedTask.status !== 'Done'}>
+                    {isTLOrAdmin ? 'Completed (Approve to Done)' : 'Completed (TL / Admin Only 🔒)'}
+                  </option>
                 </select>
               </div>
 
               <div>
-                <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">
-                  ASSIGNEE
-                </label>
-                <div className="flex items-center gap-2 p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background">
-                  <Avatar name={selectedTask.assignedUser?.name || 'Rahul K'} size="sm" />
-                  <select
-                    value={selectedTask.assignedTo || ''}
-                    onChange={(e) => assignTaskAction(selectedTask._id, e.target.value)}
-                    className="w-full bg-transparent text-xs font-semibold focus:outline-none"
-                  >
-                    <option value="">{selectedTask.assignedUser?.name || 'Rahul K'}</option>
-                    {workspaceUsers.map((u) => (
-                      <option key={u._id} value={u._id}>
-                        {u.name} ({u.role})
-                      </option>
-                    ))}
-                  </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                    ASSIGNEE
+                  </label>
+                  {currentUser.role === 'Super Admin' || currentUser.role === 'Admin' ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Admin · All Teams
+                    </span>
+                  ) : currentUser.role === 'Team Lead' ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      TL · {currentUser.team} Team Only
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-muted-foreground flex items-center gap-1">
+                      <Lock className="h-2.5 w-2.5 text-amber-500" />
+                      Handled by TL
+                    </span>
+                  )}
                 </div>
+
+                {(() => {
+                  const isAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
+                  const isTL = currentUser.role === 'Team Lead';
+                  const currentAssignedUser =
+                    selectedTask.assignedUser ||
+                    workspaceUsers.find((u) => u._id === selectedTask.assignedTo);
+                  const displayAssigneeName = currentAssignedUser
+                    ? `${currentAssignedUser.name} (${currentAssignedUser.role})`
+                    : 'Unassigned';
+
+                  const handleRedirectAssignee = async (newUserId: string) => {
+                    if (!newUserId || (!isAdmin && !isTL)) return;
+                    const targetUser = workspaceUsers.find((u) => u._id === newUserId);
+                    if (!targetUser) return;
+
+                    if (isTL && targetUser.team !== currentUser.team) {
+                      toast.error(`Team Leads can only redirect tasks within their own (${currentUser.team}) team.`);
+                      return;
+                    }
+
+                    const updatedTeam =
+                      targetUser.role !== 'Super Admin' && targetUser.team
+                        ? targetUser.team
+                        : selectedTask.team;
+
+                    const newHistory = [
+                      ...(selectedTask.history || []),
+                      {
+                        id: `hist_${Date.now()}`,
+                        action: `Redirected task to ${targetUser.name} (${targetUser.team} Team)`,
+                        performedBy: currentUser.name,
+                        performedRole: currentUser.role,
+                        timestamp: new Date().toISOString(),
+                      },
+                    ];
+
+                    const optimisticTask = {
+                      ...selectedTask,
+                      assignedTo: targetUser._id,
+                      assignedUser: targetUser,
+                      team: updatedTeam,
+                      history: newHistory,
+                      updatedAt: new Date().toISOString(),
+                    };
+
+                    setSelectedTask(optimisticTask);
+                    setTasks(tasks.map((t) => (t._id === optimisticTask._id ? optimisticTask : t)));
+                    useNotificationStore.getState().addNotification({
+                      type: 'assigned',
+                      category: 'Task Redirected',
+                      title: `📌 Task Redirected to ${targetUser.name}`,
+                      text: `${currentUser.name} (${currentUser.role}) redirected "${selectedTask.title}" to ${targetUser.name} (${targetUser.team} Team).`,
+                      color: 'bg-blue-500',
+                      taskId: selectedTask._id,
+                    });
+                    toast.success(`Redirected to ${targetUser.name} (${targetUser.team} Team)`);
+                    await assignTaskAction(selectedTask._id, newUserId);
+                  };
+
+                  if (!isAdmin && !isTL) {
+                    // Team Member: Read-only display (Only handled by TL / Admin)
+                    return (
+                      <div
+                        className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-900/50 select-none"
+                        title="Only Team Lead or Admin can redirect task assignee"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar
+                            src={currentAssignedUser?.avatar}
+                            name={currentAssignedUser?.name || 'Member'}
+                            userId={currentAssignedUser?._id || selectedTask.assignedTo}
+                            email={currentAssignedUser?.email}
+                            size="sm"
+                          />
+                          <span className="text-xs font-semibold text-foreground truncate">
+                            {displayAssigneeName}
+                          </span>
+                        </div>
+                        <Lock className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                      </div>
+                    );
+                  }
+
+                  const tlTeamUsers = workspaceUsers.filter(
+                    (u) => u.team === currentUser.team && u.role !== 'Super Admin'
+                  );
+
+                  return (
+                    <div className="flex items-center gap-2 p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background">
+                      <Avatar
+                        src={currentAssignedUser?.avatar}
+                        name={currentAssignedUser?.name || 'Member'}
+                        userId={currentAssignedUser?._id || selectedTask.assignedTo}
+                        email={currentAssignedUser?.email}
+                        size="sm"
+                      />
+                      <select
+                        value={selectedTask.assignedTo || currentAssignedUser?._id || ''}
+                        onChange={(e) => handleRedirectAssignee(e.target.value)}
+                        className="w-full bg-transparent text-xs font-semibold focus:outline-none cursor-pointer"
+                      >
+                        {!selectedTask.assignedTo && (
+                          <option value="">{displayAssigneeName}</option>
+                        )}
+                        {isTL ? (
+                          <optgroup label={`${currentUser.team} Team (Your Team)`}>
+                            {tlTeamUsers.map((u) => (
+                              <option key={u._id} value={u._id}>
+                                {u.name} ({u.role})
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : (
+                          <>
+                            {(['Development', 'Marketing', 'Creative'] as const).map((teamName) => {
+                              const members = workspaceUsers.filter(
+                                (u) => u.team === teamName && u.role !== 'Super Admin'
+                              );
+                              if (members.length === 0) return null;
+                              return (
+                                <optgroup key={teamName} label={`${teamName} Team`}>
+                                  {members.map((u) => (
+                                    <option key={u._id} value={u._id}>
+                                      {u.name} ({u.role})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              );
+                            })}
+                            <optgroup label="Super Admins">
+                              {workspaceUsers
+                                .filter((u) => u.role === 'Super Admin')
+                                .map((u) => (
+                                  <option key={u._id} value={u._id}>
+                                    {u.name} ({u.role})
+                                  </option>
+                                ))}
+                            </optgroup>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Meta details */}
@@ -716,51 +1065,353 @@ export function TaskDetailModal() {
               </div>
             </div>
 
-            {/* Primary Action Button */}
-            <Button
-              onClick={() => setIsReviewerModalOpen(true)}
-              className="w-full ambizcon-gradient hover:opacity-90 text-white font-bold text-xs py-3 rounded-2xl gap-2 shadow-glow"
-            >
-              <UserCheck className="h-4 w-4" />
-              Submit for Review
-            </Button>
+            {/* Review Footprint & TL / Admin Approval Card (Mem -> TL -> Mem (specific msg)) */}
+            <div className="rounded-2xl border border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20 p-4 space-y-3">
+              {(() => {
+                const assignedMember =
+                  selectedTask.assignedUser ||
+                  workspaceUsers.find((u) => u._id === selectedTask.assignedTo);
+                const memberName = assignedMember?.name || 'Member';
+                const teamLeadUser =
+                  workspaceUsers.find((u) => u._id === selectedTask.assignedReviewerId) ||
+                  workspaceUsers.find(
+                    (u) => u.role === 'Team Lead' && u.team === selectedTask.team
+                  );
+                const reviewerName =
+                  selectedTask.assignedReviewerName ||
+                  teamLeadUser?.name ||
+                  'Team Lead';
 
-            {/* Time Logger Box */}
+                // Extract review footprint history logs
+                const reviewFootprintLogs = (selectedTask.history || []).filter(
+                  (h) =>
+                    h.action?.includes('Footprint:') ||
+                    h.action?.toLowerCase().includes('review') ||
+                    h.action?.toLowerCase().includes('changes requested') ||
+                    h.action?.toLowerCase().includes('approved')
+                );
+
+                // Find who last moved to review
+                const lastReviewMoveLog = [...reviewFootprintLogs]
+                  .reverse()
+                  .find((h) => h.action?.toLowerCase().includes('review') && !h.action?.toLowerCase().includes('approved'));
+
+                const movedToReviewBy = lastReviewMoveLog?.performedBy || memberName;
+
+                return (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <Footprints className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                        <span className="font-extrabold text-xs uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                          REVIEW FOOTPRINT (MEM → TL → MEM)
+                        </span>
+                      </div>
+                      {selectedTask.status === 'Done' || selectedTask.reviewStatus === 'approved' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                          ✅ Approved (Done)
+                        </span>
+                      ) : selectedTask.reviewStatus === 'changes_requested' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-bold">
+                          ↩️ TL → Mem (Msg)
+                        </span>
+                      ) : selectedTask.status === 'Review' || selectedTask.reviewStatus === 'pending_review' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 text-[10px] font-bold">
+                          ⏳ In Review ({reviewerName})
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-zinc-200/70 dark:bg-zinc-800 text-muted-foreground text-[10px] font-semibold">
+                          Ready for Review
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Visual Footprint Chain: Mem -> TL -> Mem */}
+                    <div className="p-2.5 rounded-xl border border-purple-500/20 bg-background/80 space-y-2">
+                      <div className="flex items-center justify-between gap-1.5 text-[11px] font-bold">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 truncate">
+                            👤 {movedToReviewBy}
+                          </span>
+                          <ArrowRight className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                          <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 truncate">
+                            🛡️ {reviewerName} (TL)
+                          </span>
+                        </div>
+
+                        {selectedTask.reviewStatus === 'changes_requested' && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <ArrowRight className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 truncate">
+                              👤 {memberName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* To Whom Moved to Review Info */}
+                      <div className="text-[11px] text-muted-foreground flex flex-wrap items-center justify-between gap-1 pt-1 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                        <span>
+                          Moved to Review by:{' '}
+                          <strong className="text-foreground">{movedToReviewBy}</strong>
+                        </span>
+                        <span>
+                          To Reviewer:{' '}
+                          <strong className="text-purple-600 dark:text-purple-400">
+                            {selectedTask.assignedReviewerName || `${reviewerName} (Not submitted yet)`}
+                          </strong>
+                        </span>
+                      </div>
+
+                      {selectedTask.approvedBy && selectedTask.status === 'Done' && (
+                        <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold pt-1 border-t border-emerald-500/20 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                          <span>Approved to Completed (Done) by {selectedTask.approvedBy}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Specific Message Box (TL -> Mem or Mem -> TL note) */}
+                    {selectedTask.reviewNote && (
+                      <div
+                        className={`p-3 rounded-xl border text-xs space-y-1 ${
+                          selectedTask.reviewStatus === 'changes_requested'
+                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200'
+                            : 'border-purple-500/30 bg-purple-500/10 text-purple-900 dark:text-purple-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider">
+                          <span>
+                            {selectedTask.reviewStatus === 'changes_requested'
+                              ? '💬 Specific Message (TL → Member)'
+                              : '💬 Review Footprint Note (Mem → TL)'}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold leading-relaxed">
+                          &ldquo;{selectedTask.reviewNote}&rdquo;
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Footprint Trail History Steps */}
+                    {reviewFootprintLogs.length > 0 && (
+                      <div className="space-y-1.5 pt-1 max-h-28 overflow-y-auto">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                          Footprint Trail History:
+                        </span>
+                        {reviewFootprintLogs
+                          .slice()
+                          .reverse()
+                          .map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-start justify-between gap-2 text-[11px] p-1.5 rounded-lg bg-background/70 border border-zinc-200/60 dark:border-zinc-800/60"
+                            >
+                              <div className="min-w-0">
+                                <span className="font-bold text-foreground">{item.performedBy}: </span>
+                                <span className="text-muted-foreground">{item.action}</span>
+                              </div>
+                              <span className="text-[9px] font-mono text-zinc-400 shrink-0">
+                                {new Date(item.timestamp).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="space-y-2 pt-1">
+                      {/* Submit / Move to Review Button */}
+                      <Button
+                        type="button"
+                        onClick={() => setIsReviewerModalOpen(true)}
+                        className="w-full ambizcon-gradient hover:opacity-90 text-white font-bold text-xs py-2.5 rounded-xl gap-2 shadow-glow"
+                      >
+                        <UserCheck className="h-4 w-4" />
+                        {selectedTask.assignedReviewerName
+                          ? `Re-Submit / Change Reviewer (${selectedTask.assignedReviewerName})`
+                          : 'Move to Review (Select TL / Reviewer)'}
+                      </Button>
+
+                      {/* TL or Admin Exclusive Completion & Send-Back Controls */}
+                      {isTLOrAdmin ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <Button
+                            type="button"
+                            onClick={handleApproveReview}
+                            disabled={selectedTask.status === 'Done'}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-xl gap-1.5 shadow-sm"
+                          >
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            Approve to Done
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={handleRequestChangesReview}
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2.5 rounded-xl gap-1.5 shadow-sm"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                            TL → Mem (Specific Msg)
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1.5 p-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                          <Lock className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                          <span>Only TL or Admin can approve to be Done (Completed)</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Time Logger Box (Includes Worked Extra Hours / Overtime) */}
             <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Timer className="h-4 w-4 text-brand-500" />
-                <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">TIME LOGGER</span>
-              </div>
-              <div className="text-xs">
-                <span className="font-bold">{selectedTask.actualHours || 0.0}h</span> logged of {selectedTask.estimatedHours || 6}h est.
-                <div className="w-full bg-zinc-200 dark:bg-zinc-800 rounded-full h-1.5 mt-1 overflow-hidden">
-                  <div
-                    className="bg-brand-500 h-full"
-                    style={{ width: `${Math.min(100, ((selectedTask.actualHours || 0) / (selectedTask.estimatedHours || 6)) * 100)}%` }}
-                  />
-                </div>
-              </div>
+              {(() => {
+                const taskExtraHrs =
+                  selectedTask.extraHours ??
+                  (selectedTask.timeEntries || []).reduce(
+                    (sum, te) => sum + (te.isExtraHours ? Number(te.hoursLogged || 0) : 0),
+                    0
+                  );
+                return (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Timer className="h-4 w-4 text-brand-500" />
+                        <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
+                          TIME LOGGER
+                        </span>
+                      </div>
 
-              <form onSubmit={handleLogTime} className="flex gap-2">
-                <input
-                  type="number"
-                  step="0.5"
-                  value={hoursToLog}
-                  onChange={(e) => setHoursToLog(e.target.value)}
-                  placeholder="hrs"
-                  className="w-16 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2 py-1.5 text-xs text-center focus-ring"
-                />
-                <input
-                  type="text"
-                  value={workDescription}
-                  onChange={(e) => setWorkDescription(e.target.value)}
-                  placeholder="What did you do?"
-                  className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
-                />
-                <Button type="submit" size="sm" className="ambizcon-gradient text-white text-xs px-3 font-bold shadow-glow">
-                  Log
-                </Button>
-              </form>
+                      {taskExtraHrs > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-extrabold font-mono">
+                          <Zap className="h-3 w-3" />+{taskExtraHrs}h Extra Hr
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-xs">
+                      <div className="flex items-center justify-between">
+                        <span>
+                          <span className="font-bold">{selectedTask.actualHours || 0.0}h</span> logged of{' '}
+                          {selectedTask.estimatedHours || 6}h est.
+                        </span>
+                        {taskExtraHrs > 0 && (
+                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                            Includes {taskExtraHrs}h Overtime
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full bg-zinc-200 dark:bg-zinc-800 rounded-full h-1.5 mt-1 overflow-hidden">
+                        <div
+                          className="bg-brand-500 h-full"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              ((selectedTask.actualHours || 0) / (selectedTask.estimatedHours || 6)) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleLogTime} className="space-y-2.5">
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.5"
+                          value={hoursToLog}
+                          onChange={(e) => setHoursToLog(e.target.value)}
+                          placeholder="hrs"
+                          className="w-16 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2 py-1.5 text-xs text-center focus-ring"
+                        />
+                        <input
+                          type="text"
+                          value={workDescription}
+                          onChange={(e) => setWorkDescription(e.target.value)}
+                          placeholder={isExtraHoursLog ? 'Extra hrs work details...' : 'What did you do?'}
+                          className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
+                        />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          className={
+                            isExtraHoursLog
+                              ? 'bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 font-bold shadow-xs'
+                              : 'ambizcon-gradient text-white text-xs px-3 font-bold shadow-glow'
+                          }
+                        >
+                          {isExtraHoursLog ? '+Extra' : 'Log'}
+                        </Button>
+                      </div>
+
+                      {/* Worked Extra Hr Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setIsExtraHoursLog(!isExtraHoursLog)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+                          isExtraHoursLog
+                            ? 'bg-amber-500/15 border-amber-500/50 text-amber-600 dark:text-amber-400'
+                            : 'bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Zap className={`h-3.5 w-3.5 ${isExtraHoursLog ? 'text-amber-500' : 'opacity-60'}`} />
+                          Worked Extra Hr (Overtime)
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                            isExtraHoursLog
+                              ? 'bg-amber-500 text-white font-extrabold'
+                              : 'bg-zinc-200 dark:bg-zinc-800 text-muted-foreground'
+                          }`}
+                        >
+                          {isExtraHoursLog ? 'YES • EXTRA HR' : 'Off'}
+                        </span>
+                      </button>
+                    </form>
+
+                    {/* Logged Time Entries Breakdown */}
+                    {selectedTask.timeEntries && selectedTask.timeEntries.length > 0 && (
+                      <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/70 space-y-1.5 max-h-36 overflow-y-auto">
+                        {selectedTask.timeEntries
+                          .slice()
+                          .reverse()
+                          .map((te) => (
+                            <div
+                              key={te.id}
+                              className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[11px] border ${
+                                te.isExtraHours
+                                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300'
+                                  : 'bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200/60 dark:border-zinc-800/60 text-muted-foreground'
+                              }`}
+                            >
+                              <div className="truncate flex items-center gap-1.5">
+                                {te.isExtraHours && (
+                                  <span className="shrink-0 px-1.5 py-0.2 rounded bg-amber-500 text-white text-[9px] font-extrabold uppercase">
+                                    Extra Hr
+                                  </span>
+                                )}
+                                <span className="font-semibold text-foreground truncate">
+                                  {te.workDescription}
+                                </span>
+                              </div>
+                              <span className="shrink-0 font-mono font-bold">
+                                {te.isExtraHours ? `+${te.hoursLogged}h` : `${te.hoursLogged}h`}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Client Share Link Box */}
@@ -813,28 +1464,35 @@ export function TaskDetailModal() {
         onConfirmReviewer={handleConfirmReviewerInModal}
       />
 
-      {/* In-App Request Changes / Revisions Modal (Div layout - No native browser prompt) */}
+      {/* In-App Request Changes / Revisions Modal (TL -> Mem Specific Msg) */}
       <Modal
         isOpen={isRequestChangesModalOpen}
         onClose={() => setIsRequestChangesModalOpen(false)}
-        title="Request Task Changes & Provide Feedback"
-        description="Enter feedback for the assignee detailing what revisions are required."
+        title="Send Back to Member with Specific Message (TL → Mem)"
+        description="Provide a specific review message for the member. This footprint will be shown on the task and revert status to In Progress."
         maxWidth="md"
       >
         <div className="space-y-4 pt-2">
           <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-900 dark:text-amber-200">
-            <span className="font-bold block mb-1">Feedback Note for Assignee</span>
-            <span>Task will automatically revert to "In Progress" with your requested changes note.</span>
+            <span className="font-bold block mb-1">
+              Footprint: {currentUser.name} ({currentUser.role}) →{' '}
+              {selectedTask.assignedUser?.name ||
+                workspaceUsers.find((u) => u._id === selectedTask.assignedTo)?.name ||
+                'Member'}
+            </span>
+            <span>
+              Your specific message will be displayed in the Review Footprint (`Mem → TL → Mem (specific msg)`) and notify the member.
+            </span>
           </div>
 
           <div>
             <label className="text-xs font-semibold text-foreground block mb-1">
-              Feedback / Revision Details *
+              Specific Message for Member *
             </label>
             <textarea
               value={requestChangesNote}
               onChange={(e) => setRequestChangesNote(e.target.value)}
-              placeholder="e.g. Please update mobile responsiveness and adjust logo spacing..."
+              placeholder="e.g. Please update mobile responsiveness and adjust logo spacing before final approval..."
               rows={4}
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs focus-ring"
             />
@@ -850,7 +1508,7 @@ export function TaskDetailModal() {
               className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold gap-1.5"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              Send Revisions & Revert
+              Send Specific Msg to Member (TL → Mem)
             </Button>
           </div>
         </div>

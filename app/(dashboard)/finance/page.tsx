@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { ReimbursementClaim } from '@/types';
+import { fetchReimbursementsAction } from '@/actions/reimbursementActions';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -40,17 +42,18 @@ export default function FinancePage() {
   const [grossRevenue, setGrossRevenue] = useState(0);
   const [totalSalaries, setTotalSalaries] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
-  const [totalClaims, setTotalClaims] = useState(0);
+  const [manualClaimsOverride, setManualClaimsOverride] = useState<number | null>(null);
+  const [reimbursementClaims, setReimbursementClaims] = useState<ReimbursementClaim[]>([]);
 
   // Edit Metric Modal
   const [isEditMetricModalOpen, setIsEditMetricModalOpen] = useState(false);
   const [editRevenue, setEditRevenue] = useState(grossRevenue.toString());
   const [editSalaries, setEditSalaries] = useState(totalSalaries.toString());
   const [editExpenses, setEditExpenses] = useState(totalExpenses.toString());
-  const [editClaims, setEditClaims] = useState(totalClaims.toString());
+  const [editClaims, setEditClaims] = useState('0');
 
   // Roster Month Selector
-  const [selectedMonth, setSelectedMonth] = useState('August 2026');
+  const [selectedMonth, setSelectedMonth] = useState('October 2026');
 
   // Download Report Filter State
   const [reportType, setReportType] = useState<'weekly' | 'monthly' | 'custom' | 'annual'>('monthly');
@@ -61,6 +64,24 @@ export default function FinancePage() {
   // View Member Details Modal
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedMember, setSelectedMember] = useState<any>(null);
+
+  useEffect(() => {
+    const loadClaims = async () => {
+      try {
+        const res = await fetchReimbursementsAction();
+        if (res) {
+          setReimbursementClaims(
+            res.filter((c) => !String(c._id).startsWith('claim_seed_'))
+          );
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadClaims();
+    window.addEventListener('ambizcon_workspace_refresh', loadClaims);
+    return () => window.removeEventListener('ambizcon_workspace_refresh', loadClaims);
+  }, []);
 
   if (!currentUser) return null;
 
@@ -79,6 +100,19 @@ export default function FinancePage() {
     );
   }
 
+  const branchApprovedClaims = reimbursementClaims.filter(
+    (c) =>
+      isUserInCompany({ userId: c.userId, userName: c.userName, company: c.company }, activeCompanyScope) &&
+      (c.status === 'Approved' || c.adminStatus === 'approved' || c.isPaid || c.status === 'Paid')
+  );
+
+  const computedApprovedClaimsTotal = branchApprovedClaims.reduce(
+    (sum, c) => sum + Number(c.amount || 0),
+    0
+  );
+  const totalClaims =
+    manualClaimsOverride !== null ? manualClaimsOverride : computedApprovedClaimsTotal;
+
   // Derived Financial Calculations
   const netProfit = grossRevenue - (totalSalaries + totalExpenses + totalClaims);
   const profitMargin = ((netProfit / (grossRevenue || 1)) * 100).toFixed(1);
@@ -88,19 +122,29 @@ export default function FinancePage() {
     setGrossRevenue(Number(editRevenue) || 0);
     setTotalSalaries(Number(editSalaries) || 0);
     setTotalExpenses(Number(editExpenses) || 0);
-    setTotalClaims(Number(editClaims) || 0);
+    setManualClaimsOverride(Number(editClaims) || 0);
     toast.success('Executive financial metrics updated successfully!');
     setIsEditMetricModalOpen(false);
   };
 
-  // Categorized Reimbursements Data
+  const sumByCategoryMatch = (keywords: string[]) => {
+    const matched = branchApprovedClaims.filter((c) =>
+      keywords.some((kw) => (c.category || '').toLowerCase().includes(kw.toLowerCase()))
+    );
+    return {
+      amount: matched.reduce((s, c) => s + Number(c.amount || 0), 0),
+      count: matched.length,
+    };
+  };
+
+  // Categorized Reimbursements Data (Auto-populated from Approved & Paid claims)
   const claimCategories = [
-    { category: 'Travel & Commute', amount: 0, count: 0, color: '#3b82f6' },
-    { category: 'Client Lunch & Meetings', amount: 0, count: 0, color: '#10b981' },
-    { category: 'Software & Cloud SaaS', amount: 0, count: 0, color: '#8b5cf6' },
-    { category: 'Hardware & Equipment', amount: 0, count: 0, color: '#f59e0b' },
-    { category: 'Office Supplies & Utilities', amount: 0, count: 0, color: '#ec4899' },
-    { category: 'Medical & Healthcare', amount: 0, count: 0, color: '#06b6d4' },
+    { category: 'Travel & Commute', ...sumByCategoryMatch(['travel', 'commute']), color: '#3b82f6' },
+    { category: 'Client Lunch & Meetings', ...sumByCategoryMatch(['lunch', 'food', 'client', 'meal']), color: '#10b981' },
+    { category: 'Software & Cloud SaaS', ...sumByCategoryMatch(['software', 'cloud', 'saas']), color: '#8b5cf6' },
+    { category: 'Hardware & Equipment', ...sumByCategoryMatch(['equipment', 'hardware']), color: '#f59e0b' },
+    { category: 'Office Supplies & Utilities', ...sumByCategoryMatch(['office', 'supplies', 'utilities']), color: '#ec4899' },
+    { category: 'Medical & Healthcare', ...sumByCategoryMatch(['medical', 'health']), color: '#06b6d4' },
   ];
 
   // Employee Salary Payroll Roster Data with Personal & Bank Details

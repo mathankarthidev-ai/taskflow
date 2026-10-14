@@ -9,7 +9,7 @@ interface AvatarProps {
   name: string;
   userId?: string;
   email?: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
@@ -39,6 +39,7 @@ export function Avatar({ src, name, userId, email, size = 'md', className }: Ava
   }, [src, name, userId, email]);
 
   const sizeMap = {
+    xs: 'h-5 w-5 text-[10px]',
     sm: 'h-6 w-6 text-xs',
     md: 'h-8 w-8 text-sm',
     lg: 'h-10 w-10 text-base',

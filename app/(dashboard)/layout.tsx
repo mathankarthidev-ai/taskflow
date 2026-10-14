@@ -7,7 +7,6 @@ import { GlobalSearchModal } from '@/components/layout/GlobalSearchModal';
 import { TaskCreateModal } from '@/features/tasks/TaskCreateModal';
 import { TaskDetailModal } from '@/features/tasks/TaskDetailModal';
 import { KeyboardShortcutsModal } from '@/components/layout/KeyboardShortcutsModal';
-import { HealthCheckModal } from '@/components/attendance/HealthCheckModal';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useRouter } from 'next/navigation';
 
@@ -49,7 +48,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <KeyboardShortcutsModal />
       <TaskCreateModal />
       <TaskDetailModal />
-      <HealthCheckModal />
     </div>
   );
 }

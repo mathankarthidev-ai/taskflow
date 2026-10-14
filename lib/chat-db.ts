@@ -1,8 +1,30 @@
 import { ChatChannel, ChatMessage, TeamName, UserRole } from '@/types';
+import { SEED_USERS } from '@/lib/seed-data';
+import { useNotificationStore } from '@/store/useNotificationStore';
 
-const CHANNELS_KEY = 'taskflow_chat_channels_v2';
-const MESSAGES_KEY = 'taskflow_chat_messages_v2';
-const DISMISSED_MSG_IDS_KEY = 'taskflow_chat_dismissed_msg_ids_v2';
+const CHANNELS_KEY = 'taskflow_chat_channels_v3';
+const MESSAGES_KEY = 'taskflow_chat_messages_v3';
+const DISMISSED_MSG_IDS_KEY = 'taskflow_chat_dismissed_msg_ids_v3';
+
+export function extractDmParticipantIds(channelId: string): string[] {
+  if (!channelId || !channelId.startsWith('dm_')) return [];
+  const body = channelId.replace(/^dm_/, '');
+  const matches = body.match(/usr?_\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi);
+  if (matches && matches.length >= 2) return Array.from(new Set(matches));
+  if (matches && matches.length > 0) return Array.from(new Set(matches));
+  const tokens = body.split('_').filter(Boolean);
+  const reassembled: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if ((tokens[i] === 'usr' || tokens[i] === 'u') && i + 1 < tokens.length) {
+      reassembled.push(`${tokens[i]}_${tokens[i + 1]}`);
+      i++;
+    } else {
+      reassembled.push(tokens[i]);
+    }
+  }
+  return Array.from(new Set(reassembled));
+}
+
 
 export const DEFAULT_CHANNELS: ChatChannel[] = [
   {
@@ -63,47 +85,98 @@ export function getChatBroadcastChannel(): BroadcastChannel | null {
   return chatBroadcastChannel;
 }
 
-// Auto-clean legacy v1 data from localStorage on first run
+// Auto-clean legacy v1 & v2 data from localStorage on first run
 function purgeLegacyV1() {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem('taskflow_chat_channels_v1');
     localStorage.removeItem('taskflow_chat_messages_v1');
+    localStorage.removeItem('taskflow_chat_channels_v2');
+    localStorage.removeItem('taskflow_chat_messages_v2');
   } catch (_) {}
 }
 
-export function getDismissedMessageIds(): string[] {
+const LAST_READ_TS_KEY = 'taskflow_chat_last_read_ts_v2';
+
+function getLastReadTimestamps(userId?: string): Record<string, number> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const key = userId ? `${LAST_READ_TS_KEY}_${userId}` : LAST_READ_TS_KEY;
+    const rawUser = localStorage.getItem(key);
+    const rawGlobal = localStorage.getItem(LAST_READ_TS_KEY);
+    const mapUser = rawUser ? JSON.parse(rawUser) : {};
+    const mapGlobal = rawGlobal ? JSON.parse(rawGlobal) : {};
+    const merged: Record<string, number> = { ...mapGlobal };
+    Object.entries(mapUser).forEach(([k, v]) => {
+      if (typeof v === 'number' && v > (merged[k] || 0)) {
+        merged[k] = v;
+      }
+    });
+    return merged;
+  } catch (_) {
+    return {};
+  }
+}
+
+export function getDismissedMessageIds(userId?: string): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(DISMISSED_MSG_IDS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const key = userId ? `${DISMISSED_MSG_IDS_KEY}_${userId}` : DISMISSED_MSG_IDS_KEY;
+    const rawUser = localStorage.getItem(key);
+    const rawGlobal = localStorage.getItem(DISMISSED_MSG_IDS_KEY);
+    const listUser: string[] = rawUser ? JSON.parse(rawUser) : [];
+    const listGlobal: string[] = rawGlobal ? JSON.parse(rawGlobal) : [];
+    return Array.from(new Set([...listUser, ...listGlobal]));
   } catch (_) {
     return [];
   }
 }
 
-export function markChannelMessagesAsRead(channelId?: string): void {
+export function markChannelMessagesAsRead(channelId?: string, userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    const raw = localStorage.getItem(MESSAGES_KEY);
-    if (!raw) return;
-    const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
-    const dismissed = new Set<string>(getDismissedMessageIds());
-
+    const nowTs = Date.now() + 5000;
+    const tsMap = getLastReadTimestamps(userId);
     if (channelId) {
-      const list = allMsgs[channelId] || [];
-      list.forEach((m) => {
-        if (m?.id) dismissed.add(m.id);
-      });
+      tsMap[channelId] = nowTs;
     } else {
-      Object.values(allMsgs).forEach((list) => {
-        (list || []).forEach((m) => {
-          if (m?.id) dismissed.add(m.id);
-        });
-      });
+      tsMap.__ALL__ = nowTs;
     }
 
-    localStorage.setItem(DISMISSED_MSG_IDS_KEY, JSON.stringify(Array.from(dismissed)));
+    const raw = localStorage.getItem(MESSAGES_KEY);
+    if (raw) {
+      const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
+      const dismissed = new Set<string>(getDismissedMessageIds(userId));
+
+      if (channelId) {
+        const list = allMsgs[channelId] || [];
+        list.forEach((m) => {
+          if (m?.id) dismissed.add(m.id);
+        });
+      } else {
+        Object.entries(allMsgs).forEach(([chKey, list]) => {
+          tsMap[chKey] = nowTs;
+          (list || []).forEach((m) => {
+            if (m?.id) dismissed.add(m.id);
+          });
+        });
+      }
+
+      const arr = Array.from(dismissed);
+      localStorage.setItem(DISMISSED_MSG_IDS_KEY, JSON.stringify(arr));
+      if (userId) {
+        localStorage.setItem(`${DISMISSED_MSG_IDS_KEY}_${userId}`, JSON.stringify(arr));
+      }
+    }
+
+    localStorage.setItem(LAST_READ_TS_KEY, JSON.stringify(tsMap));
+    if (userId) {
+      localStorage.setItem(`${LAST_READ_TS_KEY}_${userId}`, JSON.stringify(tsMap));
+    }
+
+    try {
+      useNotificationStore.getState().markChatChannelRead(channelId);
+    } catch (_) {}
     window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
   } catch (_) {}
 }
@@ -118,7 +191,9 @@ export function isUserReceiverForChatMessage(
   // 1. NEVER notify or play sound for the SENDER
   if (
     (currentUser._id && message.senderId === currentUser._id) ||
-    (currentUser.name && message.senderName === currentUser.name)
+    (currentUser.name &&
+      message.senderName &&
+      message.senderName.toLowerCase().trim() === currentUser.name.toLowerCase().trim())
   ) {
     return false;
   }
@@ -151,13 +226,11 @@ export function isUserReceiverForChatMessage(
   // 4. Direct Individual Chat ('dm_...' / scope === 'direct'):
   // Only the target participant member EXCEPT sender
   if (ch?.scope === 'direct' || channelId.startsWith('dm_')) {
-    if (ch?.participantIds && currentUser._id) {
-      return ch.participantIds.includes(currentUser._id);
-    }
-    if (currentUser._id && channelId.includes(currentUser._id)) {
+    const extracted = extractDmParticipantIds(channelId);
+    if (currentUser._id && extracted.includes(currentUser._id)) {
       return true;
     }
-    if (ch?.name && currentUser.name && ch.name.toLowerCase().includes(currentUser.name.toLowerCase())) {
+    if (ch?.participantIds && currentUser._id && ch.participantIds.includes(currentUser._id)) {
       return true;
     }
     return false;
@@ -166,11 +239,199 @@ export function isUserReceiverForChatMessage(
   return true;
 }
 
+function isMessageAlreadyRead(
+  msg: ChatMessage,
+  channelId: string,
+  dismissed: Set<string>,
+  tsMap: Record<string, number>
+): boolean {
+  if (!msg || !msg.id) return true;
+  if (dismissed.has(msg.id)) return true;
+  const msgTime = new Date(msg.createdAt || 0).getTime();
+  const channelReadTs = Math.max(tsMap[channelId] || 0, tsMap.__ALL__ || 0);
+  if (channelReadTs > 0 && msgTime > 0 && msgTime <= channelReadTs) {
+    return true;
+  }
+  return false;
+}
+
+export function getUnreadMessageIdsForChannel(
+  channelId: string,
+  currentUser?: { _id?: string; name?: string; team?: string; role?: string } | null
+): string[] {
+  if (typeof window === 'undefined' || !channelId || !currentUser) return [];
+  try {
+    const msgs = getStoredMessages(channelId);
+    const dismissed = new Set<string>(getDismissedMessageIds(currentUser._id));
+    const tsMap = getLastReadTimestamps(currentUser._id);
+    return msgs
+      .filter((m) => {
+        if (!m || !m.id || isMessageAlreadyRead(m, channelId, dismissed, tsMap)) return false;
+        return isUserReceiverForChatMessage(m, channelId, currentUser);
+      })
+      .map((m) => m.id);
+  } catch (_) {
+    return [];
+  }
+}
+
+export function resolveDirectChannelForUser(
+  channel: ChatChannel,
+  currentUser: { _id: string; name: string; role?: string },
+  allUsers: { _id: string; name: string; role: string }[] = []
+): {
+  isParticipant: boolean;
+  partnerName: string;
+  partnerRole: string;
+  partnerKey: string;
+  displayName: string;
+  description: string;
+} {
+  const msgs = getStoredMessages(channel.id);
+  const extractedIds = extractDmParticipantIds(channel.id);
+  const storedIds = (channel.participantIds || []).filter(
+    (id) => id && id !== 'u' && id !== 'usr' && !/^\d+$/.test(id)
+  );
+  const participantIds = Array.from(new Set([...extractedIds, ...storedIds]));
+
+  const currentNameLower = (currentUser.name || '').toLowerCase().trim();
+  const isParticipantById = Boolean(currentUser._id && participantIds.includes(currentUser._id));
+
+  // If this DM channel has explicit participant IDs and currentUser is NOT one of them, strictly NOT a participant
+  if (participantIds.length >= 2 && !isParticipantById) {
+    return {
+      isParticipant: false,
+      partnerName: '',
+      partnerRole: '',
+      partnerKey: '',
+      displayName: channel.name,
+      description: channel.description || '',
+    };
+  }
+
+  const hasCurrentMsg = msgs.some(
+    (m) =>
+      m &&
+      (m.senderId === currentUser._id ||
+        (m.senderName || '').toLowerCase().trim() === currentNameLower)
+  );
+
+  const isParticipant = isParticipantById || (participantIds.length === 0 && hasCurrentMsg);
+  if (!isParticipant) {
+    return {
+      isParticipant: false,
+      partnerName: '',
+      partnerRole: '',
+      partnerKey: '',
+      displayName: channel.name,
+      description: channel.description || '',
+    };
+  }
+
+  // Build combined lookup of users (all users + SEED_USERS fallback)
+  const seedLookup = SEED_USERS.map((su, idx) => ({
+    _id: `usr_${idx + 1}`,
+    name: su.name,
+    role: su.role,
+  }));
+  const combinedUsers = [...allUsers, ...seedLookup];
+
+  const cleanPersonName = (raw: string) =>
+    raw
+      .replace(/^💬\s*/, '')
+      .replace(/\s*\([^)]*\)\s*$/, '')
+      .trim();
+
+  let partnerName = '';
+  let partnerRole = '';
+
+  // 1. Highest priority: look up the OTHER participant ID from participantIds
+  const otherId = participantIds.find((id) => id !== currentUser._id);
+  if (otherId) {
+    const matchedUser = combinedUsers.find(
+      (u) =>
+        (u._id === otherId || (u as any).id === otherId) &&
+        cleanPersonName(u.name).toLowerCase() !== currentNameLower
+    );
+    if (matchedUser) {
+      partnerName = cleanPersonName(matchedUser.name);
+      partnerRole = matchedUser.role;
+    }
+  }
+
+  // 2. Second priority: check actual messages in this DM from the OTHER participant
+  if (!partnerName) {
+    const otherMsg = [...msgs]
+      .reverse()
+      .find(
+        (m) =>
+          m &&
+          m.senderName &&
+          cleanPersonName(m.senderName).toLowerCase() !== currentNameLower &&
+          m.senderId !== currentUser._id
+      );
+
+    if (otherMsg) {
+      partnerName = cleanPersonName(otherMsg.senderName);
+      partnerRole = otherMsg.senderRole || 'Team Member';
+    }
+  }
+
+  // 3. Third priority: parse channel.name if it doesn't match currentUser.name
+  if (!partnerName && channel.name) {
+    const rawName = channel.name.replace(/^💬\s*/, '').trim();
+    const match = rawName.match(/^(.+?)\s*\((.+?)\)$/);
+    const candidateName = cleanPersonName(match ? match[1] : rawName);
+    const candidateRole = match ? match[2].trim() : 'Team Member';
+    if (candidateName && candidateName.toLowerCase() !== currentNameLower) {
+      partnerName = candidateName;
+      partnerRole = candidateRole;
+    }
+  }
+
+  // If still no valid partner (or partner is currentUser themselves), hide this channel for currentUser
+  if (!partnerName || partnerName.toLowerCase() === currentNameLower) {
+    return {
+      isParticipant: false,
+      partnerName: '',
+      partnerRole: '',
+      partnerKey: '',
+      displayName: channel.name,
+      description: channel.description || '',
+    };
+  }
+
+  const resolvedUser = combinedUsers.find(
+    (u) => cleanPersonName(u.name).toLowerCase() === partnerName.toLowerCase()
+  );
+  if (resolvedUser) {
+    partnerName = cleanPersonName(resolvedUser.name);
+    if (!partnerRole || partnerRole === 'Member') {
+      partnerRole = resolvedUser.role;
+    }
+  }
+
+  // Strictly isolate partnerKey to the specific pair of participant IDs so it never collides with third-party DMs
+  const partnerKey = otherId
+    ? [currentUser._id, otherId].sort().join('_')
+    : `${currentUser._id}_${partnerName.toLowerCase().trim()}`;
+
+  return {
+    isParticipant: true,
+    partnerName,
+    partnerRole: partnerRole || 'Team Member',
+    partnerKey,
+    displayName: `💬 ${partnerName} (${partnerRole || 'Team Member'})`,
+    description: `Private Direct Message with ${partnerName}`,
+  };
+}
+
 export function getNewChatMessageCount(
   userTeam?: string,
   userRole?: string,
   currentUserId?: string,
-  currentUserName?: string
+  currentUserName?: string,
+  allowInChatPage?: boolean
 ): {
   total: number;
   byChannel: Record<string, number>;
@@ -180,10 +441,16 @@ export function getNewChatMessageCount(
     return { total: 0, byChannel: {}, latestMessage: null };
   }
   try {
+    // If user is currently inside the /chat page, return 0 for global badges unless explicitly allowed
+    if (!allowInChatPage && window.location.pathname.startsWith('/chat')) {
+      return { total: 0, byChannel: {}, latestMessage: null };
+    }
+
     const raw = localStorage.getItem(MESSAGES_KEY);
     if (!raw) return { total: 0, byChannel: {}, latestMessage: null };
     const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
-    const dismissed = new Set<string>(getDismissedMessageIds());
+    const dismissed = new Set<string>(getDismissedMessageIds(currentUserId));
+    const tsMap = getLastReadTimestamps(currentUserId);
     const channels = getStoredChannels();
     const isAdmin = userRole === 'Super Admin' || userRole === 'Admin';
 
@@ -200,6 +467,14 @@ export function getNewChatMessageCount(
         return;
       }
 
+      // If direct channel, skip if current user is not a participant
+      if (chId.startsWith('dm_') || ch?.scope === 'direct') {
+        const dmParts = extractDmParticipantIds(chId);
+        if (currentUserId && dmParts.length >= 2 && !dmParts.includes(currentUserId)) {
+          return;
+        }
+      }
+
       // Deduplicate messages in channel
       const seen = new Set<string>();
       const validMsgs: ChatMessage[] = [];
@@ -211,7 +486,7 @@ export function getNewChatMessageCount(
 
       // Only count messages where the user is a RECEIVER (never count the sender's own messages)
       const unreadInChannel = validMsgs.filter((m) => {
-        if (dismissed.has(m.id)) return false;
+        if (isMessageAlreadyRead(m, chId, dismissed, tsMap)) return false;
         if (currentUserId || currentUserName) {
           return isUserReceiverForChatMessage(m, chId, {
             _id: currentUserId,
@@ -251,7 +526,28 @@ export function getStoredChannels(): ChatChannel[] {
       localStorage.setItem(CHANNELS_KEY, JSON.stringify(DEFAULT_CHANNELS));
       return DEFAULT_CHANNELS;
     }
-    return JSON.parse(raw);
+    const parsed: ChatChannel[] = JSON.parse(raw);
+    let repaired = false;
+    const channels = parsed.map((ch) => {
+      if (ch && (ch.scope === 'direct' || ch.id.startsWith('dm_'))) {
+        const realParts = extractDmParticipantIds(ch.id);
+        if (
+          realParts.length >= 2 &&
+          (!ch.participantIds ||
+            ch.participantIds.length < 2 ||
+            ch.participantIds.includes('usr') ||
+            ch.participantIds.includes('u'))
+        ) {
+          repaired = true;
+          return { ...ch, participantIds: realParts };
+        }
+      }
+      return ch;
+    });
+    if (repaired) {
+      localStorage.setItem(CHANNELS_KEY, JSON.stringify(channels));
+    }
+    return channels;
   } catch (err) {
     return DEFAULT_CHANNELS;
   }
@@ -306,43 +602,100 @@ export async function syncMessagesFromServer(): Promise<{
     const localMsgs: Record<string, ChatMessage[]> = raw ? JSON.parse(raw) : { ...INITIAL_MESSAGES };
     const newlyDiscovered: { channelId: string; message: ChatMessage }[] = [];
     let hasChanges = false;
+    const nowMs = Date.now();
 
-    Object.entries(data.messagesByChannel as Record<string, ChatMessage[]>).forEach(
-      ([channelId, serverList]) => {
-        if (!Array.isArray(serverList)) return;
-        const currentList = localMsgs[channelId] || [];
-        const existingIds = new Set(currentList.map((m) => m.id));
+    const serverMap = data.messagesByChannel as Record<string, ChatMessage[]>;
+    const allChannelIds = new Set([
+      ...Object.keys(INITIAL_MESSAGES),
+      ...Object.keys(localMsgs),
+      ...Object.keys(serverMap),
+    ]);
 
-        for (const srvMsg of serverList) {
-          if (srvMsg && srvMsg.id && !existingIds.has(srvMsg.id)) {
-            currentList.push(srvMsg);
-            existingIds.add(srvMsg.id);
-            newlyDiscovered.push({ channelId, message: srvMsg });
-            hasChanges = true;
-          }
-        }
-        localMsgs[channelId] = currentList;
+    const currentChannels = getStoredChannels();
+    let channelsChanged = false;
+
+    allChannelIds.forEach((channelId) => {
+      const serverList: ChatMessage[] = Array.isArray(serverMap[channelId]) ? serverMap[channelId] : [];
+      const currentList: ChatMessage[] = Array.isArray(localMsgs[channelId]) ? localMsgs[channelId] : [];
+
+      const existingIds = new Set(currentList.filter(Boolean).map((m) => m.id));
+      const serverIds = new Set(serverList.filter(Boolean).map((m) => m.id));
+
+      // 1. Keep local messages that exist on server OR were sent within the last 8 seconds (in-flight POST)
+      const retainedLocal = currentList.filter((m) => {
+        if (!m || !m.id) return false;
+        if (serverIds.has(m.id)) return true;
+        const ageMs = nowMs - new Date(m.createdAt || 0).getTime();
+        return ageMs < 8000;
+      });
+
+      if (retainedLocal.length !== currentList.length) {
+        hasChanges = true;
       }
-    );
 
-    // Also push any local messages that aren't on the server yet so other tabs/sessions get them
-    Object.entries(localMsgs).forEach(([channelId, localList]) => {
-      if (!Array.isArray(localList) || localList.length === 0) return;
-      const serverList: ChatMessage[] = data.messagesByChannel[channelId] || [];
-      const serverIds = new Set(serverList.map((m) => m.id));
-      for (const locMsg of localList) {
-        if (locMsg && locMsg.id && !serverIds.has(locMsg.id)) {
-          fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channelId, message: locMsg }),
-          }).catch(() => {});
+      // 2. Append any newly arrived server messages
+      for (const srvMsg of serverList) {
+        if (srvMsg && srvMsg.id && !existingIds.has(srvMsg.id)) {
+          retainedLocal.push(srvMsg);
+          existingIds.add(srvMsg.id);
+          newlyDiscovered.push({ channelId, message: srvMsg });
+          hasChanges = true;
+        }
+      }
+
+      retainedLocal.sort(
+        (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+      );
+      localMsgs[channelId] = retainedLocal;
+
+      // 3. Auto-create missing Direct Message (dm_) channel & update channel preview
+      if (channelId.startsWith('dm_') && retainedLocal.length > 0) {
+        const existsCh = currentChannels.some((c) => c && c.id === channelId);
+        const parts = extractDmParticipantIds(channelId);
+        const sampleMsg = retainedLocal[retainedLocal.length - 1];
+        if (!existsCh) {
+          currentChannels.unshift({
+            id: channelId,
+            name: `💬 ${sampleMsg?.senderName || 'Team Member'} (${sampleMsg?.senderRole || 'Member'})`,
+            scope: 'direct',
+            participantIds: parts,
+            description: `Direct Message with ${sampleMsg?.senderName || 'Team Member'}`,
+            lastMessage: String(sampleMsg?.text || '').slice(0, 40) || 'Direct message',
+            lastMessageTime: new Date(sampleMsg?.createdAt || Date.now()).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          });
+          channelsChanged = true;
+        } else {
+          const idx = currentChannels.findIndex((c) => c && c.id === channelId);
+          if (
+            idx !== -1 &&
+            (!currentChannels[idx].participantIds ||
+              currentChannels[idx].participantIds?.includes('usr') ||
+              (currentChannels[idx].participantIds?.length || 0) < 2)
+          ) {
+            currentChannels[idx] = { ...currentChannels[idx], participantIds: parts };
+            channelsChanged = true;
+          }
         }
       }
     });
 
-    if (hasChanges) {
+    if (channelsChanged) {
+      localStorage.setItem(CHANNELS_KEY, JSON.stringify(currentChannels));
+    }
+
+    if (hasChanges || newlyDiscovered.length > 0) {
       localStorage.setItem(MESSAGES_KEY, JSON.stringify(localMsgs));
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/chat')) {
+        markChannelMessagesAsRead();
+      }
+      window.dispatchEvent(
+        new CustomEvent('taskflow_chat_synced', {
+          detail: { newMessages: newlyDiscovered },
+        })
+      );
       window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
     }
 
@@ -397,6 +750,7 @@ export function sendChatMessage(
       const updatedList = [...currentList, newMsg];
       allMsgs[channelId] = updatedList;
       localStorage.setItem(MESSAGES_KEY, JSON.stringify(allMsgs));
+      markChannelMessagesAsRead(channelId, sender._id);
 
       // Update Channel Last Message info
       const channels = getStoredChannels();

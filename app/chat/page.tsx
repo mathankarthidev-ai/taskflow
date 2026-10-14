@@ -14,12 +14,16 @@ import {
   createDirectChannel,
   getChatBroadcastChannel,
   getNewChatMessageCount,
+  extractDmParticipantIds,
+  getUnreadMessageIdsForChannel,
   isUserReceiverForChatMessage,
   markChannelMessagesAsRead,
+  resolveDirectChannelForUser,
   syncMessagesFromServer,
 } from '@/lib/chat-db';
 import { playNotificationChime } from '@/lib/audio-chime';
 import { fetchAllUsersAction } from '@/actions/userActions';
+import { supabase } from '@/lib/supabase';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -57,6 +61,7 @@ export default function TeamChatPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [unreadByChannel, setUnreadByChannel] = useState<Record<string, number>>({});
   const [totalUnreadChat, setTotalUnreadChat] = useState<number>(0);
+  const [newMsgIdsInActiveView, setNewMsgIdsInActiveView] = useState<string[]>([]);
 
   // Form State
   const [messageText, setMessageText] = useState('');
@@ -79,36 +84,131 @@ export default function TeamChatPage() {
 
   const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
 
+  // Helper to get all channel IDs belonging to the EXACT SAME Direct DM participant pair (in case duplicate DM channels exist)
+  const getRelatedChannelIds = (channelId: string, allChs: ChatChannel[] = channels): string[] => {
+    if (!currentUser || !channelId.startsWith('dm_')) return [channelId];
+    const targetParts = extractDmParticipantIds(channelId).sort();
+    if (targetParts.length < 2) return [channelId];
+    if (!targetParts.includes(currentUser._id)) return [channelId];
+
+    const matchingIds = allChs
+      .filter((c) => {
+        if (c.scope !== 'direct' && !c.id.startsWith('dm_')) return false;
+        const cParts = extractDmParticipantIds(c.id).sort();
+        if (cParts.length < 2) return false;
+        return cParts[0] === targetParts[0] && cParts[1] === targetParts[1];
+      })
+      .map((c) => c.id);
+
+    return matchingIds.length > 0 ? Array.from(new Set([channelId, ...matchingIds])) : [channelId];
+  };
+
+  const loadMergedMessagesForChannel = (channelId: string, allChs: ChatChannel[] = channels): ChatMessage[] => {
+    const relatedIds = getRelatedChannelIds(channelId, allChs);
+    const isDm = channelId.startsWith('dm_');
+    const dmParts = isDm ? extractDmParticipantIds(channelId) : [];
+
+    const merged: ChatMessage[] = [];
+    const seen = new Set<string>();
+    for (const id of relatedIds) {
+      for (const m of getStoredMessages(id)) {
+        if (!m || !m.id || seen.has(m.id)) continue;
+        // Extra security: strictly isolate DM messages to the 2 participants of this channel
+        if (isDm && dmParts.length === 2 && m.senderId) {
+          if (!dmParts.includes(m.senderId)) {
+            // Stray message from a third party — never leak into this private DM
+            continue;
+          }
+        }
+        seen.add(m.id);
+        merged.push(m);
+      }
+    }
+    return merged.sort(
+      (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    );
+  };
+
   const refreshUnreadCounts = () => {
     if (!currentUser) return;
+    // The active channel is currently in view — mark it as read immediately
+    markChannelMessagesAsRead(activeChannelId, currentUser._id);
+    useNotificationStore.getState().markChatChannelRead(activeChannelId);
+
     const res = getNewChatMessageCount(
       currentUser.team,
       currentUser.role,
       currentUser._id,
-      currentUser.name
+      currentUser.name,
+      true
     );
-    setUnreadByChannel(res.byChannel);
-    setTotalUnreadChat(res.total);
+
+    const updated = { ...res.byChannel };
+    // Active channel currently in view MUST ALWAYS have 0 unread badge
+    delete updated[activeChannelId];
+    const related = getRelatedChannelIds(activeChannelId);
+    for (const rId of related) {
+      delete updated[rId];
+    }
+    setUnreadByChannel(updated);
+    setTotalUnreadChat(Object.values(updated).reduce((a, b) => a + b, 0));
   };
 
   useEffect(() => {
-    fetchAllUsersAction().then(setUsers);
+    fetchAllUsersAction().then((list) => {
+      if (Array.isArray(list)) {
+        import('@/lib/avatar-store').then(({ syncUsersAvatarsToLocalStore }) => {
+          syncUsersAvatarsToLocalStore(list);
+        });
+      }
+      setUsers(list || []);
+    });
     const loadedChannels = getStoredChannels();
     setChannels(loadedChannels);
+    if (currentUser) {
+      markChannelMessagesAsRead(activeChannelId, currentUser._id);
+      useNotificationStore.getState().markChatChannelRead(activeChannelId);
+      toast.dismiss();
+    }
     refreshUnreadCounts();
   }, [currentUser]);
 
+  // When user opens or views activeChannelId:
+  // Immediately mark all messages in the channel as read and remove popups/notifications
   useEffect(() => {
-    if (activeChannelId) {
-      const msgs = getStoredMessages(activeChannelId);
+    if (activeChannelId && currentUser) {
+      if (activeChannelId.startsWith('dm_')) {
+        const parts = extractDmParticipantIds(activeChannelId);
+        if (parts.length >= 2 && !parts.includes(currentUser._id)) {
+          setActiveChannelId('channel_all');
+          return;
+        }
+      }
+
+      const currentChs = getStoredChannels();
+      const msgs = loadMergedMessagesForChannel(activeChannelId, currentChs);
       setMessages(msgs);
+      setNewMsgIdsInActiveView([]);
+
+      markChannelMessagesAsRead(activeChannelId, currentUser._id);
+      useNotificationStore.getState().markChatChannelRead(activeChannelId);
+      toast.dismiss();
       refreshUnreadCounts();
     }
-  }, [activeChannelId]);
+  }, [activeChannelId, currentUser?._id, users.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Auto-clear any transient "New Msg" indicator inside active view after 3 seconds once seen
+  useEffect(() => {
+    if (newMsgIdsInActiveView.length === 0) return;
+    const t = setTimeout(() => {
+      setNewMsgIdsInActiveView([]);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [newMsgIdsInActiveView]);
 
   // Real-time synchronization & cross-tab / cross-session events listener
   useEffect(() => {
@@ -118,8 +218,10 @@ export default function TeamChatPage() {
       }
 
       const isReceiver = isUserReceiverForChatMessage(message, channelId, currentUser);
+      const currentChs = getStoredChannels();
+      const relatedActiveIds = getRelatedChannelIds(activeChannelId, currentChs);
 
-      if (channelId === activeChannelId && message) {
+      if (relatedActiveIds.includes(channelId) && message) {
         if (message.senderId !== currentUser?._id && message.senderName !== currentUser?.name) {
           setMessages((prev) => {
             if (prev.some((m) => m.id === message.id)) return prev;
@@ -134,12 +236,18 @@ export default function TeamChatPage() {
             }
             return [...prev, message];
           });
+          setNewMsgIdsInActiveView((prev) => (prev.includes(message.id) ? prev : [...prev, message.id]));
         }
       }
 
-      // Only play notification sound for RECEIVERS (in Direct/Member, Team, or All-in-One) — NEVER for the sender!
+      if (currentUser && relatedActiveIds.includes(channelId)) {
+        markChannelMessagesAsRead(activeChannelId, currentUser._id);
+        useNotificationStore.getState().markChatChannelRead(activeChannelId);
+      }
+
+      // Only play distinct chat notification sound for RECEIVERS — NEVER for the sender!
       if (isReceiver) {
-        playNotificationChime();
+        playNotificationChime('chat');
       }
 
       setChannels(getStoredChannels());
@@ -154,10 +262,12 @@ export default function TeamChatPage() {
 
     const handleDeletedMessage = (e: any) => {
       const { channelId, messageId } = e.detail || {};
-      if (channelId === activeChannelId && messageId) {
+      const currentChs = getStoredChannels();
+      const relatedActiveIds = getRelatedChannelIds(activeChannelId, currentChs);
+      if (relatedActiveIds.includes(channelId) && messageId) {
         setMessages((prev) => prev.filter((m) => m.id !== messageId));
       }
-      setChannels(getStoredChannels());
+      setChannels(currentChs);
       refreshUnreadCounts();
     };
 
@@ -171,43 +281,104 @@ export default function TeamChatPage() {
       bc.addEventListener('message', handleBroadcast);
     }
 
-    const pollChatServer = async () => {
-      const { newMessages } = await syncMessagesFromServer();
-      if (newMessages.length > 0) {
-        setMessages(getStoredMessages(activeChannelId));
-        setChannels(getStoredChannels());
-        refreshUnreadCounts();
-        // Play sound only if currentUser is a receiver for at least one newly synced message
-        const hasIncomingForReceiver = newMessages.some((item) =>
+    const handleSyncedFromServer = (e: any) => {
+      const currentChs = getStoredChannels();
+      const relatedActiveIds = getRelatedChannelIds(activeChannelId, currentChs);
+      const newMessages = e?.detail?.newMessages || [];
+
+      if (newMessages.length > 0 && currentUser) {
+        const newlyInActive = newMessages
+          .filter(
+            (item: any) =>
+              relatedActiveIds.includes(item.channelId) &&
+              isUserReceiverForChatMessage(item.message, item.channelId, currentUser)
+          )
+          .map((item: any) => item.message.id);
+
+        if (newlyInActive.length > 0) {
+          setNewMsgIdsInActiveView((prev) => Array.from(new Set([...prev, ...newlyInActive])));
+        }
+
+        const hasIncomingForReceiver = newMessages.some((item: any) =>
           isUserReceiverForChatMessage(item.message, item.channelId, currentUser)
         );
         if (hasIncomingForReceiver) {
-          playNotificationChime();
+          playNotificationChime('chat');
         }
       }
+
+      if (currentUser) {
+        markChannelMessagesAsRead(activeChannelId, currentUser._id);
+        useNotificationStore.getState().markChatChannelRead(activeChannelId);
+      }
+
+      setMessages(loadMergedMessagesForChannel(activeChannelId, currentChs));
+      setChannels(currentChs);
+      refreshUnreadCounts();
+    };
+
+    const pollChatServer = async () => {
+      await syncMessagesFromServer();
+      const currentChs = getStoredChannels();
+      if (currentUser) {
+        markChannelMessagesAsRead(activeChannelId, currentUser._id);
+        useNotificationStore.getState().markChatChannelRead(activeChannelId);
+      }
+      setMessages(loadMergedMessagesForChannel(activeChannelId, currentChs));
+      setChannels(currentChs);
+      refreshUnreadCounts();
     };
     pollChatServer();
-    const pollTimer = setInterval(pollChatServer, 3500);
+    const pollTimer = setInterval(pollChatServer, 2000);
+
+    // Subscribe to Supabase Realtime on chat_messages for instant cross-device delivery
+    const realtimeSub = supabase
+      .channel(`chat_live_${activeChannelId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'chat_messages' },
+        () => {
+          pollChatServer();
+        }
+      )
+      .subscribe();
 
     window.addEventListener('taskflow_chat_message_sent', handleRemoteMessage);
     window.addEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+    window.addEventListener('taskflow_chat_synced', handleSyncedFromServer);
     window.addEventListener('taskflow_chat_unread_updated', refreshUnreadCounts);
-    window.addEventListener('storage', refreshUnreadCounts);
+    window.addEventListener('storage', handleSyncedFromServer);
     return () => {
       window.removeEventListener('taskflow_chat_message_sent', handleRemoteMessage);
       window.removeEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+      window.removeEventListener('taskflow_chat_synced', handleSyncedFromServer);
       window.removeEventListener('taskflow_chat_unread_updated', refreshUnreadCounts);
-      window.removeEventListener('storage', refreshUnreadCounts);
+      window.removeEventListener('storage', handleSyncedFromServer);
       if (bc) {
         bc.removeEventListener('message', handleBroadcast);
       }
       clearInterval(pollTimer);
+      supabase.removeChannel(realtimeSub);
     };
   }, [activeChannelId, currentUser?._id, currentUser?.name, currentUser?.team, currentUser?.role]);
 
   if (!currentUser) return null;
 
-  const activeChannel = channels.find((c) => c.id === activeChannelId) || channels[0];
+  const rawActiveChannel = channels.find((c) => c.id === activeChannelId) || channels[0];
+  const activeChannel = (() => {
+    if (!rawActiveChannel) return channels[0];
+    if (rawActiveChannel.scope === 'direct') {
+      const resolved = resolveDirectChannelForUser(rawActiveChannel, currentUser, users);
+      if (resolved.partnerKey) {
+        return {
+          ...rawActiveChannel,
+          name: resolved.displayName,
+          description: resolved.description,
+        };
+      }
+    }
+    return rawActiveChannel;
+  })();
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -314,6 +485,9 @@ export default function TeamChatPage() {
         return [...prev, created];
       });
 
+      setNewMsgIdsInActiveView([]);
+      markChannelMessagesAsRead(activeChannelId, currentUser._id);
+      useNotificationStore.getState().markChatChannelRead(activeChannelId);
       setChannels(getStoredChannels());
       refreshUnreadCounts();
       window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
@@ -372,7 +546,54 @@ export default function TeamChatPage() {
   const teamGroupChannels = channels.filter(
     (c) => c.scope === 'team' && (currentUser.role === 'Super Admin' || currentUser.role === 'Admin' || c.team === currentUser.team)
   );
-  const directChannels = channels.filter((c) => c.scope === 'direct');
+
+  // Resolve Direct DMs for currentUser so:
+  // 1) It ALWAYS shows the OTHER participant's name (never currentUser's own name, and never a stale persona's name)
+  // 2) It deduplicates by partnerKey so the same person is NEVER shown twice in INDIVIDUAL DIRECT DMS
+  const directChannels = (() => {
+    const mapByPartner = new Map<
+      string,
+      ChatChannel & { mergedIds: string[]; unreadTotal: number }
+    >();
+
+    for (const ch of channels) {
+      if (ch.scope !== 'direct' && !ch.id.startsWith('dm_')) continue;
+      const resolved = resolveDirectChannelForUser(ch, currentUser, users);
+      if (!resolved.isParticipant || !resolved.partnerKey) continue;
+
+      const chMsgs = getStoredMessages(ch.id);
+      const lastMsg = chMsgs[chMsgs.length - 1];
+      const latestTimeStr = lastMsg
+        ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : ch.lastMessageTime || '';
+      const chUnread = unreadByChannel[ch.id] || 0;
+
+      const existing = mapByPartner.get(resolved.partnerKey);
+      if (!existing) {
+        mapByPartner.set(resolved.partnerKey, {
+          ...ch,
+          name: resolved.displayName,
+          description: resolved.description,
+          lastMessageTime: latestTimeStr,
+          mergedIds: [ch.id],
+          unreadTotal: chUnread,
+        });
+      } else {
+        existing.mergedIds.push(ch.id);
+        existing.unreadTotal += chUnread;
+        // Prefer the channel ID that has messages or is currently active
+        const existingMsgs = getStoredMessages(existing.id);
+        if (ch.id === activeChannelId || (chMsgs.length > existingMsgs.length && existing.id !== activeChannelId)) {
+          existing.id = ch.id;
+        }
+        if (latestTimeStr && !existing.lastMessageTime) {
+          existing.lastMessageTime = latestTimeStr;
+        }
+      }
+    }
+
+    return Array.from(mapByPartner.values());
+  })();
 
   const filteredUsersForDm = users.filter(
     (u) =>
@@ -405,7 +626,13 @@ export default function TeamChatPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Avatar name={currentUser.name} src={currentUser.avatar} size="sm" />
+          <Avatar
+            name={currentUser.name}
+            src={currentUser.avatar}
+            userId={currentUser._id}
+            email={currentUser.email}
+            size="sm"
+          />
           <span className="text-xs font-bold text-foreground">{currentUser.name}</span>
           <Badge variant="outline" className="text-[10px]">
             {currentUser.role}
@@ -442,7 +669,7 @@ export default function TeamChatPage() {
             </span>
             <div className="space-y-1">
               {allGroupChannel.map((ch) => {
-                const newCount = unreadByChannel[ch.id] || 0;
+                const newCount = activeChannelId === ch.id ? 0 : unreadByChannel[ch.id] || 0;
                 return (
                   <button
                     key={ch.id}
@@ -479,7 +706,7 @@ export default function TeamChatPage() {
             </span>
             <div className="space-y-1">
               {teamGroupChannels.map((ch) => {
-                const newCount = unreadByChannel[ch.id] || 0;
+                const newCount = activeChannelId === ch.id ? 0 : unreadByChannel[ch.id] || 0;
                 return (
                   <button
                     key={ch.id}
@@ -522,13 +749,15 @@ export default function TeamChatPage() {
             <div className="space-y-1">
               {directChannels.length > 0 ? (
                 directChannels.map((ch) => {
-                  const newCount = unreadByChannel[ch.id] || 0;
+                  const isActiveDm = ch.mergedIds.includes(activeChannelId);
+                  // Do NOT show "New Msg" in sidebar if the user is currently viewing this DM
+                  const newCount = isActiveDm ? 0 : ch.unreadTotal;
                   return (
                     <button
                       key={ch.id}
                       onClick={() => setActiveChannelId(ch.id)}
                       className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
-                        activeChannelId === ch.id
+                        isActiveDm
                           ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
                           : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-foreground'
                       }`}
@@ -576,21 +805,49 @@ export default function TeamChatPage() {
               <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 font-bold">
                 {activeChannel?.scope === 'all' ? 'Group (TL, Member, Admin)' : activeChannel?.scope === 'team' ? `${activeChannel.team} Team` : 'Direct DM'}
               </Badge>
-              {(unreadByChannel[activeChannelId] || 0) > 0 && (
-                <Badge className="bg-rose-500 text-white font-extrabold text-[10px] animate-pulse">
-                  ● {unreadByChannel[activeChannelId]} New Msg
-                </Badge>
-              )}
               <button
                 type="button"
                 onClick={() => {
-                  playNotificationChime();
-                  toast.success('🔊 Notification Chime Tested! Sound & Team Alerts are active.');
+                  playNotificationChime('chat');
+                  toast.success('🔊 Chat Message Sound Tested! (Double Pop + Ping)');
                 }}
-                className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold ml-1 px-2 py-0.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors cursor-pointer"
-                title="Click to test notification chime sound"
+                className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold ml-1 px-2 py-0.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                title="Test distinct Chat notification sound"
               >
-                <Volume2 className="h-3.5 w-3.5 animate-pulse" /> Sound &amp; Team Alerts Active
+                <Volume2 className="h-3 w-3 animate-pulse" /> 💬 Chat Sound
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playNotificationChime('reminder');
+                  toast.success('⏰ Due Reminder Sound Tested! (3-Note Bell Alarm)');
+                }}
+                className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                title="Test distinct Reminder notification sound"
+              >
+                ⏰ Reminder Sound
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playNotificationChime('self_reminder');
+                  toast.success('🔔 Self Reminder Sound Tested! (4-Note Warm Melody)');
+                }}
+                className="inline-flex items-center gap-1 text-[10px] text-purple-600 dark:text-purple-400 font-bold px-2 py-0.5 rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 transition-colors cursor-pointer"
+                title="Test distinct Self Reminder notification sound"
+              >
+                🔔 Self Reminder Sound
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playNotificationChime('task_assigned');
+                  toast.success('📌 Task Assigned Sound Tested! (2-Chord Brass Fanfare)');
+                }}
+                className="inline-flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 font-bold px-2 py-0.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 transition-colors cursor-pointer"
+                title="Test distinct Task Assigned notification sound"
+              >
+                📌 Task Assigned Sound
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">{activeChannel?.description || 'Collaborate with text updates, share files, and link resources.'}</p>
@@ -606,22 +863,6 @@ export default function TeamChatPage() {
               <ArrowLeft className="h-3.5 w-3.5 text-brand-500" />
               Home
             </Link>
-            {totalUnreadChat > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  markChannelMessagesAsRead(activeChannelId);
-                  refreshUnreadCounts();
-                  toast.info('Marked channel messages as read');
-                }}
-                className="text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 gap-1"
-              >
-                <CheckCircle className="h-3.5 w-3.5" />
-                Mark Read
-              </Button>
-            )}
             {isAdmin && messages.length > 0 && (
               <Button
                 type="button"
@@ -657,26 +898,68 @@ export default function TeamChatPage() {
               }
               uniqueMessages.push(m);
             }
+
+            let hasRenderedNewDivider = false;
+
             return uniqueMessages.length > 0 ? (
-              uniqueMessages.map((msg) => {
-                const isMe = msg.senderId === currentUser._id;
-              return (
-                <div key={msg.id} className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} group`}>
-                  <Avatar name={msg.senderName} src={msg.senderAvatar} size="md" className="shrink-0" />
-                  <div className={`max-w-xl space-y-1 ${isMe ? 'items-end text-right' : 'items-start'}`}>
-                    {/* Sender Info & Admin Delete Action */}
-                    <div className={`flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground ${isMe ? 'justify-end' : ''}`}>
-                      <span className="font-bold text-foreground">{msg.senderName}</span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                        {msg.senderRole}
-                      </span>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1">
-                        <Bell className="h-2.5 w-2.5" />
-                        {activeChannel?.scope === 'all' ? 'Notified All Teams' : 'Team Notified'}
-                      </span>
-                      <span className="font-mono text-[10px]">
-                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+              uniqueMessages.map((msg, idx) => {
+                const isMe =
+                  msg.senderId === currentUser._id ||
+                  (msg.senderName || '').toLowerCase() === currentUser.name.toLowerCase();
+                // Only show transient "New Msg" if it just arrived while viewing AND user hasn't replied after it
+                const hasReplyAfter = uniqueMessages
+                  .slice(idx + 1)
+                  .some(
+                    (later) =>
+                      later.senderId === currentUser._id ||
+                      (later.senderName || '').toLowerCase() === currentUser.name.toLowerCase()
+                  );
+                const isNewMsg = !isMe && !hasReplyAfter && newMsgIdsInActiveView.includes(msg.id);
+                const showNewDivider = isNewMsg && !hasRenderedNewDivider;
+                if (showNewDivider) {
+                  hasRenderedNewDivider = true;
+                }
+
+                return (
+                  <React.Fragment key={msg.id}>
+                    {showNewDivider && (
+                      <div className="flex items-center gap-3 my-2">
+                        <div className="h-px flex-1 bg-rose-500/30" />
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/15 border border-rose-500/40 px-3 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                          <Bell className="h-3 w-3 animate-bounce" />
+                          New Message Received
+                        </span>
+                        <div className="h-px flex-1 bg-rose-500/30" />
+                      </div>
+                    )}
+                    <div className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} group`}>
+                      <Avatar
+                        name={msg.senderName}
+                        src={msg.senderAvatar}
+                        userId={msg.senderId}
+                        size="md"
+                        className="shrink-0"
+                      />
+                      <div className={`max-w-xl space-y-1 ${isMe ? 'items-end text-right' : 'items-start'}`}>
+                        {/* Sender Info & Admin Delete Action */}
+                        <div className={`flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground ${isMe ? 'justify-end' : ''}`}>
+                          <span className="font-bold text-foreground">{msg.senderName}</span>
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                            {msg.senderRole}
+                          </span>
+                          {isNewMsg && (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-500 text-white shadow-sm animate-pulse inline-flex items-center gap-1">
+                              <Bell className="h-2.5 w-2.5" />
+                              New Msg
+                            </span>
+                          )}
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1">
+                            <Bell className="h-2.5 w-2.5" />
+                            {activeChannel?.scope === 'all' ? 'Notified All Teams' : 'Team Notified'}
+                          </span>
+                          <span className="font-mono text-[10px]">
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                       {/* Admin Delete Action */}
                       {(isAdmin || isMe) && (
                         <button
@@ -750,6 +1033,7 @@ export default function TeamChatPage() {
                     </div>
                   </div>
                 </div>
+                </React.Fragment>
               );
             })
           ) : (

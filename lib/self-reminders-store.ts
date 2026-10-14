@@ -26,7 +26,21 @@ export interface SelfReminder {
   created_at?: string;
 }
 
-const STORAGE_PREFIX = 'ambizcon_self_reminders_';
+const STORAGE_PREFIX = 'ambizcon_self_reminders_v2_';
+
+function purgeLegacySelfReminders() {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('ambizcon_self_reminders_') && !k.startsWith('ambizcon_self_reminders_v2_')) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (_) {}
+}
 
 export function getDayOfWeekFromDate(dateStr: string): string {
   if (!dateStr) return 'Monday';
@@ -64,44 +78,8 @@ export function to24HourTime(time12: string): string {
   return `${String(h).padStart(2, '0')}:${m}`;
 }
 
-function getDefaultSelfReminders(userId: string, userEmail: string, userName: string): SelfReminder[] {
-  const todayStr = new Date().toLocaleDateString('en-CA');
-  const todayDayName = getDayOfWeekFromDate(todayStr);
-
-  return [
-    {
-      id: `SR-${userEmail}-1`,
-      user_id: userId,
-      user_email: userEmail,
-      user_name: userName,
-      title: 'Daily Morning Standup & Priority Review',
-      note: 'Check urgent tasks and team updates for the day',
-      reminder_date: todayStr,
-      day_name: 'Every Day',
-      reminder_time: '09:30 AM',
-      repeat_type: 'Daily',
-      custom_days: 'Mon, Tue, Wed, Thu, Fri',
-      is_completed: false,
-      is_active: true,
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: `SR-${userEmail}-2`,
-      user_id: userId,
-      user_email: userEmail,
-      user_name: userName,
-      title: 'Weekly Progress & Timesheet Check',
-      note: 'Review completed tasks and weekly attendance hours',
-      reminder_date: todayStr,
-      day_name: todayDayName,
-      reminder_time: '05:00 PM',
-      repeat_type: 'Weekly',
-      custom_days: todayDayName,
-      is_completed: false,
-      is_active: true,
-      created_at: new Date().toISOString(),
-    },
-  ];
+function getDefaultSelfReminders(): SelfReminder[] {
+  return [];
 }
 
 export async function fetchSelfReminders(
@@ -110,6 +88,7 @@ export async function fetchSelfReminders(
   userName: string
 ): Promise<SelfReminder[]> {
   if (!userEmail) return [];
+  purgeLegacySelfReminders();
   const emailLower = userEmail.toLowerCase();
   const storageKey = `${STORAGE_PREFIX}${emailLower}`;
 
@@ -120,7 +99,7 @@ export async function fetchSelfReminders(
       .eq('user_email', emailLower)
       .order('created_at', { ascending: false });
 
-    if (!error && data && data.length > 0) {
+    if (!error && data) {
       const mapped: SelfReminder[] = data.map((row: any) => ({
         id: row.id,
         user_id: row.user_id || userId,
@@ -143,15 +122,6 @@ export async function fetchSelfReminders(
       }
       return mapped;
     }
-
-    if (!error && (!data || data.length === 0)) {
-      const defaults = getDefaultSelfReminders(userId, emailLower, userName);
-      await supabase.from('self_reminders').upsert(defaults, { onConflict: 'id' });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(storageKey, JSON.stringify(defaults));
-      }
-      return defaults;
-    }
   } catch (e) {}
 
   if (typeof window !== 'undefined') {
@@ -161,9 +131,7 @@ export async function fetchSelfReminders(
         return JSON.parse(cached);
       } catch (e) {}
     }
-    const defaults = getDefaultSelfReminders(userId, emailLower, userName);
-    localStorage.setItem(storageKey, JSON.stringify(defaults));
-    return defaults;
+    return [];
   }
 
   return [];

@@ -58,15 +58,21 @@ export function DashboardOverview() {
   const [brisbaneTime, setBrisbaneTime] = useState('');
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
+    async function loadData(showSpinner = true) {
+      if (showSpinner) setLoading(true);
       const res = await fetchTasksAction();
       setTasks(res);
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
-    loadData();
+    loadData(true);
     setQuote(getRandomQuote());
     setTimeGreeting(getTimeBasedGreeting());
+
+    const handleWorkspaceRefresh = () => {
+      loadData(false);
+    };
+    window.addEventListener('ambizcon_workspace_refresh', handleWorkspaceRefresh);
+    return () => window.removeEventListener('ambizcon_workspace_refresh', handleWorkspaceRefresh);
   }, []);
 
   useEffect(() => {
@@ -157,7 +163,13 @@ export function DashboardOverview() {
       {/* Time-Based Greeting Banner with Random Motivational Quote */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border ambizcon-hero-banner p-6 glass-panel">
         <div className="flex items-center gap-4">
-          <Avatar src={currentUser.avatar} name={currentUser.name} size="xl" />
+          <Avatar
+            src={currentUser.avatar}
+            name={currentUser.name}
+            userId={currentUser._id}
+            email={currentUser.email}
+            size="xl"
+          />
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold tracking-tight text-foreground">

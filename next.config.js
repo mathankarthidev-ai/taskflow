@@ -18,7 +18,9 @@ const nextConfig = {
     ],
   },
   experimental: {
-    // serverActions is enabled by default in Next 15
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
   },
   webpack: (config) => {
     config.resolve.symlinks = false;

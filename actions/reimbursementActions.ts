@@ -61,8 +61,6 @@ function mapRowToClaim(row: any): ReimbursementClaim {
   };
 }
 
-let claimsAutoSeeded = false;
-
 export async function fetchReimbursementsAction(): Promise<ReimbursementClaim[]> {
   try {
     const { data: rows, error } = await supabase
@@ -71,19 +69,13 @@ export async function fetchReimbursementsAction(): Promise<ReimbursementClaim[]>
       .order('created_at', { ascending: false });
 
     if (!error && rows) {
-      if (rows.length === 0 && !claimsAutoSeeded && mockStore.reimbursements.length > 0) {
-        claimsAutoSeeded = true;
-        const seedRows = mockStore.reimbursements.map(mapClaimToRow);
-        await supabase.from('reimbursements').upsert(seedRows, { onConflict: 'id' });
-        return mockStore.reimbursements;
-      }
       return rows.map(mapRowToClaim);
     }
   } catch (e) {
     console.error('Error fetching reimbursements from Supabase:', e);
   }
 
-  return mockStore.reimbursements;
+  return [];
 }
 
 export async function submitReimbursementAction(input: {

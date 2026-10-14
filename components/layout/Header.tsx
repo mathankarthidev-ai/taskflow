@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   Search,
   Plus,
@@ -28,6 +28,8 @@ import {
   Droplets,
   Clock,
   CheckCircle2,
+  X,
+  BellRing,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '../ui/Button';
@@ -36,13 +38,23 @@ import { Badge } from '../ui/Badge';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSearchStore } from '@/store/useSearchStore';
 import { useTaskStore } from '@/store/useTaskStore';
+import { fetchTasksAction } from '@/actions/taskActions';
+import { supabase } from '@/lib/supabase';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { isUserInCompany } from '@/lib/company-filter';
 import { SEED_USERS } from '@/lib/seed-data';
 import { QrScannerModal } from '@/components/attendance/QrScannerModal';
-import { HEALTH_CHECKLIST, INTERVAL_OPTIONS } from '@/components/attendance/HealthCheckModal';
+import {
+  HEALTH_CHECKLIST,
+  INTERVAL_OPTIONS,
+  DAILY_WELLNESS_HABITS,
+  getDailyHabitIndex,
+  getDailyShuffledCheckpoints,
+  HealthQuote,
+} from '@/components/attendance/HealthCheckModal';
 import { playNotificationChime } from '@/lib/audio-chime';
+import { fetchSelfReminders } from '@/lib/self-reminders-store';
 import {
   getChatBroadcastChannel,
   getNewChatMessageCount,
@@ -118,6 +130,7 @@ const MONTH_WISE_BIRTHDAYS = [
 
 export function Header({ onMobileMenuToggle }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const currentUser = useAuthStore((s) => s.currentUser);
   const login = useAuthStore((s) => s.login);
@@ -125,27 +138,56 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const toggleSearch = useSearchStore((s) => s.toggleSearch);
   const setCreateModalOpen = useTaskStore((s) => s.setCreateModalOpen);
 
+  // When user is on /chat route, immediately erase all chat notifications and right-side popups
+  useEffect(() => {
+    if (pathname?.startsWith('/chat') && currentUser) {
+      markChannelMessagesAsRead(undefined, currentUser._id);
+      useNotificationStore.getState().markChatChannelRead();
+      toast.dismiss();
+    }
+  }, [pathname, currentUser?._id]);
+
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const setSelectedCompany = useCompanyStore((s) => s.setSelectedCompany);
 
   type ActiveMenu = 'company' | 'birthday' | 'health' | 'notif' | 'persona' | null;
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
+  const [showBirthdaysInProfile, setShowBirthdaysInProfile] = useState(false);
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Quick Health Check Dropdown State
+  // Quick Health Check Dropdown State with Daily Shuffle
   const [healthCompletedItems, setHealthCompletedItems] = useState<number[]>([]);
-  const [healthGifMode, setHealthGifMode] = useState<'stretch' | 'water'>('stretch');
   const [healthIntervalMins, setHealthIntervalMins] = useState<number>(60);
   const [selectedHealthCheckpoint, setSelectedHealthCheckpoint] = useState<string>('all');
+  const [currentHabitIndex, setCurrentHabitIndex] = useState<number>(() => getDailyHabitIndex());
+  const [shuffledCheckpoints, setShuffledCheckpoints] = useState<HealthQuote[]>(() => getDailyShuffledCheckpoints());
 
-  // System Notifications State (Includes Role-Targeted Reimbursement Note Alerts)
+  const currentHabit = DAILY_WELLNESS_HABITS[currentHabitIndex] || DAILY_WELLNESS_HABITS[0];
+
+  const handleShuffleHabit = () => {
+    setCurrentHabitIndex((prev) => (prev + 1) % DAILY_WELLNESS_HABITS.length);
+    setShuffledCheckpoints((prev) => {
+      const copy = [...prev];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    });
+    toast.success('🔀 Shuffled daily wellness task & exercises!');
+  };
+
+  // System Notifications State (Includes Role-Targeted Reimbursement Note Alerts & Persistent Right-Side Pop-up Alerts)
   const rawNotificationsList = useNotificationStore((s) => s.notifications);
+  const rawPopupAlerts = useNotificationStore((s) => s.popupAlerts);
   const markAllReadStore = useNotificationStore((s) => s.markAllRead);
   const markAsReadStore = useNotificationStore((s) => s.markAsRead);
+  const dismissPopupAlert = useNotificationStore((s) => s.dismissPopupAlert);
+  const dismissAllPopupAlerts = useNotificationStore((s) => s.dismissAllPopupAlerts);
 
-  // Filter notifications: show general notifications + notifications targeted at currentUser.role (and for chat_message, only receivers, never the sender)
-  const notificationsList = rawNotificationsList.filter((n) => {
+  const isNotificationVisibleForUser = (n: any) => {
+    if (!n) return false;
     if (!currentUser) return true;
     const isAdminUser = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
 
@@ -166,12 +208,20 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     if (n.targetRoles.includes(currentUser.role as any)) {
       return true;
     }
-    // Allow reimbursement note sender to see confirmation entry
     if (n.senderName === currentUser.name) {
       return true;
     }
     return false;
-  });
+  };
+
+  // Filter notifications: show general notifications + notifications targeted at currentUser.role
+  const notificationsList = (Array.isArray(rawNotificationsList) ? rawNotificationsList : []).filter(
+    isNotificationVisibleForUser
+  );
+
+  const visiblePopupAlerts = (Array.isArray(rawPopupAlerts) ? rawPopupAlerts : []).filter(
+    isNotificationVisibleForUser
+  );
 
   const unreadCount = notificationsList.filter((n) => n.unread).length;
 
@@ -180,6 +230,48 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   };
 
   const closeAllMenus = () => setActiveMenu(null);
+
+  // Hourly Wellness Check Trigger — opens ONLY inside the navbar dropdown itself
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const handleOpenDropdown = () => {
+      setActiveMenu('health');
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+
+    window.addEventListener('ambizcon_trigger_health_check', handleOpenDropdown);
+
+    const INTERVAL_MS = healthIntervalMins * 60 * 1000;
+    const storageKeyLast = `ambizcon_last_health_check_${currentUser._id}`;
+
+    const checkWellnessAlert = () => {
+      const now = Date.now();
+      const lastCheckStr = localStorage.getItem(storageKeyLast);
+      if (lastCheckStr) {
+        const elapsed = now - Number(lastCheckStr);
+        if (elapsed >= INTERVAL_MS) {
+          localStorage.setItem(storageKeyLast, now.toString());
+          // Open ONLY in navbar dropdown itself
+          setActiveMenu('health');
+          playNotificationChime('reminder');
+          toast.info('🧘 Time for your Hourly Wellness Check!', {
+            description: 'Take 60 seconds to reset posture, stretch, and hydrate in the navbar.',
+          });
+        }
+      } else {
+        localStorage.setItem(storageKeyLast, now.toString());
+      }
+    };
+
+    const timer = setInterval(checkWellnessAlert, 20000);
+    return () => {
+      window.removeEventListener('ambizcon_trigger_health_check', handleOpenDropdown);
+      clearInterval(timer);
+    };
+  }, [currentUser, healthIntervalMins]);
 
   // Group & Team Chat Notification & Audio Chime Listener (Same-Tab, Cross-Tab BroadcastChannel, & Server Sync)
   useEffect(() => {
@@ -191,6 +283,13 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
       // Strictly verify currentUser is a RECEIVER (in Direct/Member, Team, or All-in-One) and NOT the sender!
       if (!isUserReceiverForChatMessage(message, channelId, currentUser)) {
         window.dispatchEvent(new CustomEvent('taskflow_chat_unread_updated'));
+        return;
+      }
+
+      // If user is currently inside /chat, mark read immediately, remove popups & notifications, and do NOT show popup/toast
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/chat')) {
+        markChannelMessagesAsRead(undefined, currentUser._id);
+        useNotificationStore.getState().markChatChannelRead();
         return;
       }
 
@@ -215,9 +314,18 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           : undefined;
 
       // Ensure notification exists in store for targeted receivers
-      const existingNotifs = useNotificationStore.getState().notifications;
+      const existingNotifs = Array.isArray(useNotificationStore.getState().notifications)
+        ? useNotificationStore.getState().notifications
+        : [];
+      const msgTextStr = String(message.text || '');
       const alreadyExists = existingNotifs.some(
-        (n) => n.messageId === message.id || (n.type === 'chat_message' && n.text.includes(message.text) && n.senderName === message.senderName)
+        (n) =>
+          n &&
+          (n.messageId === message.id ||
+            (n.type === 'chat_message' &&
+              msgTextStr.length > 0 &&
+              String(n.text || '').includes(msgTextStr) &&
+              n.senderName === message.senderName))
       );
 
       if (!alreadyExists) {
@@ -241,13 +349,13 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         });
       }
 
-      // Play sound and show toast ONLY for the receiver
-      playNotificationChime();
+      // Play distinct chat sound and show toast ONLY for the receiver (when not already in /chat)
+      playNotificationChime('chat');
       toast.info(
         `💬 New Message from ${message.senderName} (${message.senderRole})`,
         {
           description: `${channelLabel}: "${
-            message.text ? message.text.slice(0, 60) : 'Check Team Chat'
+            message.text ? String(message.text).slice(0, 60) : 'Check Team Chat'
           }"`,
         }
       );
@@ -261,47 +369,60 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     };
 
     // Check existing unread messages in All-in-One / Team / Direct Chat for RECEIVERS only (e.g., when switching persona)
-    const unreadInfo = getNewChatMessageCount(
-      currentUser.team,
-      currentUser.role,
-      currentUser._id,
-      currentUser.name
-    );
-    if (unreadInfo.total > 0 && unreadInfo.latestMessage) {
-      const msg = unreadInfo.latestMessage;
-      const msgChannelId = msg.channelId || 'channel_all';
-      if (isUserReceiverForChatMessage(msg, msgChannelId, currentUser)) {
-        const existingNotifs = useNotificationStore.getState().notifications;
-        const hasNotif = existingNotifs.some(
-          (n) => n.messageId === msg.id || (n.type === 'chat_message' && n.text.includes(msg.text))
+    try {
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/chat')) {
+        markChannelMessagesAsRead(undefined, currentUser._id);
+        useNotificationStore.getState().markChatChannelRead();
+      } else {
+        const unreadInfo = getNewChatMessageCount(
+          currentUser.team,
+          currentUser.role,
+          currentUser._id,
+          currentUser.name
         );
-        if (!hasNotif) {
-          useNotificationStore.getState().addNotification({
-            type: 'chat_message',
-            category: msgChannelId === 'channel_all' ? 'All-in-One Chat (All Teams)' : 'Team Chat',
-            title: `💬 ${msg.senderName} (${msg.senderRole}) sent a message`,
-            text: `${msg.senderName}: "${msg.text}"`,
-            color: 'bg-teal-500',
-            link: '/chat',
-            channelId: msgChannelId,
-            messageId: msg.id,
-            senderName: msg.senderName,
-            senderRole: msg.senderRole,
-            targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
-          });
-        }
+        if (unreadInfo.total > 0 && unreadInfo.latestMessage) {
+          const msg = unreadInfo.latestMessage;
+          const msgChannelId = msg.channelId || 'channel_all';
+          if (isUserReceiverForChatMessage(msg, msgChannelId, currentUser)) {
+            const existingNotifs = Array.isArray(useNotificationStore.getState().notifications)
+              ? useNotificationStore.getState().notifications
+              : [];
+            const msgText = String(msg.text || '');
+            const hasNotif = existingNotifs.some(
+              (n) =>
+                n &&
+                (n.messageId === msg.id ||
+                  (n.type === 'chat_message' && msgText.length > 0 && String(n.text || '').includes(msgText)))
+            );
+            if (!hasNotif) {
+              useNotificationStore.getState().addNotification({
+                type: 'chat_message',
+                category: msgChannelId === 'channel_all' ? 'All-in-One Chat (All Teams)' : 'Team Chat',
+                title: `💬 ${msg.senderName} (${msg.senderRole}) sent a message`,
+                text: `${msg.senderName}: "${msg.text || ''}"`,
+                color: 'bg-teal-500',
+                link: '/chat',
+                channelId: msgChannelId,
+                messageId: msg.id,
+                senderName: msg.senderName,
+                senderRole: msg.senderRole,
+                targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+              });
+            }
 
-        // Play sound once per receiver session for the latest unread message
-        const alertKey = `ambizcon_chat_chime_${currentUser._id}_${msg.id}`;
-        if (!sessionStorage.getItem(alertKey)) {
-          sessionStorage.setItem(alertKey, '1');
-          playNotificationChime();
-          toast.info(`💬 ${unreadInfo.total} New Message(s) in Chat`, {
-            description: `${msg.senderName} (${msg.senderRole}): "${msg.text}"`,
-          });
+            // Play distinct chat sound once per receiver session for the latest unread message
+            const alertKey = `ambizcon_chat_chime_${currentUser._id}_${msg.id}`;
+            if (!sessionStorage.getItem(alertKey)) {
+              sessionStorage.setItem(alertKey, '1');
+              playNotificationChime('chat');
+              toast.info(`💬 ${unreadInfo.total} New Message(s) in Chat`, {
+                description: `${msg.senderName} (${msg.senderRole}): "${msg.text || ''}"`,
+              });
+            }
+          }
         }
       }
-    }
+    } catch (_) {}
 
     // Listen to BroadcastChannel for instant cross-tab notifications
     const bc = getChatBroadcastChannel();
@@ -314,15 +435,209 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
       bc.addEventListener('message', handleBroadcast);
     }
 
-    // Poll server /api/chat every 4 seconds for cross-browser / cross-device team messages
+    let lastTaskHash = '';
+    // Poll server /api/chat & live Supabase team data every 5 seconds (plus Supabase Realtime)
     const pollServer = async () => {
-      const { newMessages } = await syncMessagesFromServer();
-      for (const item of newMessages) {
-        triggerTeamChatAlert(item.message, item.channelId);
-      }
+      try {
+        const { newMessages } = await syncMessagesFromServer();
+        for (const item of newMessages) {
+          triggerTeamChatAlert(item.message, item.channelId);
+        }
+      } catch (_) {}
+
+      try {
+        const freshTasks = await fetchTasksAction();
+        if (Array.isArray(freshTasks)) {
+          const nextHash = freshTasks.map((t) => `${t._id}:${t.status}:${t.updatedAt}`).join('|');
+          if (lastTaskHash && nextHash !== lastTaskHash) {
+            useTaskStore.getState().setTasks(freshTasks);
+            window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+            window.dispatchEvent(new CustomEvent('ambizcon_work_logs_updated'));
+          } else if (!lastTaskHash) {
+            useTaskStore.getState().setTasks(freshTasks);
+          }
+          lastTaskHash = nextHash;
+
+          // Sync already-completed tasks (status === 'Done') into System Notifications & Right-Side Pop-up once per user
+          const isAdminUser = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
+          const completedTasksForUser = freshTasks
+            .filter(
+              (t) =>
+                t &&
+                t.status === 'Done' &&
+                (isAdminUser ||
+                  t.assignedTo === currentUser._id ||
+                  t.createdBy === currentUser._id ||
+                  t.team === currentUser.team)
+            )
+            .slice(0, 3);
+
+          for (const doneTask of completedTasksForUser) {
+            const syncKey = `ambizcon_done_alert_v2_${currentUser._id}_${doneTask._id}`;
+            if (!localStorage.getItem(syncKey)) {
+              localStorage.setItem(syncKey, '1');
+              useNotificationStore.getState().addNotification({
+                type: 'task_update',
+                category: doneTask.reminderSettings?.enabled ? 'Reminder Completed' : 'Task Completed',
+                title: `✅ Completed: ${doneTask.title}`,
+                text: `"${doneTask.title}" (${doneTask.clientName || doneTask.team}) is marked as Completed (Done).`,
+                color: 'bg-emerald-500',
+                link: doneTask.reminderSettings?.enabled ? '/reminders' : '/kanban',
+                taskId: doneTask._id,
+                targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+              });
+            }
+          }
+
+          // Also check Due Reminders with editable Trigger Time (t.reminderSettings?.enabled)
+          const nowObj = new Date();
+          const todayIsoStr = nowObj.toISOString().split('T')[0];
+          const now24Str = `${String(nowObj.getHours()).padStart(2, '0')}:${String(nowObj.getMinutes()).padStart(2, '0')}`;
+          const dueReminderTasks = freshTasks.filter(
+            (t) =>
+              t &&
+              t.reminderSettings?.enabled &&
+              t.status !== 'Done' &&
+              (isAdminUser ||
+                t.assignedTo === currentUser._id ||
+                t.createdBy === currentUser._id ||
+                t.team === currentUser.team)
+          );
+          for (const remTask of dueReminderTasks) {
+            const rTime = remTask.reminderSettings?.reminderTime || '09:30 AM';
+            const m = rTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            let r24 = rTime;
+            if (m) {
+              let h = parseInt(m[1], 10);
+              const mins = m[2];
+              const p = m[3].toUpperCase();
+              if (p === 'PM' && h < 12) h += 12;
+              if (p === 'AM' && h === 12) h = 0;
+              r24 = `${String(h).padStart(2, '0')}:${mins}`;
+            }
+            const rDate = remTask.reminderSettings?.reminderDate || todayIsoStr;
+            const isDueNow =
+              (remTask.reminderSettings?.frequency === 'Daily' || rDate <= todayIsoStr) &&
+              r24 <= now24Str;
+            if (isDueNow) {
+              const dueKey = `ambizcon_duerem_alert_v1_${currentUser._id}_${remTask._id}_${todayIsoStr}_${r24}`;
+              if (!localStorage.getItem(dueKey)) {
+                localStorage.setItem(dueKey, '1');
+                useNotificationStore.getState().addNotification({
+                  type: 'due_date_reminder',
+                  category: 'Due Reminder Triggered',
+                  title: `🔔 Reminder Alert: ${remTask.title}`,
+                  text: `Scheduled ${remTask.reminderSettings?.frequency || 'Daily'} alert for ${remTask.clientName || remTask.team} at ${rTime}.`,
+                  color: 'bg-amber-500',
+                  link: '/reminders',
+                  taskId: remTask._id,
+                  targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+                });
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
+      // Also check Self Reminders globally so due or already-completed reminders alert on any page
+      try {
+        const selfRems = await fetchSelfReminders(
+          currentUser._id,
+          currentUser.email,
+          currentUser.name
+        );
+        if (Array.isArray(selfRems) && selfRems.length > 0) {
+          const now = new Date();
+          const todayStr = now.toISOString().split('T')[0];
+          const nowTime24 = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+          for (const rem of selfRems) {
+            const to24 = (tStr: string) => {
+              const m = (tStr || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+              if (!m) return tStr;
+              let h = parseInt(m[1], 10);
+              const mins = m[2];
+              const p = m[3].toUpperCase();
+              if (p === 'PM' && h < 12) h += 12;
+              if (p === 'AM' && h === 12) h = 0;
+              return `${String(h).padStart(2, '0')}:${mins}`;
+            };
+            const rem24 = to24(rem.reminder_time);
+            const isDueToday = rem.reminder_date === todayStr && rem24 <= nowTime24;
+
+            if (rem.is_completed || isDueToday) {
+              const stateTag = rem.is_completed ? 'done' : 'due';
+              const remSyncKey = `ambizcon_selfrem_alert_v2_${currentUser._id}_${rem.id}_${todayStr}_${stateTag}`;
+              if (!localStorage.getItem(remSyncKey)) {
+                localStorage.setItem(remSyncKey, '1');
+                useNotificationStore.getState().addNotification({
+                  type: 'system',
+                  category: rem.is_completed ? 'Self Reminder Completed' : 'Self Reminder Alert',
+                  title: rem.is_completed
+                    ? `✅ Self Reminder Completed: ${rem.title}`
+                    : `🔔 Self Reminder Due: ${rem.title}`,
+                  text: `${rem.note || rem.title} • Scheduled at ${rem.reminder_time} (${rem.repeat_type})`,
+                  color: rem.is_completed ? 'bg-emerald-500' : 'bg-amber-500',
+                  link: '/self-reminders',
+                  senderName: currentUser.name,
+                  senderRole: currentUser.role,
+                  targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member', 'Reception Staff'],
+                });
+              }
+            }
+          }
+        }
+      } catch (_) {}
     };
     pollServer();
-    const pollInterval = setInterval(pollServer, 4000);
+    const pollInterval = setInterval(pollServer, 5000);
+
+    // Instant Supabase Realtime listener across chat_messages, tasks, work_logs, attendance
+    const realtimeChannel = supabase
+      .channel('ambizcon_global_team_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'chat_messages' },
+        () => {
+          syncMessagesFromServer().then(({ newMessages }) => {
+            for (const item of newMessages) {
+              triggerTeamChatAlert(item.message, item.channelId);
+            }
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        () => {
+          fetchTasksAction().then((freshTasks) => {
+            useTaskStore.getState().setTasks(freshTasks);
+            window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'work_logs' },
+        () => {
+          window.dispatchEvent(new CustomEvent('ambizcon_work_logs_updated'));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance' },
+        () => {
+          window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'reimbursements' },
+        () => {
+          window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+        }
+      )
+      .subscribe();
 
     window.addEventListener('taskflow_chat_message_sent', handleChatNotify);
     return () => {
@@ -331,17 +646,34 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         bc.removeEventListener('message', handleBroadcast);
       }
       clearInterval(pollInterval);
+      supabase.removeChannel(realtimeChannel);
     };
   }, [currentUser?._id, currentUser?.team, currentUser?.role]);
 
   // 1-Click Manual Workspace Refresh for All Users
-  const handleManualRefresh = () => {
+  const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    router.refresh();
+    try {
+      // Clear cached work_logs in localStorage so fresh Supabase data loads
+      if (typeof window !== 'undefined') {
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith('ambizcon_work_logs_')) {
+            localStorage.removeItem(k);
+          }
+        });
+      }
+      const freshTasks = await fetchTasksAction();
+      useTaskStore.getState().setTasks(freshTasks);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+        window.dispatchEvent(new CustomEvent('ambizcon_work_logs_updated'));
+      }
+      router.refresh();
+    } catch (e) {}
     setTimeout(() => {
       setIsRefreshing(false);
       toast.success('Workspace refreshed & data synced!');
-    }, 600);
+    }, 500);
   };
 
   const handleMarkAllRead = () => {
@@ -434,13 +766,11 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     };
   }, []);
 
-  if (!currentUser) return null;
-
-  const isSuperAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
-  const isReception = currentUser.role === 'Reception Staff';
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const isReception = currentUser?.role === 'Reception Staff';
   const isAustralia = isSuperAdmin
     ? selectedCompany === 'Ambizcon'
-    : currentUser.company === 'Ambizcon';
+    : currentUser?.company === 'Ambizcon';
 
   // Automatically sync company store to member's assigned branch
   useEffect(() => {
@@ -453,6 +783,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
       }
     }
   }, [currentUser, isSuperAdmin, setSelectedCompany]);
+
+  if (!currentUser) return null;
 
   return (
     <header className="sticky top-0 z-20 flex h-16 w-full items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 bg-background/80 px-3 sm:px-4 md:px-6 backdrop-blur-xl">
@@ -481,8 +813,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           </kbd>
         </button>
 
-        {/* Company Branch Switcher: Admin Only */}
-        {isSuperAdmin ? (
+        {/* Company Branch Switcher: Super Admin Only */}
+        {isSuperAdmin && (
           <div className="relative header-dropdown-menu">
             <button
               onClick={() => toggleMenu('company')}
@@ -583,34 +915,6 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               </div>
             )}
           </div>
-        ) : isAustralia ? (
-          <div
-            className="flex h-10 items-center gap-1.5 sm:gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-2.5 sm:px-3 text-xs font-semibold text-foreground shadow-sm select-none"
-            title="Assigned Branch: Ambizcon"
-          >
-            <div className="h-5 w-5 rounded-md bg-white p-0.5 border border-sky-500/30 flex items-center justify-center shrink-0">
-              <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
-            </div>
-            <span className="hidden md:inline-flex items-center gap-1.5 font-bold text-sky-700 dark:text-sky-300">
-              🇦🇺 Ambizcon
-            </span>
-            <span className="md:hidden font-bold text-sky-700 dark:text-sky-300">
-              🇦🇺 AUS
-            </span>
-          </div>
-        ) : (
-          <div
-            className="flex h-10 items-center gap-1.5 sm:gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2.5 sm:px-3 text-xs font-semibold text-foreground shadow-sm select-none"
-            title="Assigned Branch: Ambizcon Health - India"
-          >
-            <img src="/ambizcon-logo.png" alt="IND" className="h-5 w-5 rounded-md object-cover border border-emerald-500/30 shrink-0" />
-            <span className="hidden md:inline-flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-300">
-              🇮🇳 Ambizcon Health - India
-            </span>
-            <span className="md:hidden font-bold text-emerald-700 dark:text-emerald-300">
-              🇮🇳 IND
-            </span>
-          </div>
         )}
       </div>
 
@@ -657,67 +961,6 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           title="1-Click Refresh Workspace & Sync Data"
         >
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-emerald-500' : ''}`} />
-        </button>
-
-        {/* Team Birthdays Dropdown */}
-        <div className="relative header-dropdown-menu">
-          <button
-            onClick={() => toggleMenu('birthday')}
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 p-0 text-amber-500 hover:bg-amber-500/20 transition-colors"
-            title="Team Birthdays"
-          >
-            <Cake className="h-4 w-4" />
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-          </button>
-
-          {activeMenu === 'birthday' && (
-            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 shadow-xl glass-panel z-50 animate-fade">
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                <div className="flex items-center gap-2">
-                  <Cake className="h-4 w-4 text-amber-500" />
-                  <span className="text-xs font-bold text-foreground">
-                    Team Birthdays ({isAustralia ? 'Ambizcon AU' : 'Ambizcon Health'})
-                  </span>
-                </div>
-              </div>
-
-              <div className="max-h-72 overflow-y-auto space-y-3 pt-3 pr-1">
-                {MONTH_WISE_BIRTHDAYS.map((m) => {
-                  const branchUsers = m.users.filter((u) =>
-                    isUserInCompany(u, isAustralia ? 'Ambizcon' : 'Ambizcon Health - India')
-                  );
-                  if (branchUsers.length === 0) return null;
-                  return (
-                    <div key={m.month} className="space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block border-b border-zinc-200/40 dark:border-zinc-800/40 pb-0.5">
-                        {m.month}
-                      </span>
-                      {branchUsers.map((u) => (
-                        <div key={u.name} className="flex items-center justify-between p-2 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 text-xs">
-                          <div>
-                            <span className="font-bold text-foreground block">{u.name}</span>
-                            <span className="text-[10px] text-muted-foreground">{u.role} • {u.team}</span>
-                          </div>
-                          <Badge variant="outline" className="font-mono text-[10px] text-amber-600 border-amber-500/30">
-                            {u.date}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Theme Toggle */}
-        <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          title="Toggle Theme"
-        >
-          {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
         </button>
 
         {/* Quick Health & Ergonomics Check Dropdown */}
@@ -767,9 +1010,12 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                   <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-200/60 dark:border-zinc-700/60">
                     <button
                       type="button"
-                      onClick={() => setHealthGifMode('stretch')}
+                      onClick={() => {
+                        const idx = DAILY_WELLNESS_HABITS.findIndex((h) => h.category === 'stretch');
+                        if (idx !== -1) setCurrentHabitIndex(idx);
+                      }}
                       className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
-                        healthGifMode === 'stretch'
+                        currentHabit.category === 'stretch'
                           ? 'bg-white dark:bg-zinc-700 text-foreground shadow-xs'
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
@@ -779,15 +1025,27 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setHealthGifMode('water')}
+                      onClick={() => {
+                        const idx = DAILY_WELLNESS_HABITS.findIndex((h) => h.category === 'water');
+                        if (idx !== -1) setCurrentHabitIndex(idx);
+                      }}
                       className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
-                        healthGifMode === 'water'
+                        currentHabit.category === 'water'
                           ? 'bg-white dark:bg-zinc-700 text-foreground shadow-xs'
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       <Droplets className="h-3 w-3 text-blue-500" />
                       Hydration
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleShuffleHabit}
+                      title="Daily Shuffle inside task & exercises"
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-extrabold bg-brand-500/15 text-brand-600 dark:text-brand-300 hover:bg-brand-500/25 transition-all"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      Shuffle
                     </button>
                   </div>
                 </div>
@@ -797,31 +1055,37 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 </p>
               </div>
 
-              {/* Ergonomic Habit Builder Banner */}
-              <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-gradient-to-br from-emerald-500/5 via-brand-500/5 to-purple-500/5 p-3 flex items-center gap-3">
+              {/* Ergonomic Habit Builder Banner with Daily Shuffle */}
+              <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-gradient-to-br from-emerald-500/5 via-brand-500/5 to-purple-500/5 p-3 flex items-center gap-3 relative">
                 <img
-                  src={healthGifMode === 'stretch' ? '/health-stretch.gif' : '/drink-water.gif'}
-                  alt={healthGifMode === 'stretch' ? 'Office Stretch Demonstration' : 'Drink Water Reminder'}
+                  src={currentHabit.gif}
+                  alt={currentHabit.title}
                   className="h-16 w-20 rounded-lg object-cover border border-zinc-200/60 dark:border-zinc-700/60 shrink-0 bg-zinc-900"
                 />
                 <div className="space-y-1 min-w-0 flex-1">
-                  <div className="flex items-center gap-1 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400">
-                    <Sparkles className="h-3 w-3" />
-                    <span>Ergonomic Habit Builder</span>
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 truncate">
+                      <Sparkles className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{currentHabit.badge}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleShuffleHabit}
+                      className="text-[9px] font-extrabold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-0.5 shrink-0"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      Shuffle Task
+                    </button>
                   </div>
                   <h4 className="text-xs font-bold text-foreground truncate">
-                    {healthGifMode === 'stretch'
-                      ? 'Relieve Spine & Shoulder Tension'
-                      : 'Keep Brain Hydrated & Clear'}
+                    {currentHabit.title}
                   </h4>
                   <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
-                    {healthGifMode === 'stretch'
-                      ? 'Micro-breaks boost overall coding stamina by up to 28% and relieve musculoskeletal strain from sitting.'
-                      : 'Even mild dehydration reduces mental concentration by 15%. Grab your water bottle and take a sip now!'}
+                    {currentHabit.description}
                   </p>
                   <div className="flex items-center justify-between pt-0.5">
                     <span className="text-[9px] font-mono text-muted-foreground bg-background/80 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800">
-                      Goal: 60 sec pause
+                      {currentHabit.goal}
                     </span>
                     <button
                       type="button"
@@ -840,10 +1104,24 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               {/* Dropdown Selector to Choose from 10 Health Checkpoints */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-foreground">10 Health Checkpoints</span>
-                  <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                    {healthCompletedItems.length} of {HEALTH_CHECKLIST.length} completed
-                  </span>
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>10 Health Checkpoints</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">(Daily Shuffled)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      {healthCompletedItems.length} of {HEALTH_CHECKLIST.length} completed
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleShuffleHabit}
+                      title="Shuffle checkpoint list order"
+                      className="text-[10px] font-extrabold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      Shuffle
+                    </button>
+                  </div>
                 </div>
 
                 {/* Select Dropdown to Choose Checkpoint */}
@@ -853,7 +1131,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                   className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                 >
                   <option value="all">📋 Show All 10 Health Checkpoints (Choose below)</option>
-                  {HEALTH_CHECKLIST.map((item) => (
+                  {shuffledCheckpoints.map((item) => (
                     <option key={item.id} value={String(item.id)}>
                       {item.id}. {item.emoji} {item.title} {healthCompletedItems.includes(item.id) ? '✓' : ''}
                     </option>
@@ -862,7 +1140,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
                 {/* Filtered Checkpoint List */}
                 <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                  {HEALTH_CHECKLIST.filter(
+                  {shuffledCheckpoints.filter(
                     (item) => selectedHealthCheckpoint === 'all' || String(item.id) === selectedHealthCheckpoint
                   ).map((item) => {
                     const isChecked = healthCompletedItems.includes(item.id);
@@ -920,18 +1198,9 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                     <Clock className="h-3 w-3 text-brand-500" />
                     Next automatic alert in <strong>{healthIntervalMins} minutes</strong>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeAllMenus();
-                      if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('ambizcon_trigger_health_check'));
-                      }
-                    }}
-                    className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
-                  >
-                    Expand Popup
-                  </button>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    Navbar Quick Wellness
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1009,6 +1278,55 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                       <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* Distinct Notification Sound Recognizer Bar */}
+              <div className="pt-2.5 pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                  🔊 Distinct Alert Sounds (Click to Recognize):
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playNotificationChime('chat');
+                      toast.success('💬 Chat Sound: Double Pop + Ping');
+                    }}
+                    className="rounded-lg border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 px-2 py-1 text-[10px] font-extrabold text-teal-600 dark:text-teal-400 text-left transition-colors"
+                  >
+                    💬 Chat Msg Sound
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playNotificationChime('reminder');
+                      toast.success('⏰ Reminder Sound: 3-Note Bell Alarm');
+                    }}
+                    className="rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 text-[10px] font-extrabold text-amber-600 dark:text-amber-400 text-left transition-colors"
+                  >
+                    ⏰ Reminder Sound
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playNotificationChime('self_reminder');
+                      toast.success('🔔 Self Reminder: 4-Note Warm Melody');
+                    }}
+                    className="rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 text-[10px] font-extrabold text-purple-600 dark:text-purple-400 text-left transition-colors"
+                  >
+                    🔔 Self Reminder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playNotificationChime('task_assigned');
+                      toast.success('📌 Task Assigned: 2-Chord Brass Fanfare');
+                    }}
+                    className="rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 text-[10px] font-extrabold text-blue-600 dark:text-blue-400 text-left transition-colors"
+                  >
+                    📌 Task Assigned
+                  </button>
                 </div>
               </div>
 
@@ -1102,7 +1420,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           </button>
 
           {activeMenu === 'persona' && (
-            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-3.5 shadow-xl glass-panel z-50 animate-fade">
+            <div className="absolute right-0 mt-2 w-80 sm:w-[350px] max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-3.5 shadow-xl glass-panel z-50 animate-fade">
               {/* Current User Header with Profile Picture & Upload Shortcut */}
               <div className="flex items-center gap-3 px-2 py-2.5 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-2">
                 <Link href="/profile" onClick={closeAllMenus} className="relative group shrink-0" title="Upload or change profile picture in My Profile">
@@ -1126,6 +1444,114 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                       {currentUser.role} • {currentUser.team}
                     </Badge>
                   </div>
+                </div>
+              </div>
+
+              {/* Theme & Birthday Controls Inside Profile */}
+              <div className="space-y-2 mb-2 pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                {/* Theme Mode Switcher */}
+                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60">
+                  <div className="flex items-center gap-2">
+                    {theme === 'dark' ? (
+                      <Moon className="h-3.5 w-3.5 text-purple-400" />
+                    ) : (
+                      <Sun className="h-3.5 w-3.5 text-amber-500" />
+                    )}
+                    <span className="text-xs font-bold text-foreground">Theme</span>
+                  </div>
+                  <div className="flex items-center p-0.5 rounded-lg bg-zinc-200/70 dark:bg-zinc-800 border border-zinc-300/40 dark:border-zinc-700/40">
+                    <button
+                      type="button"
+                      onClick={() => setTheme('light')}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                        theme === 'light'
+                          ? 'bg-white text-zinc-900 shadow-xs'
+                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      <Sun className="h-3 w-3 text-amber-500" />
+                      Light
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTheme('dark')}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                        theme === 'dark'
+                          ? 'bg-zinc-900 text-white shadow-xs'
+                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      <Moon className="h-3 w-3 text-purple-400" />
+                      Dark
+                    </button>
+                  </div>
+                </div>
+
+                {/* Team Birthdays Section */}
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden transition-all">
+                  <button
+                    type="button"
+                    onClick={() => setShowBirthdaysInProfile((prev) => !prev)}
+                    className="w-full flex items-center justify-between p-2 text-xs font-bold text-foreground hover:bg-amber-500/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Cake className="h-3.5 w-3.5 text-amber-500" />
+                      <span>Team Birthdays</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 font-bold">
+                        {showBirthdaysInProfile ? 'Hide' : 'View (12 Mo)'}
+                      </span>
+                      <ChevronDown
+                        className={`h-3 w-3 text-amber-600 transition-transform duration-200 ${
+                          showBirthdaysInProfile ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  {showBirthdaysInProfile && (
+                    <div className="p-2 pt-0 border-t border-amber-500/20 max-h-56 overflow-y-auto space-y-2 bg-background/50">
+                      <div className="pt-2 flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                        <span>{isAustralia ? 'Ambizcon AU' : 'Ambizcon Health'}</span>
+                        <span className="text-amber-600 font-mono">12 Months</span>
+                      </div>
+                      {MONTH_WISE_BIRTHDAYS.map((m) => {
+                        const branchUsers = m.users.filter((u) =>
+                          isUserInCompany(u, isAustralia ? 'Ambizcon' : 'Ambizcon Health - India')
+                        );
+                        if (branchUsers.length === 0) return null;
+                        return (
+                          <div key={m.month} className="space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block border-b border-zinc-200/40 dark:border-zinc-800/40 pb-0.5">
+                              {m.month}
+                            </span>
+                            {branchUsers.map((u) => (
+                              <div
+                                key={u.name}
+                                className="flex items-center justify-between p-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 text-xs"
+                              >
+                                <div className="min-w-0 pr-1">
+                                  <span className="font-bold text-foreground block text-[11px] truncate">
+                                    {u.name}
+                                  </span>
+                                  <span className="text-[9px] text-muted-foreground truncate block">
+                                    {u.role} • {u.team}
+                                  </span>
+                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className="font-mono text-[9px] text-amber-600 border-amber-500/30 shrink-0"
+                                >
+                                  {u.date}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1223,6 +1649,90 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           )}
         </div>
       </div>
+
+      {/* Persistent Right-Side Notification & Alert Pop-up (Stays open until user clicks Close) */}
+      {visiblePopupAlerts.length > 0 && (
+        <div className="fixed top-20 right-4 z-[95] w-80 sm:w-96 max-w-[calc(100vw-24px)] space-y-2.5 pointer-events-none">
+          {visiblePopupAlerts.length > 1 && (
+            <div className="flex justify-end pointer-events-auto">
+              <button
+                type="button"
+                onClick={dismissAllPopupAlerts}
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300/80 dark:border-zinc-700/80 bg-background/95 backdrop-blur-md px-3 py-1 text-[10px] font-extrabold text-muted-foreground hover:text-rose-500 hover:border-rose-500/40 shadow-md transition-all"
+              >
+                <X className="h-3 w-3" />
+                Close All Alerts ({visiblePopupAlerts.length})
+              </button>
+            </div>
+          )}
+
+          {visiblePopupAlerts.slice(0, 4).map((alert) => (
+            <div
+              key={alert.id}
+              className="pointer-events-auto rounded-2xl border-2 border-emerald-500/50 dark:border-emerald-500/40 bg-background/95 dark:bg-zinc-900/95 backdrop-blur-xl p-3.5 shadow-2xl transition-all animate-fade"
+            >
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <div
+                    className={`h-8 w-8 rounded-xl ${
+                      alert.color || 'bg-emerald-500'
+                    } text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5`}
+                  >
+                    <BellRing className="h-4 w-4 animate-bounce" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                        {alert.category || 'Notification Alert'}
+                      </span>
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        {alert.time || 'Just now'}
+                      </span>
+                    </div>
+                    <h4 className="text-xs font-extrabold text-foreground mt-1 leading-snug break-words">
+                      {alert.title}
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed break-words">
+                      {alert.text}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Explicit Close Button (Only closes when user clicks this) */}
+                <button
+                  type="button"
+                  onClick={() => dismissPopupAlert(alert.id)}
+                  className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-800/80 text-muted-foreground hover:text-rose-500 hover:border-rose-500/40 hover:bg-rose-500/10 flex items-center justify-center shrink-0 transition-colors"
+                  title="Close Alert Pop-up"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="mt-3 pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismissPopupAlert(alert.id);
+                    handleNotificationClick(alert);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-bold transition-colors"
+                >
+                  Open Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dismissPopupAlert(alert.id)}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-rose-500/10 hover:text-rose-500 text-foreground border border-zinc-200 dark:border-zinc-700 text-[10px] font-bold transition-colors flex items-center gap-1"
+                >
+                  <X className="h-3 w-3" />
+                  Close Pop-up
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Member In-App Camera QR Code Scanner Modal */}
       <QrScannerModal

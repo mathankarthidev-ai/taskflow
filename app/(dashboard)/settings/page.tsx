@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
   const [hasResetOnce, setHasResetOnce] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   if (!currentUser) return null;
 
@@ -51,8 +52,6 @@ export default function SettingsPage() {
     setNewPw('');
     setConfirmPw('');
   };
-
-  const [isClearing, setIsClearing] = useState(false);
 
   const handleClearDemoData = async () => {
     if (!confirm('Are you sure you want to clear all demo and test data? This will reset all tasks, dummy leave requests, and claims to a clean slate.')) {

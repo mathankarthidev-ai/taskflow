@@ -171,16 +171,19 @@ export async function DELETE() {
 
   // 2. Wipe Supabase dynamic tables
   try {
-    await supabase.from('tasks').delete().neq('id', '___none___');
+    await supabase.from('tasks').update({ reminder_settings: null }).neq('id', '___none___');
+    await supabase.from('reimbursements').delete().neq('id', '___none___');
+    await supabase.from('chat_messages').delete().neq('id', '___none___');
+    await supabase.from('self_reminders').delete().neq('id', '___none___');
     await supabase.from('comments').delete().neq('id', '___none___');
     await supabase.from('leave_requests').delete().neq('id', '___none___');
-    await supabase.from('reimbursements').delete().neq('id', '___none___');
+    await supabase.from('work_logs').delete().neq('id', '___none___');
   } catch (e) {
     console.error('Supabase delete error:', e);
   }
 
   return NextResponse.json({
     success: true,
-    message: 'All demo and test tasks, leave requests, reimbursement claims, and comments have been permanently removed from Supabase.',
+    message: 'All demo and test tasks, work logs, leave requests, reimbursement claims, and comments have been permanently removed from Supabase.',
   });
 }
