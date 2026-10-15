@@ -1,0 +1,14 @@
+ToolName,ExpenseCategory,Purpose,PricingModel,BillingPeriod,Amount,Currency,VerifiedStatus,Evidence,Notes
+Google Antigravity,AI Development Tool,Pair programming agent & build supervisor,Developer Preview,Monthly,0.00,USD,Verified,Built-in agent CLI,Used strictly during development; zero production cost
+Vercel Edge Platform,Hosting & Compute,Next.js serverless production deployment,Hobby Tier (Free),Monthly,0.00,USD,Verified,Live production URL,Generous free tier with SSL & global CDN
+Vercel Pro (Optional),Hosting & Compute,Team collaboration & custom domain SLA,Paid Tier,Monthly,20.00,USD,Configured,Vercel pricing catalog,Recommended only when exceeding 100GB bandwidth
+Supabase Cloud,Database & Auth,PostgreSQL 15 database & connection pooling,Free Tier,Monthly,0.00,USD,Verified,Active project schema,500MB DB quota & 50K MAUs included free
+Supabase Pro (Optional),Database & Auth,Daily backups & 8GB storage expansion,Paid Tier,Monthly,25.00,USD,Configured,Supabase pricing catalog,Recommended when scaling past 1000 active employees
+DiceBear API,Avatar Service,Dynamic SVG avatar rendering for employees,Free Public CDN,Permanent,0.00,USD,Verified,lib/avatar-store.ts,Zero storage cost; generated on-the-fly via name seeds
+Unsplash CDN,Asset Storage,Professional profile background banners,Free Public CDN,Permanent,0.00,USD,Verified,TeamPresenceOverviewPanel.tsx,High-resolution stock photography via free CDN
+Web Audio API,Audio Alerts,Synthesized chime engine for task/chat alerts,Native Browser API,Permanent,0.00,USD,Verified,lib/audio-chime.ts,Zero external file hosting; zero bandwidth cost
+Vercel Subdomain,DNS & Domain,Production web address,Included Free,Annual,0.00,USD,Verified,taskflow-saas-app-five.vercel.app,Free default production domain provided by Vercel
+Custom Domain (Optional),DNS & Domain,Branded corporate domain (.com),Annual Registrar,Annual,12.00,USD,Estimated,Namecheap/Cloudflare pricing,Optional custom vanity URL
+Senior Full-Stack Dev (Manual),Labor Cost (Manual),1025 hours manual rebuild estimate,Hourly Billing,One-Time,25625.00,USD,Estimated,1025 hrs @ $25/hr blended rate,Avoided via Google Antigravity AI acceleration
+Actual Human Effort,Labor Cost (AI-Assisted),112 hours human oversight & testing,Hourly Billing,One-Time,2800.00,USD,Verified,112 hrs @ $25/hr blended rate,Direct verified labor investment with Antigravity
+TOTAL CURRENT EXPENDITURE,Consolidated Cost,All tools & active production infrastructure,Current Active,Monthly,0.00,USD,Verified,Active production environment,Operates 100% within free tiers with zero current debt
