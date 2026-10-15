@@ -189,23 +189,32 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
         setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
         setSelectedTask(updated);
         if (onUpdated) onUpdated(updated);
+        const isCompleted = updated.status === 'Done';
+        const assignedName = updated.assignedUser?.name || 'Member';
         useNotificationStore.getState().addNotification({
-          type: 'task_update',
-          category: updated.status === 'Done' ? 'Task Completed' : isReminder ? 'Reminder Updated' : 'Task Updated',
+          type: isCompleted ? 'task_completed' : 'task_update',
+          category: isCompleted ? 'Task Completed' : isReminder ? 'Reminder Updated' : 'Task Updated',
           title:
-            updated.status === 'Done'
+            isCompleted
               ? `✅ ${isReminder ? 'Reminder' : 'Task'} Completed: ${updated.title}`
               : `✏️ ${isReminder ? 'Reminder' : 'Task'} Updated: ${updated.title}`,
           text:
-            updated.status === 'Done'
+            isCompleted
               ? `${currentUser.name} marked "${updated.title}" as Completed (Done).`
               : `${currentUser.name} updated "${updated.title}" (Status: ${updated.status}).`,
-          color: updated.status === 'Done' ? 'bg-emerald-500' : 'bg-blue-500',
+          color: isCompleted ? 'bg-emerald-500' : 'bg-blue-500',
           link: isReminder ? '/reminders' : '/kanban',
           taskId: updated._id,
+          targetTeam: updated.team,
+          assignedUserId: updated.assignedTo,
+          assignedUserName: assignedName,
+          completedByUserId: currentUser._id,
+          completedByName: currentUser.name,
           senderName: currentUser.name,
           senderRole: currentUser.role,
-          targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+          targetRoles: ['Super Admin', 'Admin', 'Team Lead'],
+          targetUserIds: [updated.assignedTo, currentUser._id].filter(Boolean) as string[],
+          targetUserNames: [assignedName, currentUser.name].filter(Boolean) as string[],
         });
         toast.success(`${isReminder ? 'Reminder' : 'Task'} updated successfully!`);
         onClose();

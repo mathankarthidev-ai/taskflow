@@ -6,6 +6,8 @@ import {
   playNotificationChime,
   resolveNotificationSoundType,
 } from '@/lib/audio-chime';
+import { useAuthStore } from './useAuthStore';
+import { isNotificationVisibleForUser } from '@/lib/notification-filter';
 
 export interface AppNotification {
   id: string;
@@ -39,6 +41,12 @@ export interface AppNotification {
   targetRoles?: ('Super Admin' | 'Admin' | 'Team Lead' | 'Team Member' | 'Reception Staff')[];
   senderName?: string;
   senderRole?: string;
+  assignedUserId?: string;
+  assignedUserName?: string;
+  completedByUserId?: string;
+  completedByName?: string;
+  targetUserIds?: string[];
+  targetUserNames?: string[];
 }
 
 interface NotificationState {
@@ -92,8 +100,12 @@ export const useNotificationStore = create<NotificationState>()(
           // Automatically play distinct notification sound for non-chat notifications
           // (chat sound is played by the chat receiver listener so senders don't hear their own outgoing msg)
           if (!existsInNotifs && newEntry.type !== 'chat_message' && typeof window !== 'undefined') {
-            const soundType = resolveNotificationSoundType(newEntry);
-            playNotificationChime(soundType);
+            const currentAuthUser = useAuthStore.getState().currentUser;
+            const isVisible = isNotificationVisibleForUser(newEntry, currentAuthUser);
+            if (isVisible) {
+              const soundType = resolveNotificationSoundType(newEntry);
+              playNotificationChime(soundType);
+            }
           }
 
           return {

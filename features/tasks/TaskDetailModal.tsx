@@ -215,6 +215,8 @@ export function TaskDetailModal() {
 
     setSelectedTask(updated);
     setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
+    const assignedUser = selectedTask.assignedUser || (selectedTask.assignedTo ? workspaceUsers.find((u) => u._id === selectedTask.assignedTo) : undefined);
+    const assignedName = assignedUser?.name || selectedTask.assignedUser?.name || currentUser.name || 'Member';
     useNotificationStore.getState().addNotification({
       type: 'review_assigned',
       category: 'Reviewer Assignment',
@@ -224,6 +226,14 @@ export function TaskDetailModal() {
       }`,
       color: 'bg-purple-600',
       taskId: selectedTask._id,
+      targetTeam: selectedTask.team,
+      assignedUserId: selectedTask.assignedTo,
+      assignedUserName: assignedName,
+      completedByUserId: currentUser._id,
+      completedByName: currentUser.name,
+      targetRoles: ['Super Admin', 'Admin', 'Team Lead'],
+      targetUserIds: [reviewer._id, selectedTask.assignedTo, currentUser._id].filter(Boolean) as string[],
+      targetUserNames: [reviewer.name, assignedName, currentUser.name].filter(Boolean) as string[],
     });
     toast.success(`Footprint saved: ${currentUser.name} → ${reviewer.name} (Moved to Review)`);
     await updateTaskReviewWorkflowAction(selectedTask._id, {
@@ -358,6 +368,8 @@ export function TaskDetailModal() {
     };
     setSelectedTask(updated);
     setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
+    const assignedUser = selectedTask.assignedUser || (selectedTask.assignedTo ? workspaceUsers.find((u) => u._id === selectedTask.assignedTo) : undefined);
+    const assignedName = assignedUser?.name || selectedTask.assignedUser?.name || 'Member';
     useNotificationStore.getState().addNotification({
       type: 'task_approval',
       category: 'Task Approved',
@@ -365,6 +377,14 @@ export function TaskDetailModal() {
       text: `${currentUser.name} (${currentUser.role}) approved task "${selectedTask.title}".`,
       color: 'bg-emerald-600',
       taskId: selectedTask._id,
+      targetTeam: selectedTask.team,
+      assignedUserId: selectedTask.assignedTo,
+      assignedUserName: assignedName,
+      completedByUserId: currentUser._id,
+      completedByName: currentUser.name,
+      targetRoles: ['Super Admin', 'Admin', 'Team Lead'],
+      targetUserIds: [selectedTask.assignedTo, currentUser._id].filter(Boolean) as string[],
+      targetUserNames: [assignedName, currentUser.name].filter(Boolean) as string[],
     });
     toast.success(`Task "${selectedTask.title}" approved!`);
   };
@@ -417,6 +437,8 @@ export function TaskDetailModal() {
     };
     setSelectedTask(updated);
     setTasks(tasks.map((t) => (t._id === updated._id ? updated : t)));
+    const assignedUser = selectedTask.assignedUser || (selectedTask.assignedTo ? workspaceUsers.find((u) => u._id === selectedTask.assignedTo) : undefined);
+    const assignedName = assignedUser?.name || selectedTask.assignedUser?.name || 'Member';
     useNotificationStore.getState().addNotification({
       id: `notif_done_${selectedTask._id}_${Date.now()}`,
       type: 'task_completed',
@@ -425,6 +447,14 @@ export function TaskDetailModal() {
       text: `${currentUser.name} (${currentUser.role}) approved "${selectedTask.title}" and marked it Completed!`,
       color: 'bg-emerald-500',
       taskId: selectedTask._id,
+      targetTeam: selectedTask.team,
+      assignedUserId: selectedTask.assignedTo,
+      assignedUserName: assignedName,
+      completedByUserId: currentUser._id,
+      completedByName: currentUser.name,
+      targetRoles: ['Super Admin', 'Admin', 'Team Lead'],
+      targetUserIds: [selectedTask.assignedTo, currentUser._id].filter(Boolean) as string[],
+      targetUserNames: [assignedName, currentUser.name].filter(Boolean) as string[],
     });
     toast.success(`Approved by ${currentUser.name} (${currentUser.role}) & marked Completed!`);
     await updateTaskReviewWorkflowAction(selectedTask._id, {

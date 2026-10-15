@@ -252,6 +252,8 @@ function KanbanBoardContent() {
       setTasks(updatedTasks);
 
       if (targetStatus === 'Done') {
+        const assignedUser = task.assignedUser || (task.assignedTo ? users.find((u) => u._id === task.assignedTo) : undefined);
+        const assignedName = assignedUser?.name || task.assignedUser?.name || 'Member';
         useNotificationStore.getState().addNotification({
           id: `notif_done_${task._id}_${Date.now()}`,
           type: 'task_completed',
@@ -260,6 +262,14 @@ function KanbanBoardContent() {
           text: `${currentUser?.name || 'User'} (${currentUser?.role}) approved "${task.title}" (${task.team} Team) as Completed!`,
           color: 'bg-emerald-500',
           taskId: task._id,
+          targetTeam: task.team,
+          assignedUserId: task.assignedTo,
+          assignedUserName: assignedName,
+          completedByUserId: currentUser?._id,
+          completedByName: currentUser?.name,
+          targetRoles: ['Super Admin', 'Admin', 'Team Lead'],
+          targetUserIds: [task.assignedTo, currentUser?._id].filter(Boolean) as string[],
+          targetUserNames: [assignedName, currentUser?.name].filter(Boolean) as string[],
         });
       } else {
         useNotificationStore.getState().addNotification({
@@ -331,6 +341,8 @@ function KanbanBoardContent() {
     );
 
     setTasks(updatedTasks);
+    const assignedUser = reviewTaskTarget.assignedUser || (reviewTaskTarget.assignedTo ? users.find((u) => u._id === reviewTaskTarget.assignedTo) : undefined);
+    const assignedName = assignedUser?.name || reviewTaskTarget.assignedUser?.name || currentUser?.name || 'Member';
     useNotificationStore.getState().addNotification({
       type: 'review_assigned',
       category: 'Reviewer Assignment',
@@ -340,6 +352,14 @@ function KanbanBoardContent() {
       }`,
       color: 'bg-purple-600',
       taskId: reviewTaskTarget._id,
+      targetTeam: reviewTaskTarget.team,
+      assignedUserId: reviewTaskTarget.assignedTo,
+      assignedUserName: assignedName,
+      completedByUserId: currentUser?._id,
+      completedByName: currentUser?.name,
+      targetRoles: ['Super Admin', 'Admin', 'Team Lead'],
+      targetUserIds: [reviewer._id, reviewTaskTarget.assignedTo, currentUser?._id].filter(Boolean) as string[],
+      targetUserNames: [reviewer.name, assignedName, currentUser?.name].filter(Boolean) as string[],
     });
     toast.success(`Footprint saved: ${currentUser?.name || 'Member'} → ${reviewer.name} (Moved to Review)`);
     await updateTaskReviewWorkflowAction(reviewTaskTarget._id, {
@@ -462,6 +482,8 @@ function KanbanBoardContent() {
     );
     setTasks(updated);
     if (newStatus === 'Done') {
+      const assignedUser = targetTask.assignedUser || (targetTask.assignedTo ? users.find((u) => u._id === targetTask.assignedTo) : undefined);
+      const assignedName = assignedUser?.name || targetTask.assignedUser?.name || 'Member';
       useNotificationStore.getState().addNotification({
         id: `notif_done_${targetTask._id}_${Date.now()}`,
         type: 'task_completed',
@@ -470,6 +492,14 @@ function KanbanBoardContent() {
         text: `${currentUser?.name || 'User'} (${currentUser?.role}) approved "${targetTask.title}" as Completed!`,
         color: 'bg-emerald-500',
         taskId: targetTask._id,
+        targetTeam: targetTask.team,
+        assignedUserId: targetTask.assignedTo,
+        assignedUserName: assignedName,
+        completedByUserId: currentUser?._id,
+        completedByName: currentUser?.name,
+        targetRoles: ['Super Admin', 'Admin', 'Team Lead'],
+        targetUserIds: [targetTask.assignedTo, currentUser?._id].filter(Boolean) as string[],
+        targetUserNames: [assignedName, currentUser?.name].filter(Boolean) as string[],
       });
     } else {
       useNotificationStore.getState().addNotification({

@@ -42,6 +42,7 @@ import { fetchTasksAction } from '@/actions/taskActions';
 import { supabase } from '@/lib/supabase';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
+import { isNotificationVisibleForUser } from '@/lib/notification-filter';
 import { isUserInCompany } from '@/lib/company-filter';
 import { SEED_USERS } from '@/lib/seed-data';
 import { QrScannerModal } from '@/components/attendance/QrScannerModal';
@@ -186,41 +187,13 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const dismissPopupAlert = useNotificationStore((s) => s.dismissPopupAlert);
   const dismissAllPopupAlerts = useNotificationStore((s) => s.dismissAllPopupAlerts);
 
-  const isNotificationVisibleForUser = (n: any) => {
-    if (!n) return false;
-    if (!currentUser) return true;
-    const isAdminUser = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
-
-    // For chat messages: ONLY show to receivers (mem, team, all) — NEVER to the sender!
-    if (n.type === 'chat_message') {
-      if (n.senderName === currentUser.name) return false;
-      if (n.targetTeam && !isAdminUser && currentUser.team !== n.targetTeam) return false;
-      if (n.channelId && n.channelId.startsWith('dm_') && !n.channelId.includes(currentUser._id)) {
-        return false;
-      }
-      return true;
-    }
-
-    if (!n.targetRoles || n.targetRoles.length === 0) return true;
-    if (isAdminUser && (n.targetRoles.includes('Super Admin') || n.targetRoles.includes('Admin'))) {
-      return true;
-    }
-    if (n.targetRoles.includes(currentUser.role as any)) {
-      return true;
-    }
-    if (n.senderName === currentUser.name) {
-      return true;
-    }
-    return false;
-  };
-
-  // Filter notifications: show general notifications + notifications targeted at currentUser.role
-  const notificationsList = (Array.isArray(rawNotificationsList) ? rawNotificationsList : []).filter(
-    isNotificationVisibleForUser
+  // Filter notifications: show only notifications that are visible to currentUser (e.g. strict completed task targeting)
+  const notificationsList = (Array.isArray(rawNotificationsList) ? rawNotificationsList : []).filter((n) =>
+    isNotificationVisibleForUser(n, currentUser)
   );
 
-  const visiblePopupAlerts = (Array.isArray(rawPopupAlerts) ? rawPopupAlerts : []).filter(
-    isNotificationVisibleForUser
+  const visiblePopupAlerts = (Array.isArray(rawPopupAlerts) ? rawPopupAlerts : []).filter((n) =>
+    isNotificationVisibleForUser(n, currentUser)
   );
 
   const unreadCount = notificationsList.filter((n) => n.unread).length;
