@@ -72,7 +72,7 @@ Based on repository Git commit timestamps spanning August 4, 2026 to October 15,
 - **Manual Verification, UI Review & Live Testing:** ~38 hours
 - **Design Decisions, Schema Iterations & Scope Tweaks:** ~20 hours
 - **DevOps, Vercel Deployments & Account Management:** ~12 hours
-- **Total Verified Actual Human Hours:** **~112 human hours** (~2.8 working weeks).
+- **Total Verified Actual Human Hours:** **~112 human hours** (~14 developer days of active steering executed across a **3-month calendar timeline** from August to October).
 
 ### Where AI Acceleration Had Maximum Impact:
 1. **Boilerplate Reduction:** Instant generation of strongly typed TypeScript DTOs, Zod schemas, and Supabase client bindings.
