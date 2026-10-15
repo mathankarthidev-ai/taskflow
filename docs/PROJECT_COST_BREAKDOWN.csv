@@ -9,6 +9,6 @@ Unsplash CDN,Asset Storage,Professional profile background banners,Free Public C
 Web Audio API,Audio Alerts,Synthesized chime engine for task/chat alerts,Native Browser API,Permanent,0.00,USD,Verified,lib/audio-chime.ts,Zero external file hosting; zero bandwidth cost
 Vercel Subdomain,DNS & Domain,Production web address,Included Free,Annual,0.00,USD,Verified,taskflow-saas-app-five.vercel.app,Free default production domain provided by Vercel
 Custom Domain (Optional),DNS & Domain,Branded corporate domain (.com),Annual Registrar,Annual,12.00,USD,Estimated,Namecheap/Cloudflare pricing,Optional custom vanity URL
-Senior Full-Stack Dev (Manual),Labor Cost (Manual),1025 hours manual rebuild estimate,Hourly Billing,One-Time,25625.00,USD,Estimated,1025 hrs @ $25/hr blended rate,Avoided via Google Antigravity AI acceleration
-Actual Human Effort,Labor Cost (AI-Assisted),112 hours human oversight & testing,Hourly Billing,One-Time,2800.00,USD,Verified,112 hrs @ $25/hr blended rate,Direct verified labor investment with Antigravity
-TOTAL CURRENT EXPENDITURE,Consolidated Cost,All tools & active production infrastructure,Current Active,Monthly,0.00,USD,Verified,Active production environment,Operates 100% within free tiers with zero current debt
+Full-Stack Dev (Manual Baseline),Labor Cost (Manual),1025 hours manual development (128.1 days),Daily/Hourly Rate,One-Time,128125.00,INR,Estimated,128.1 days @ Rs. 1000/8hrs (Rs. 125/hr),Avoided via Google Antigravity AI acceleration
+Actual Human Effort (AI-Assisted),Labor Cost (AI-Assisted),112 hours human steering (14.0 days),Daily/Hourly Rate,One-Time,14000.00,INR,Verified,14.0 days @ Rs. 1000/8hrs (Rs. 125/hr),Direct human investment with Antigravity
+TOTAL CURRENT EXPENDITURE,Consolidated Cost,Active tools & production infrastructure,Current Active,Monthly,0.00,INR,Verified,Active production environment,Operates 100% within free tiers with zero infrastructure debt

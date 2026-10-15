@@ -59,7 +59,8 @@ Below is the verified master index of all 18 accompanying technical documents an
 ### 3.2. Financial & Cost Summary
 - **Actual Verified Tooling & Infrastructure Expenditure:** **$0.00 USD / ₹0 INR** (100% within Vercel, Supabase, and Antigravity free developer tiers).
 - **Current Monthly Operating Expense:** **$0.00 / month**.
-- **Avoided Engineering Labor Cost (Manual vs. AI):** **$22,825 to $69,335 USD** (~₹19.1 to ₹58.2 Lakhs INR saved).
+- **Avoided Engineering Labor Cost (Manual Baseline at ₹1,000 / 8-hr day):** **₹1,14,125 INR Saved** (Manual: ₹1,28,125 vs. AI-Assisted: ₹14,000 INR).
+- **Global Rate Comparison (at $25/hr):** $22,825 USD (~₹19.1 Lakhs INR) saved.
 
 ---
 

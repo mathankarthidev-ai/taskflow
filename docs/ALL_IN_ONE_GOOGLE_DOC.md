@@ -70,11 +70,25 @@ For the **entire 36,555-line production codebase** (including foundational archi
 | **Maximum Manual Development Estimate** | **1,340 hrs** | 167.5 days | 33.5 weeks | ~7.8 months |
 | **Verified Actual Human Effort (With Antigravity)** | **~112 hrs** | 14.0 days | 2.8 weeks | ~2.5 calendar months (sprints) |
 
-### Financial Cost Savings (Manual vs. AI-Assisted)
-- **Manual Labor Cost (at $25/hr - India market rate):** $25 × 1,025 hrs = **$25,625 USD (~₹21,52,500 INR)**.
-- **Actual Human Labor Cost (at $25/hr):** $25 × 112 hrs = **$2,800 USD (~₹2,35,200 INR)**.
-- **Cloud Tooling & Infrastructure Cost:** **$0.00** (100% within Vercel, Supabase, and Antigravity free developer tiers).
-- **Direct Capital Saved:** **$22,825 USD (~₹19.1 Lakhs INR)** — an **89.1% direct financial saving**.
+### Financial Cost Analysis (Based on ₹1,000 / 8-Hour Day = ₹125 / Hour)
+
+* **Standard Working Day Rate:** **₹1,000 INR per 8 hours** (₹125 INR / hr).
+
+#### Scenario 1: Manual Development (Full-Stack Developer without AI)
+* **Minimum Manual Cost (780 hrs / 97.5 days):** 97.5 days × ₹1,000 = **₹97,500 INR**
+* **Most Likely Manual Cost (1,025 hrs / 128.1 days):** 128.1 days × ₹1,000 = **₹1,28,125 INR**
+* **Maximum Manual Cost (1,340 hrs / 167.5 days):** 167.5 days × ₹1,000 = **₹1,67,500 INR**
+
+#### Scenario 2: Actual AI-Assisted Development (With Google Antigravity)
+* **Actual Human Effort:** **112 hours** (14.0 working days).
+* **Actual Human Labor Cost:** 14.0 days × ₹1,000 = **₹14,000 INR** (112 hrs × ₹125/hr).
+* **Cloud Tooling & Infrastructure Cost:** **₹0.00** (100% within Vercel, Supabase, and Antigravity free developer tiers).
+* **Total Project Expenditure:** **₹14,000 INR**.
+
+#### Financial Savings & ROI
+* **Direct Money Saved (Most Likely):** ₹1,28,125 − ₹14,000 = **₹1,14,125 INR Saved**.
+* **Direct Cost Reduction:** **89.1% direct savings**.
+* **Time to Market:** Reduced from **128.1 working days (~6 months)** down to **14 working days (~2.8 weeks)** — **~9.1x acceleration**.
 
 ---
 

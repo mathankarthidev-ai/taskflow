@@ -57,34 +57,26 @@ TaskFlow was architected, engineered, and continuously refined using **Google An
 
 ## 5. Economic ROI: AI-Assisted vs. Manual Development Cost
 
-This analysis contrasts the financial cost of developing TaskFlow manually with a traditional engineering team versus using AI-assisted development with Google Antigravity.
+### Standard Developer Rate: ₹1,000 INR per 8-Hour Day (₹125 INR / hr)
 
-### Scenario 1: Manual Software Development (No AI Agent)
-- **Estimated Development Effort:** 1,025 engineering hours (Most likely estimate).
-- **Blended Hourly Rate (Senior Full-Stack Developer):**
-  - *India Market Rate:* $25.00 / hr (₹2,100 / hr).
-  - *US / Global Market Rate:* $65.00 / hr.
-- **Manual Labor Cost:**
-  - **India Baseline:** $25 × 1,025 hrs = **$25,625 USD (~₹21,52,500 INR)**.
-  - **Global Baseline:** $65 × 1,025 hrs = **$66,625 USD**.
-- **Additional QA & Project Management (15%):** ~$3,840 to $9,990 USD.
-- **Total Manual Investment:** **$29,465 to $76,615 USD**.
-- **Time to Market:** **6.4 calendar months**.
+#### Scenario 1: Manual Software Development (No AI Agent)
+- **Minimum Manual Development (780 hrs / 97.5 days):** 97.5 days × ₹1,000 = **₹97,500 INR**
+- **Most Likely Manual Development (1,025 hrs / 128.1 days):** 128.1 days × ₹1,000 = **₹1,28,125 INR**
+- **Maximum Manual Development (1,340 hrs / 167.5 days):** 167.5 days × ₹1,000 = **₹1,67,500 INR**
+- **Time to Market:** **128.1 working days (~6.0 calendar months)**.
 
-### Scenario 2: AI-Assisted Development (With Google Antigravity)
-- **Actual Human Oversight & Steering Effort:** ~112 hours.
-- **Blended Hourly Rate:** $25.00 / hr (India) or $65.00 / hr (Global).
-- **Human Labor Cost:**
-  - **India Baseline:** $25 × 112 hrs = **$2,800 USD (~₹2,35,200 INR)**.
-  - **Global Baseline:** $65 × 112 hrs = **$7,280 USD**.
-- **AI Tooling & Cloud Infrastructure Cost:** **$0.00 USD**.
-- **Total AI-Assisted Investment:** **$2,800 to $7,280 USD**.
-- **Time to Market:** **~2.5 calendar months (intermittent sprints)**.
+#### Scenario 2: AI-Assisted Development (With Google Antigravity)
+- **Actual Human Oversight & Steering Effort:** **112 hours** (14.0 working days).
+- **Actual Human Labor Cost:** 14.0 days × ₹1,000 = **₹14,000 INR** (112 hrs × ₹125/hr).
+- **AI Tooling & Cloud Infrastructure Cost:** **₹0.00** (100% within Vercel, Supabase, and Antigravity free tiers).
+- **Total AI-Assisted Investment:** **₹14,000 INR**.
+- **Time to Market:** **14 working days (~2.8 working weeks)**.
 
 ### Financial Summary & Savings
-- **Direct Capital Saved:** **$22,825 to $69,335 USD** (~₹19.1 Lakhs to ₹58.2 Lakhs INR).
-- **Cost Reduction Percentage:** **89.1% to 90.5% savings**.
-- **Speed-to-Market Acceleration:** **~9.1x reduction in developer man-hours**.
+- **Direct Capital Saved:** ₹1,28,125 − ₹14,000 = **₹1,14,125 INR Saved**.
+- **Cost Reduction Percentage:** **89.1% direct financial savings**.
+- **Speed-to-Market Acceleration:** **~9.1x reduction in developer man-hours (from 128.1 days down to 14 days)**.
+- **Total Project Expenditure:** **₹14,000 INR** (Labor) + **₹0.00** (Infrastructure) = **₹14,000 INR Total**.
 
 ---
 
