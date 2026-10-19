@@ -78,13 +78,36 @@ export async function GET() {
   });
 }
 
+import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
+
 export async function POST(request: Request) {
   try {
+    // Security Check: Rate Limiting (Max 30 chat messages per minute per client)
+    const clientId = getClientIdentifier(request, 'chat');
+    const rateLimit = checkRateLimit(clientId, { maxRequests: 30, windowSeconds: 60 });
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Rate Limit Exceeded: Too many messages sent. Please wait ${rateLimit.resetInSeconds} seconds.`,
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { channelId, message } = body as { channelId: string; message: ChatMessage };
 
     if (!channelId || !message || !message.id) {
       return NextResponse.json({ success: false, error: 'Invalid message payload' }, { status: 400 });
+    }
+
+    // Security Check: Text payload length guard (max 3000 chars)
+    if (message.text && message.text.length > 3000) {
+      return NextResponse.json(
+        { success: false, error: 'Message exceeds maximum permitted length of 3000 characters.' },
+        { status: 400 }
+      );
     }
 
     const store = getServerChatStore();

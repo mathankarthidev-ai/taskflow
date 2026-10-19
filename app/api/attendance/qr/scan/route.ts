@@ -5,6 +5,8 @@ import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils
 import { SEED_USERS } from '@/lib/seed-data';
 
 import { logSecurityEvent } from '@/lib/audit-logger';
+import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
+import { QrScanInputSchema, validateRequestBody } from '@/lib/validations/api-schemas';
 
 // Anti-Replay Token Cache: Stores consumed dynamic QR tokens with timestamp
 const consumedTokens = new Map<string, number>();
@@ -21,16 +23,31 @@ function cleanupExpiredTokens() {
 
 export async function POST(req: Request) {
   try {
-    cleanupExpiredTokens();
-    const body = await req.json().catch(() => ({}));
-    const { tokenId, userId, userName, userTeam, branch, expiresAt } = body;
-
-    if (!userId || !userName) {
+    // Security Check: Rate Limiting (Max 15 scan attempts per minute per IP)
+    const clientId = getClientIdentifier(req, 'qr-scan');
+    const rateLimit = checkRateLimit(clientId, { maxRequests: 15, windowSeconds: 60 });
+    if (!rateLimit.success) {
       return NextResponse.json(
-        { success: false, message: 'Missing employee identification details' },
-        { status: 400 }
+        {
+          success: false,
+          message: `Rate Limit Exceeded: Too many scan requests. Please wait ${rateLimit.resetInSeconds} seconds.`,
+        },
+        { status: 429 }
       );
     }
+
+    cleanupExpiredTokens();
+    const rawBody = await req.json().catch(() => ({}));
+
+    // Security Check: Strict Zod Schema Validation
+    const validation = validateRequestBody(QrScanInputSchema, rawBody);
+    if (!validation.success) {
+      return NextResponse.json({ success: false, message: validation.error }, { status: 400 });
+    }
+
+    const body = validation.data;
+    const { tokenId, userId, userName, userTeam, branch, expiresAt } = body;
+    const userEmail = body.userEmail;
 
     // Security Check: One-Time Token Invalidation (Anti-Replay Protection)
     if (tokenId) {

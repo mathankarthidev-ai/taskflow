@@ -145,7 +145,27 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
   return [];
 }
 
-export async function saveWorkLogItem(item: WorkLogItem): Promise<WorkLogItem> {
+export async function saveWorkLogItem(
+  item: WorkLogItem,
+  requestingUser?: { id?: string; email?: string; role?: string }
+): Promise<WorkLogItem> {
+  // Security Check: Insecure Direct Object Reference (IDOR) Ownership Protection
+  if (requestingUser) {
+    const reqEmail = String(requestingUser.email || '').toLowerCase();
+    const reqId = String(requestingUser.id || '').toLowerCase();
+    const isPrivileged =
+      requestingUser.role === 'Super Admin' ||
+      requestingUser.role === 'Admin' ||
+      requestingUser.role === 'Team Lead';
+    const isOwner =
+      (item.user_email && String(item.user_email).toLowerCase() === reqEmail) ||
+      (item.user_id && String(item.user_id).toLowerCase() === reqId);
+
+    if (!isPrivileged && reqEmail && !isOwner) {
+      throw new Error('Unauthorized (IDOR Protection): You can only create or edit your own work logs.');
+    }
+  }
+
   const storageKey = `${STORAGE_KEY_PREFIX}${item.work_date}`;
 
   try {
@@ -177,7 +197,31 @@ function getDismissedAutoIds(): Set<string> {
   }
 }
 
-export async function deleteWorkLogItem(id: string, workDate: string): Promise<boolean> {
+export async function deleteWorkLogItem(
+  id: string,
+  workDate: string,
+  requestingUser?: { id?: string; email?: string; role?: string }
+): Promise<boolean> {
+  // Security Check: Insecure Direct Object Reference (IDOR) Ownership Protection
+  if (requestingUser) {
+    const isPrivileged =
+      requestingUser.role === 'Super Admin' ||
+      requestingUser.role === 'Admin' ||
+      requestingUser.role === 'Team Lead';
+    if (!isPrivileged) {
+      const current = await fetchWorkLogsForDate(workDate);
+      const target = current.find((x) => x.id === id);
+      const reqEmail = String(requestingUser.email || '').toLowerCase();
+      const reqId = String(requestingUser.id || '').toLowerCase();
+      const isOwner =
+        (target?.user_email && String(target.user_email).toLowerCase() === reqEmail) ||
+        (target?.user_id && String(target.user_id).toLowerCase() === reqId);
+      if (target && !isOwner) {
+        throw new Error('Unauthorized (IDOR Protection): You cannot delete another employee\'s work log.');
+      }
+    }
+  }
+
   const storageKey = `${STORAGE_KEY_PREFIX}${workDate}`;
 
   try {
