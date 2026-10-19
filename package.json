@@ -8,7 +8,9 @@
     "start": "node dev-runner.js start",
     "lint": "next lint",
     "seed": "node -e \"console.log('Use /api/seed route or run seed action')\"",
-    "test:security": "npx tsx scripts/verify-all-securities.ts"
+    "test:security": "npx tsx scripts/verify-all-securities.ts",
+    "test:all": "npx tsx scripts/test-all-options.ts",
+    "test": "npx tsx scripts/verify-all-securities.ts && npx tsx scripts/test-all-options.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
