@@ -401,10 +401,20 @@ export default function ReimbursementsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // File size check: warn if file exceeds 4.5MB
-    if (file.size > 4.5 * 1024 * 1024) {
+    // Security Check: Prohibited extensions (.exe, .bat, .sh, .cmd, .js, .vbs, .msi, etc.)
+    const lowerName = file.name.toLowerCase();
+    const PROHIBITED = ['.exe', '.bat', '.sh', '.cmd', '.js', '.vbs', '.scr', '.msi', '.ps1', '.jar'];
+    if (PROHIBITED.some((ext) => lowerName.endsWith(ext))) {
+      toast.error(`Security Violation: "${file.name}" is a prohibited file type.`, {
+        description: 'Executable and script files cannot be uploaded. Please attach PDF or images.',
+      });
+      return;
+    }
+
+    // File size check: warn if file exceeds 5MB
+    if (file.size > 5 * 1024 * 1024) {
       toast.error(`File "${file.name}" is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB)`, {
-        description: 'Maximum attachment size is 4.5 MB. Please select a smaller receipt or document.',
+        description: 'Maximum attachment size is 5 MB. Please select a smaller receipt or document.',
       });
       return;
     }
@@ -533,6 +543,10 @@ export default function ReimbursementsPage() {
         // Edit Mode: update existing claim before approval
         const editPayload = {
           claimId: editingClaim._id,
+          userId: currentUser?._id,
+          userEmail: currentUser?.email,
+          userName: currentUser?.name,
+          userRole: currentUser?.role,
           category: firstCategory,
           amount: totalCalculatedAmount,
           date: items[0].date,
@@ -560,7 +574,12 @@ export default function ReimbursementsPage() {
         }
 
         if (!updated) {
-          updated = await updateReimbursementAction(editingClaim._id, editPayload);
+          updated = await updateReimbursementAction(editingClaim._id, editPayload, {
+            id: currentUser?._id,
+            email: currentUser?.email,
+            role: currentUser?.role,
+            name: currentUser?.name,
+          });
         }
 
         if (!updated) {
@@ -1773,7 +1792,7 @@ export default function ReimbursementsPage() {
                   <div>
                     <label className="text-[11px] font-semibold text-foreground flex items-center justify-between">
                       <span>Document / Receipt Upload {isAmountOver200 ? '*' : '(Optional)'}</span>
-                      <span className="text-[10px] text-brand-600 dark:text-brand-400 font-bold">Any File Format</span>
+                      <span className="text-[10px] text-brand-600 dark:text-brand-400 font-bold">PDF, Images &amp; Docs (Max 5MB)</span>
                     </label>
                     <div className="mt-1 flex items-center gap-2">
                       <label
@@ -1786,7 +1805,7 @@ export default function ReimbursementsPage() {
                       >
                         <Paperclip className="h-3.5 w-3.5 text-brand-500 shrink-0" />
                         <span className="text-xs text-foreground truncate flex-1 font-mono">
-                          {item.receiptName ? item.receiptName : 'Click to Upload Any Document / Receipt...'}
+                          {item.receiptName ? item.receiptName : 'Click to Upload Receipt / Document...'}
                         </span>
                         <span className="bg-brand-500/10 text-brand-600 dark:text-brand-400 text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0">
                           Upload File
@@ -1795,13 +1814,13 @@ export default function ReimbursementsPage() {
                       <input
                         id={`file_upload_${idx}`}
                         type="file"
-                        accept="*/*"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,application/pdf,image/*"
                         onChange={(e) => handleFileUpload(idx, e)}
                         className="hidden"
                       />
                     </div>
                     <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                      Supports PDF, PNG, JPG, DOC, DOCX, XLS, XLSX, ZIP, or any format
+                      Supports PDF, PNG, JPG, WEBP, DOC, DOCX, XLS, XLSX (Max 5 MB)
                     </span>
                   </div>
 

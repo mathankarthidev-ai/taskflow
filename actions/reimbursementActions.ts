@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { mockStore } from '@/lib/mock-store';
 import { ReimbursementClaim, ClaimCategory, TeamName, ExpenseItem, ClaimComment } from '@/types';
 import { revalidatePath } from 'next/cache';
+import { validateReceiptAttachment } from '@/lib/file-security';
 
 function mapClaimToRow(claim: ReimbursementClaim) {
   return {
@@ -101,6 +102,24 @@ export async function submitReimbursementAction(input: {
       : Number(input.amount);
   const nowIso = new Date().toISOString();
 
+  const primaryReceiptName = input.receiptName || input.items?.[0]?.receiptName || 'receipt_document.pdf';
+  const primaryReceiptUrl = input.receiptUrl || input.items?.[0]?.receiptUrl || '';
+
+  // Security Check: File upload validation (5MB max & prohibited extension block)
+  const primaryCheck = validateReceiptAttachment(primaryReceiptName, primaryReceiptUrl);
+  if (!primaryCheck.valid) {
+    throw new Error(primaryCheck.error);
+  }
+
+  if (Array.isArray(input.items)) {
+    for (const it of input.items) {
+      const itemCheck = validateReceiptAttachment(it.receiptName, it.receiptUrl);
+      if (!itemCheck.valid) {
+        throw new Error(itemCheck.error);
+      }
+    }
+  }
+
   const newClaim: ReimbursementClaim = {
     _id: `claim_${Date.now()}`,
     claimNo,
@@ -113,8 +132,8 @@ export async function submitReimbursementAction(input: {
     amount: calculatedTotal,
     date: input.date,
     description: input.description,
-    receiptName: input.receiptName || 'receipt_document.pdf',
-    receiptUrl: input.receiptUrl || input.items?.[0]?.receiptUrl || '',
+    receiptName: primaryReceiptName,
+    receiptUrl: primaryReceiptUrl,
     items: input.items || [],
     comments: [],
     tlStatus: null,
@@ -431,7 +450,8 @@ export async function updateReimbursementAction(
     receiptName?: string;
     receiptUrl?: string;
     items?: ExpenseItem[];
-  }
+  },
+  requestingUser?: { id?: string; email?: string; role?: string; name?: string }
 ): Promise<ReimbursementClaim | null> {
   try {
     const { data: existing } = await supabase
@@ -449,6 +469,21 @@ export async function updateReimbursementAction(
         throw new Error('Approved claims cannot be edited.');
       }
 
+      // Security Check: Insecure Direct Object Reference (IDOR) Protection
+      if (requestingUser) {
+        const reqId = String(requestingUser.id || requestingUser.email || '').toLowerCase();
+        const reqRole = String(requestingUser.role || '');
+        const isPrivileged = reqRole === 'Super Admin' || reqRole === 'Admin' || reqRole === 'CEO';
+        const isOwner =
+          existing.user_id &&
+          (String(existing.user_id).toLowerCase() === reqId ||
+            String(existing.user_name || '').toLowerCase() === String(requestingUser.name || '').toLowerCase());
+
+        if (!isPrivileged && reqId && !isOwner) {
+          throw new Error('Unauthorized (IDOR Protection): You can only edit your own reimbursement claims.');
+        }
+      }
+
       const calculatedTotal =
         input.items && input.items.length > 0
           ? input.items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
@@ -462,6 +497,23 @@ export async function updateReimbursementAction(
         input.receiptUrl !== undefined
           ? input.receiptUrl
           : input.items?.[0]?.receiptUrl || '';
+
+      // Security Check: File upload validation (5MB max & prohibited extension block)
+      if (primaryReceiptName || primaryReceiptUrl) {
+        const primaryCheck = validateReceiptAttachment(primaryReceiptName, primaryReceiptUrl);
+        if (!primaryCheck.valid) {
+          throw new Error(primaryCheck.error);
+        }
+      }
+
+      if (Array.isArray(input.items)) {
+        for (const it of input.items) {
+          const itemCheck = validateReceiptAttachment(it.receiptName, it.receiptUrl);
+          if (!itemCheck.valid) {
+            throw new Error(itemCheck.error);
+          }
+        }
+      }
 
       const updatedFields: any = {
         category: input.category || existing.category,

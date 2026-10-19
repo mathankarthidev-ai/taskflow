@@ -1528,11 +1528,11 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 </div>
               </div>
 
-              {/* Persona Switcher List - Restricted ONLY to Super Admin */}
-              {isSuperAdmin && (
+              {/* Persona Switcher List - Restricted ONLY to Super Admin in development mode (disabled in production) */}
+              {isSuperAdmin && (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_PERSONA_SWITCHER === 'true') && (
                 <>
                   <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 py-1">
-                    Super Admin Persona Switcher ({isAustralia ? 'Ambizcon AU' : 'Ambizcon Health'})
+                    Super Admin Persona Switcher ({isAustralia ? 'Ambizcon AU' : 'Ambizcon Health'}) [Dev Only]
                   </div>
 
                   <div className="max-h-56 overflow-y-auto space-y-1 my-1 pr-0.5">

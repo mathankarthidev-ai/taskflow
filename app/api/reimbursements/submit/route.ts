@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { mockStore } from '@/lib/mock-store';
 import { ReimbursementClaim, ClaimCategory, TeamName, ExpenseItem } from '@/types';
 import { revalidatePath } from 'next/cache';
+import { validateReceiptAttachment } from '@/lib/file-security';
+import { logSecurityEvent } from '@/lib/audit-logger';
 
 function mapClaimToRow(claim: ReimbursementClaim) {
   return {
@@ -86,6 +88,33 @@ export async function POST(req: Request) {
           );
         }
 
+        // Security Check: Insecure Direct Object Reference (IDOR) Protection
+        const requesterId = String(input.userId || input.userEmail || '').toLowerCase();
+        const requesterRole = String(input.userRole || '');
+        const isPrivileged = requesterRole === 'Super Admin' || requesterRole === 'Admin' || requesterRole === 'CEO';
+        const isOwner =
+          existing.user_id &&
+          (String(existing.user_id).toLowerCase() === requesterId ||
+            String(existing.user_name || '').toLowerCase() === String(input.userName || '').toLowerCase());
+
+        if (!isPrivileged && requesterId && !isOwner) {
+          await logSecurityEvent({
+            eventType: 'IDOR_BLOCKED',
+            actorId: requesterId,
+            actorEmail: input.userEmail,
+            actorRole: requesterRole,
+            targetId: claimId,
+            targetType: 'reimbursements',
+            status: 'BLOCKED',
+            details: { attemptedClaimId: claimId, realOwnerId: existing.user_id },
+          });
+
+          return NextResponse.json(
+            { success: false, error: 'Unauthorized (IDOR Protection): You can only edit your own reimbursement claims.' },
+            { status: 403 }
+          );
+        }
+
         const calculatedTotal =
           input.items && input.items.length > 0
             ? input.items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0)
@@ -99,6 +128,21 @@ export async function POST(req: Request) {
           input.receiptUrl !== undefined
             ? input.receiptUrl
             : input.items?.[0]?.receiptUrl || '';
+
+        // Security Check: File upload validation (5MB max & prohibited extension block)
+        const primaryCheck = validateReceiptAttachment(primaryReceiptName, primaryReceiptUrl);
+        if (!primaryCheck.valid) {
+          return NextResponse.json({ success: false, error: primaryCheck.error }, { status: 400 });
+        }
+
+        if (Array.isArray(input.items)) {
+          for (const it of input.items) {
+            const itemCheck = validateReceiptAttachment(it.receiptName, it.receiptUrl);
+            if (!itemCheck.valid) {
+              return NextResponse.json({ success: false, error: itemCheck.error }, { status: 400 });
+            }
+          }
+        }
 
         const updatedFields = {
           category: input.category || existing.category,
@@ -136,6 +180,21 @@ export async function POST(req: Request) {
 
     const primaryReceiptName = input.receiptName || input.items?.[0]?.receiptName || '';
     const primaryReceiptUrl = input.receiptUrl || input.items?.[0]?.receiptUrl || '';
+
+    // Security Check: File upload validation (5MB max & prohibited extension block)
+    const primaryCheck = validateReceiptAttachment(primaryReceiptName, primaryReceiptUrl);
+    if (!primaryCheck.valid) {
+      return NextResponse.json({ success: false, error: primaryCheck.error }, { status: 400 });
+    }
+
+    if (Array.isArray(input.items)) {
+      for (const it of input.items) {
+        const itemCheck = validateReceiptAttachment(it.receiptName, it.receiptUrl);
+        if (!itemCheck.valid) {
+          return NextResponse.json({ success: false, error: itemCheck.error }, { status: 400 });
+        }
+      }
+    }
 
     const newClaim: ReimbursementClaim = {
       _id: `claim_${Date.now()}`,

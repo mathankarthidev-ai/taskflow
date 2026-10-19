@@ -4,8 +4,24 @@ import { supabase } from '@/lib/supabase';
 import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
 import { SEED_USERS } from '@/lib/seed-data';
 
+import { logSecurityEvent } from '@/lib/audit-logger';
+
+// Anti-Replay Token Cache: Stores consumed dynamic QR tokens with timestamp
+const consumedTokens = new Map<string, number>();
+
+// Periodic cleanup of consumed tokens older than 60 seconds
+function cleanupExpiredTokens() {
+  const now = Date.now();
+  for (const [token, timestamp] of consumedTokens.entries()) {
+    if (now - timestamp > 60000) {
+      consumedTokens.delete(token);
+    }
+  }
+}
+
 export async function POST(req: Request) {
   try {
+    cleanupExpiredTokens();
     const body = await req.json().catch(() => ({}));
     const { tokenId, userId, userName, userTeam, branch, expiresAt } = body;
 
@@ -14,6 +30,29 @@ export async function POST(req: Request) {
         { success: false, message: 'Missing employee identification details' },
         { status: 400 }
       );
+    }
+
+    // Security Check: One-Time Token Invalidation (Anti-Replay Protection)
+    if (tokenId) {
+      if (consumedTokens.has(tokenId)) {
+        await logSecurityEvent({
+          eventType: 'QR_REPLAY_ATTEMPT',
+          actorId: userId,
+          actorEmail: body.userEmail,
+          status: 'BLOCKED',
+          details: { tokenId, userName, branch },
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Security Alert: This QR code has already been scanned. Please wait for the dynamic QR code to refresh.',
+          },
+          { status: 400 }
+        );
+      }
+      // Register token as consumed immediately
+      consumedTokens.set(tokenId, Date.now());
     }
 
     // Validate token expiration if provided
