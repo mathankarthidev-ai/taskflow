@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, UserRole, TeamName, WorkMode, CompanyBranch } from '@/types';
+import { User, UserRole, TeamName, WorkMode, CompanyBranch, Task } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
   fetchAllUsersAction,
@@ -10,6 +10,7 @@ import {
   createUserAction,
   deleteUserAction,
 } from '@/actions/userActions';
+import { fetchTasksAction } from '@/actions/taskActions';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -167,14 +168,20 @@ export function UserManagementTable() {
   const [newCompany, setNewCompany] = useState<CompanyBranch>('Ambizcon Health - India');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [tasks, setTasks] = useState<Task[]>([]);
+
   const fetchUsers = async () => {
     setLoading(true);
-    const data = await fetchAllUsersAction();
+    const [data, taskData] = await Promise.all([
+      fetchAllUsersAction(),
+      fetchTasksAction(),
+    ]);
     if (Array.isArray(data)) {
       const { syncUsersAvatarsToLocalStore } = await import('@/lib/avatar-store');
       syncUsersAvatarsToLocalStore(data);
     }
-    setUsers(data);
+    setUsers(data || []);
+    setTasks(taskData || []);
     setLoading(false);
   };
 
@@ -208,8 +215,10 @@ export function UserManagementTable() {
 
     setIsSubmitting(true);
     try {
-      const cleanDob = formatDayMonthOnly(newDob.trim() || newBirthday.trim() || '14 Oct');
-      const cleanBirthday = formatDayMonthOnly(newBirthday.trim() || newDob.trim() || '14 Oct');
+      const rawDob = newDob.trim() || newBirthday.trim();
+      const cleanDob = rawDob ? formatDayMonthOnly(rawDob) : '';
+      const rawBirthday = newBirthday.trim() || newDob.trim();
+      const cleanBirthday = rawBirthday ? formatDayMonthOnly(rawBirthday) : '';
 
       const created = await createUserAction({
         name: newName.trim(),
@@ -248,8 +257,8 @@ export function UserManagementTable() {
     setEditRole(u.role);
     setEditTeam(u.team);
     setEditCompany(u.company || 'Ambizcon Health - India');
-    setEditBirthday(formatDayMonthOnly(u.birthday || u.dob || '14 Oct'));
-    setEditDob(formatDayMonthOnly(u.dob || u.birthday || '14 Oct'));
+    setEditBirthday(u.birthday ? formatDayMonthOnly(u.birthday) : u.dob ? formatDayMonthOnly(u.dob) : '');
+    setEditDob(u.dob ? formatDayMonthOnly(u.dob) : u.birthday ? formatDayMonthOnly(u.birthday) : '');
     setEditWorkMode(u.workMode || 'Work From Office');
   };
 
@@ -258,8 +267,10 @@ export function UserManagementTable() {
     if (!editingUser) return;
 
     try {
-      const cleanDob = formatDayMonthOnly(editDob.trim() || editBirthday.trim() || '14 Oct');
-      const cleanBirthday = formatDayMonthOnly(editBirthday.trim() || editDob.trim() || '14 Oct');
+      const rawDob = editDob.trim() || editBirthday.trim();
+      const cleanDob = rawDob ? formatDayMonthOnly(rawDob) : '';
+      const rawBirthday = editBirthday.trim() || editDob.trim();
+      const cleanBirthday = rawBirthday ? formatDayMonthOnly(rawBirthday) : '';
 
       const updatedUser = await updateUserAction(editingUser._id, {
         name: editName.trim(),
@@ -594,7 +605,7 @@ export function UserManagementTable() {
             className="gap-1.5 text-xs font-bold border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
-            Completed Tasks View (5D • 10W • 40M • 100+Y)
+            Completed Tasks Explorer
           </Button>
         </div>
       </div>
@@ -622,6 +633,29 @@ export function UserManagementTable() {
               <tbody className="divide-y divide-zinc-200/60 dark:border-zinc-800/60">
                 {filteredUsers.map((u) => {
                   const effCompany = resolveEffectiveCompany(u);
+                  const userDoneTasks = (tasks || []).filter(
+                    (t) => (t.assignedTo === u._id || t.assignedUser?.email === u.email) && t.status === 'Done'
+                  );
+                  const now = new Date();
+                  const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+                  const dayOfWeek = now.getDay();
+                  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                  const monday = new Date(now);
+                  monday.setDate(now.getDate() + diffToMonday);
+                  const mondayStr = monday.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+                  const monthPrefix = todayStr.slice(0, 7);
+
+                  const dCount = userDoneTasks.filter(
+                    (t) => (t.updatedAt || t.createdAt || t.dueDate || '').slice(0, 10) === todayStr
+                  ).length;
+                  const wCount = userDoneTasks.filter(
+                    (t) => (t.updatedAt || t.createdAt || t.dueDate || '').slice(0, 10) >= mondayStr
+                  ).length;
+                  const mCount = userDoneTasks.filter(
+                    (t) => (t.updatedAt || t.createdAt || t.dueDate || '').slice(0, 10).startsWith(monthPrefix)
+                  ).length;
+                  const yCount = userDoneTasks.length;
+
                   return (
                   <tr key={u._id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors">
                     <td className="px-4 py-3">
@@ -676,9 +710,9 @@ export function UserManagementTable() {
                             setIsCompletedModalOpen(true);
                           }}
                           className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold font-mono text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white transition-colors"
-                          title={`View ${u.name}'s 5 Daily completed tasks`}
+                          title={`View ${u.name}'s ${dCount} Daily completed tasks`}
                         >
-                          5D
+                          {dCount}D
                         </button>
                         <button
                           type="button"
@@ -688,9 +722,9 @@ export function UserManagementTable() {
                             setIsCompletedModalOpen(true);
                           }}
                           className="rounded-md border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-bold font-mono text-blue-600 dark:text-blue-400 hover:bg-blue-500 hover:text-white transition-colors"
-                          title={`View ${u.name}'s 10 Weekly completed tasks`}
+                          title={`View ${u.name}'s ${wCount} Weekly completed tasks`}
                         >
-                          10W
+                          {wCount}W
                         </button>
                         <button
                           type="button"
@@ -700,9 +734,9 @@ export function UserManagementTable() {
                             setIsCompletedModalOpen(true);
                           }}
                           className="rounded-md border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-bold font-mono text-purple-600 dark:text-purple-400 hover:bg-purple-500 hover:text-white transition-colors"
-                          title={`View ${u.name}'s 40 Monthly completed tasks`}
+                          title={`View ${u.name}'s ${mCount} Monthly completed tasks`}
                         >
-                          40M
+                          {mCount}M
                         </button>
                         <button
                           type="button"
@@ -712,13 +746,13 @@ export function UserManagementTable() {
                             setIsCompletedModalOpen(true);
                           }}
                           className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold font-mono text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white transition-colors"
-                          title={`View ${u.name}'s 105 (100+) Yearly completed tasks`}
+                          title={`View ${u.name}'s ${yCount} Yearly completed tasks`}
                         >
-                          100+Y
+                          {yCount}Y
                         </button>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-mono font-semibold">{formatDayMonthOnly(u.dob || u.birthday || '14 Oct')}</td>
+                    <td className="px-4 py-3 font-mono font-semibold">{formatDayMonthOnly(u.dob || u.birthday) || '—'}</td>
                     <td className="px-4 py-3 font-semibold text-emerald-600 dark:text-emerald-400">
                       {u.workMode || 'Work From Office'}
                     </td>
@@ -1162,6 +1196,7 @@ export function UserManagementTable() {
         isOpen={isCompletedModalOpen}
         onClose={() => setIsCompletedModalOpen(false)}
         users={filteredUsers.length > 0 ? filteredUsers : companyScopedUsers}
+        tasks={tasks}
         initialMemberId={completedModalMemberId}
         initialPeriod={completedModalPeriod}
       />

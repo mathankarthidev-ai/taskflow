@@ -19,13 +19,27 @@ export async function getAnalyticsData(teamFilter?: TeamName, companyFilter?: st
     (t) => t.status !== 'Done' && new Date(t.dueDate).getTime() < now.getTime()
   ).length;
 
+  // Real average completion hours
+  let avgCompletionHours = 0;
+  const doneTasks = tasks.filter((t) => t.status === 'Done');
+  if (doneTasks.length > 0) {
+    let totalDurHours = 0;
+    doneTasks.forEach((t) => {
+      const startMs = new Date(t.createdAt || t.dueDate || Date.now()).getTime();
+      const endMs = new Date(t.updatedAt || t.createdAt || Date.now()).getTime();
+      const dur = Math.max(0, (endMs - startMs) / 3600000);
+      totalDurHours += dur;
+    });
+    avgCompletionHours = +(totalDurHours / doneTasks.length).toFixed(1);
+  }
+
   const summary: AnalyticsSummary = {
     totalTasks,
     completedTasks,
     inProgressTasks,
     pendingReviewTasks,
     overdueTasks,
-    avgCompletionHours: 18.5, // Average completion time metric
+    avgCompletionHours,
     incomingQueueCount,
   };
 
@@ -59,16 +73,33 @@ export async function getAnalyticsData(teamFilter?: TeamName, companyFilter?: st
     };
   });
 
-  // Monthly Trend Data
-  const monthlyTrend = [
-    { month: 'Jan', completed: 12, created: 15 },
-    { month: 'Feb', completed: 18, created: 20 },
-    { month: 'Mar', completed: 24, created: 22 },
-    { month: 'Apr', completed: 30, created: 28 },
-    { month: 'May', completed: 35, created: 32 },
-    { month: 'Jun', completed: 42, created: 40 },
-    { month: 'Jul', completed: completedTasks + 10, created: totalTasks + 5 },
-  ];
+  // Real Monthly Trend Data (Last 6 months calculated strictly from database)
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthlyTrend: { month: string; completed: number; created: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const monthKey = `${y}-${m}`;
+    const label = monthNames[d.getMonth()];
+
+    const createdCount = tasks.filter((t) => {
+      const cDate = (t.createdAt || '').slice(0, 7);
+      return cDate === monthKey;
+    }).length;
+
+    const completedCount = tasks.filter((t) => {
+      if (t.status !== 'Done') return false;
+      const uDate = (t.updatedAt || t.createdAt || '').slice(0, 7);
+      return uDate === monthKey;
+    }).length;
+
+    monthlyTrend.push({
+      month: label,
+      created: createdCount,
+      completed: completedCount,
+    });
+  }
 
   return {
     summary,

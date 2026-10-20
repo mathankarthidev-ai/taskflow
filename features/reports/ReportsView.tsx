@@ -23,10 +23,7 @@ import {
 import { toast } from 'sonner';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { isTaskInCompany, isUserInCompany } from '@/lib/company-filter';
-import {
-  CompletedPeriod,
-  generateAllMembersCompletedTasks,
-} from '@/lib/completed-tasks-generator';
+import { CompletedPeriod } from '@/lib/completed-tasks-generator';
 
 export function ReportsView() {
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -81,41 +78,101 @@ export function ReportsView() {
       ? 'monthly'
       : 'yearly';
 
-  const generatedCompleted = useMemo(
-    () => generateAllMembersCompletedTasks(scopedUsers, completedPeriod),
-    [scopedUsers, completedPeriod]
-  );
-
   const combinedTasks = useMemo(() => {
     if (statusScope === 'completed_only') {
-      return generatedCompleted;
+      return (tasks || []).filter((t) => t && t.status === 'Done');
     }
-    const activeNonDone = (tasks || []).filter((t) => t && t.status !== 'Done');
-    return [...activeNonDone, ...generatedCompleted];
-  }, [tasks, generatedCompleted, statusScope]);
+    return tasks || [];
+  }, [tasks, statusScope]);
 
-  if (!currentUser) return null;
+  // Strict Filter Tasks based on Company Branch, Report Type, Member, Role & Date Scoping
+  const filteredTasks = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-  // Strict Filter Tasks based on Company Branch, Report Type, Member & Role Scoping
-  const filteredTasks = combinedTasks.filter((t) => {
-    if (!isTaskInCompany(t, activeCompanyScope, users)) return false;
+    const dayOfWeek = now.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+    const mondayStr = monday.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-    // 1. Report Type Filter
-    if (reportType === 'my') {
-      if (t.assignedTo !== currentUser._id && t.createdBy !== currentUser._id) return false;
-    } else if (reportType === 'team') {
-      if (!isSuperAdmin && t.team !== currentUser.team) return false;
-    } else if (reportType === 'company') {
-      if (!isSuperAdmin) return false;
-    }
+    const monthPrefix = todayStr.slice(0, 7);
 
-    // 2. Member Filter
-    if (selectedMemberId !== 'all') {
-      if (t.assignedTo !== selectedMemberId && t.createdBy !== selectedMemberId) return false;
-    }
+    return combinedTasks.filter((t) => {
+      if (!isTaskInCompany(t, activeCompanyScope, users)) return false;
 
-    return true;
-  });
+      // 1. Report Type Filter
+      if (reportType === 'my') {
+        if (t.assignedTo !== currentUser?._id && t.createdBy !== currentUser?._id) return false;
+      } else if (reportType === 'team') {
+        if (!isSuperAdmin && t.team !== currentUser?.team) return false;
+      } else if (reportType === 'company') {
+        if (!isSuperAdmin) return false;
+      }
+
+      // 2. Member Filter
+      if (selectedMemberId !== 'all') {
+        if (t.assignedTo !== selectedMemberId && t.createdBy !== selectedMemberId) return false;
+      }
+
+      // 3. Date Range Filter
+      const taskDate = (t.updatedAt || t.createdAt || t.dueDate || '').slice(0, 10);
+      if (dateRange === 'today') {
+        if (taskDate !== todayStr) return false;
+      } else if (dateRange === 'week') {
+        if (taskDate < mondayStr) return false;
+      } else if (dateRange === 'month') {
+        if (!taskDate.startsWith(monthPrefix)) return false;
+      }
+
+      return true;
+    });
+  }, [combinedTasks, activeCompanyScope, users, reportType, currentUser, isSuperAdmin, selectedMemberId, dateRange]);
+
+  const realPeriodCounts = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+    const dayOfWeek = now.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+    const mondayStr = monday.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const monthPrefix = todayStr.slice(0, 7);
+
+    const doneTasks = (tasks || []).filter((t) => {
+      if (!t || t.status !== 'Done') return false;
+      if (!isTaskInCompany(t, activeCompanyScope, users)) return false;
+      if (reportType === 'my') {
+        if (t.assignedTo !== currentUser?._id && t.createdBy !== currentUser?._id) return false;
+      } else if (reportType === 'team') {
+        if (!isSuperAdmin && t.team !== currentUser?.team) return false;
+      }
+      if (selectedMemberId !== 'all') {
+        if (t.assignedTo !== selectedMemberId && t.createdBy !== selectedMemberId) return false;
+      }
+      return true;
+    });
+
+    const todayCount = doneTasks.filter((t) => {
+      const d = (t.updatedAt || t.createdAt || t.dueDate || '').slice(0, 10);
+      return d === todayStr;
+    }).length;
+
+    const weekCount = doneTasks.filter((t) => {
+      const d = (t.updatedAt || t.createdAt || t.dueDate || '').slice(0, 10);
+      return d >= mondayStr;
+    }).length;
+
+    const monthCount = doneTasks.filter((t) => {
+      const d = (t.updatedAt || t.createdAt || t.dueDate || '').slice(0, 10);
+      return d.startsWith(monthPrefix);
+    }).length;
+
+    const allCount = doneTasks.length;
+
+    return { today: todayCount, week: weekCount, month: monthCount, all: allCount };
+  }, [tasks, activeCompanyScope, users, reportType, currentUser, isSuperAdmin, selectedMemberId]);
 
   const handleExportCSV = () => {
     if (reportType === 'company' && !isSuperAdmin) {
@@ -161,8 +218,7 @@ export function ReportsView() {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Completed Task View Options per member: <strong>Daily (5)</strong> • <strong>Weekly (10)</strong> •{' '}
-              <strong>Monthly (40)</strong> • <strong>Yearly (105 / 100+)</strong>
+              Real-time task completion audit and performance export.
             </p>
           </div>
         </div>
@@ -187,36 +243,27 @@ export function ReportsView() {
             {
               range: 'today',
               title: 'Daily Completed',
-              perMem: '5 Tasks / Member',
-              count: 5,
               accent: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
             },
             {
               range: 'week',
               title: 'Weekly Completed',
-              perMem: '10 Tasks / Member',
-              count: 10,
               accent: 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400',
             },
             {
               range: 'month',
               title: 'Monthly Completed',
-              perMem: '40 Tasks / Member',
-              count: 40,
               accent: 'border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-400',
             },
             {
               range: 'all',
-              title: 'Yearly Completed (100+)',
-              perMem: '105 Tasks / Member',
-              count: 105,
+              title: 'Yearly Completed',
               accent: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
             },
           ] as const
         ).map((card) => {
           const isActive = dateRange === card.range;
-          const memberMultiplier =
-            reportType === 'my' || selectedMemberId !== 'all' ? 1 : scopedUsers.length;
+          const count = realPeriodCounts[card.range];
           return (
             <button
               key={card.range}
@@ -236,15 +283,15 @@ export function ReportsView() {
                   {card.title}
                 </span>
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold font-mono ${card.accent}`}>
-                  {card.perMem}
+                  {count} {count === 1 ? 'Task' : 'Tasks'}
                 </span>
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="text-2xl font-black text-foreground">
-                  {card.count * memberMultiplier}
+                  {count}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  {memberMultiplier === 1 ? '1 Member Selected' : `${scopedUsers.length} Members`}
+                  {count === 0 ? 'No completed tasks' : 'Real database records'}
                 </span>
               </div>
             </button>
@@ -259,7 +306,7 @@ export function ReportsView() {
           <button
             onClick={() => {
               setReportType('my');
-              setSelectedMemberId(currentUser._id);
+              setSelectedMemberId(currentUser?._id || 'all');
               setVisibleLimit(30);
             }}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold transition-all ${
@@ -269,7 +316,7 @@ export function ReportsView() {
             }`}
           >
             <UserCheck className="h-3.5 w-3.5" />
-            My Report (5D / 10W / 40M / 105Y)
+            My Report
           </button>
 
           <button
@@ -285,7 +332,7 @@ export function ReportsView() {
             }`}
           >
             <Users className="h-3.5 w-3.5" />
-            Team Report ({currentUser.team})
+            Team Report ({currentUser?.team || 'General'})
           </button>
 
           {/* Company Report Tab - Only Visible to Super Admin */}
@@ -332,7 +379,7 @@ export function ReportsView() {
             <option value="all">All Scoped Members ({scopedUsers.length})</option>
             {scopedUsers.map((u) => (
               <option key={u._id} value={u._id}>
-                {u.name} ({u.team}) — 5D / 10W / 40M / 105Y
+                {u.name} ({u.team})
               </option>
             ))}
           </select>
@@ -343,7 +390,7 @@ export function ReportsView() {
               setStatusScope(e.target.value as any);
               setVisibleLimit(30);
             }}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring"
+            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3.5 py-1.5 text-xs font-semibold focus-ring"
           >
             <option value="completed_only">✅ Completed Tasks Only</option>
             <option value="all">📋 All Statuses (Active + Completed)</option>
@@ -355,12 +402,12 @@ export function ReportsView() {
               setDateRange(e.target.value as any);
               setVisibleLimit(30);
             }}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-bold focus-ring"
+            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3.5 py-1.5 text-xs font-bold focus-ring"
           >
-            <option value="today">Daily View (5 / member)</option>
-            <option value="week">Weekly View (10 / member)</option>
-            <option value="month">Monthly View (40 / member)</option>
-            <option value="all">Yearly View (105 / 100+ / member)</option>
+            <option value="today">Daily View (Today)</option>
+            <option value="week">Weekly View (This Week)</option>
+            <option value="month">Monthly View (This Month)</option>
+            <option value="all">Yearly / All-Time View</option>
           </select>
         </div>
       </div>

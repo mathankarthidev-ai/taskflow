@@ -101,8 +101,8 @@ export function AnalyticsCharts() {
             </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-foreground">{summary.totalTasks}</p>
-          <span className="text-[10px] text-emerald-500 font-medium flex items-center gap-1 mt-1">
-            <TrendingUp className="h-3 w-3" /> +14% vs last month
+          <span className="text-[10px] text-muted-foreground mt-1 block">
+            {summary.totalTasks === 0 ? 'No tasks logged' : `${summary.totalTasks} tasks in workspace`}
           </span>
         </Card>
 
@@ -127,8 +127,8 @@ export function AnalyticsCharts() {
             </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-foreground">{summary.avgCompletionHours}h</p>
-          <span className="text-[10px] text-emerald-500 font-medium flex items-center gap-1 mt-1">
-            -2.4h resolution velocity
+          <span className="text-[10px] text-muted-foreground mt-1 block">
+            {summary.completedTasks === 0 ? 'No completed tasks yet' : `Across ${summary.completedTasks} completed tasks`}
           </span>
         </Card>
 

@@ -7,10 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { isUserInCompany, isTaskInCompany } from '@/lib/company-filter';
-import {
-  CompletedPeriod,
-  generateAllMembersCompletedTasks,
-} from '@/lib/completed-tasks-generator';
+import { CompletedPeriod } from '@/lib/completed-tasks-generator';
 import { TaskCard } from '../tasks/TaskCard';
 import { TaskListView } from './TaskListView';
 import { TaskCalendarView } from './TaskCalendarView';
@@ -890,6 +887,7 @@ function KanbanBoardContent() {
         isOpen={isCompletedExplorerOpen}
         onClose={() => setIsCompletedExplorerOpen(false)}
         users={teamMembersList}
+        tasks={tasks}
         initialMemberId={
           tlMemberFilter !== 'team_all' && tlMemberFilter !== 'my_own'
             ? tlMemberFilter

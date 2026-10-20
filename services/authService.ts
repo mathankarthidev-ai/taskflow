@@ -177,8 +177,8 @@ export async function createUser(input: {
   const newId = `usr_${Date.now()}`;
   const avatar = input.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(input.name)}`;
   const company = input.company || 'Ambizcon Health - India';
-  const birthday = input.birthday || '14 Oct';
-  const dob = input.dob || '14 Oct';
+  const birthday = input.birthday || '';
+  const dob = input.dob || '';
   const workMode = input.workMode || 'Work From Office';
   const nowIso = new Date().toISOString();
 

@@ -80,59 +80,21 @@ export default function ProfilePage() {
       });
 
       setAvatarUrl(customAvatar);
-      setPhone(user.phone || '+91 98765 43210');
-      setEmergencyContact(user.emergencyContact || 'Spouse: +91 98765 00000');
-      setAddress(user.address || 'No. 42, Ambizcon Health Tech Park, Chennai, India');
-      setBloodGroup(user.bloodGroup || 'O+');
+      setPhone(user.phone || '');
+      setEmergencyContact(user.emergencyContact || '');
+      setAddress(user.address || '');
+      setBloodGroup(user.bloodGroup || '—');
 
       if (user.education && Array.isArray(user.education) && user.education.length > 0) {
         setEducation(user.education);
       } else {
-        setEducation([
-          {
-            id: 'edu_1',
-            degree: 'Bachelor of Technology (B.Tech) - Computer Science',
-            institution: 'Anna University, College of Engineering Guindy',
-            year: '2018 - 2022',
-            area: 'Guindy, Chennai',
-            state: 'Tamil Nadu',
-            grade: '8.6 CGPA (First Class with Distinction)',
-          },
-          {
-            id: 'edu_2',
-            degree: 'Higher Secondary Certificate (HSC / 12th Standard)',
-            institution: 'St. Xavier Higher Secondary School',
-            year: '2016 - 2018',
-            area: 'T. Nagar, Chennai',
-            state: 'Tamil Nadu',
-            grade: '92.4%',
-          },
-        ]);
+        setEducation([]);
       }
 
       if (user.experience && Array.isArray(user.experience) && user.experience.length > 0) {
         setExperience(user.experience);
       } else {
-        setExperience([
-          {
-            id: 'exp_1',
-            role: currentUser.role === 'Reception Staff' ? 'Front Desk & Operations Executive' : `${currentUser.role || 'Senior Software Engineer'}`,
-            company: 'Ambizcon Healthcare Technologies',
-            year: '2023 - Present',
-            area: 'OMR, Chennai',
-            state: 'Tamil Nadu',
-            description: 'Leading operational workflows, team task execution, and healthcare client stakeholder coordination.',
-          },
-          {
-            id: 'exp_2',
-            role: currentUser.role === 'Reception Staff' ? 'Front Office Guest Coordinator' : 'Associate Systems Engineer',
-            company: 'Apollo Global Health Tech',
-            year: '2021 - 2023',
-            area: 'Greams Road, Chennai',
-            state: 'Tamil Nadu',
-            description: 'Handled client schedules, reception kiosk operations, and digital documentation records.',
-          },
-        ]);
+        setExperience([]);
       }
     }
   }, [currentUser]);
@@ -449,7 +411,7 @@ export default function ProfilePage() {
             <Calendar className="h-4 w-4 text-amber-500" />
             <div>
               <span className="text-[10px] text-muted-foreground block font-semibold uppercase">Birthday / DOB</span>
-              <span className="text-foreground font-semibold">{formatDayMonthOnly(currentUser.dob || currentUser.birthday || '14 Oct')}</span>
+              <span className="text-foreground font-semibold">{formatDayMonthOnly(currentUser.dob || currentUser.birthday) || '—'}</span>
             </div>
           </div>
         </div>

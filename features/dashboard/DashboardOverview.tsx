@@ -324,8 +324,15 @@ export function DashboardOverview() {
             </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-foreground">{completedToday.length}</p>
-          <span className="text-[10px] text-emerald-500 font-medium flex items-center gap-1 mt-1">
-            <TrendingUp className="h-3 w-3" /> Great velocity today
+          <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1 mt-1">
+            {completedToday.length > 0 ? (
+              <>
+                <TrendingUp className="h-3 w-3 text-emerald-500" />
+                <span className="text-emerald-500 font-semibold">{completedToday.length} completed during shift</span>
+              </>
+            ) : (
+              <span>No tasks finished yet today</span>
+            )}
           </span>
         </Card>
 
