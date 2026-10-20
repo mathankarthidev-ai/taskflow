@@ -222,6 +222,18 @@ export const SEED_USERS: Omit<
     workMode: 'Work From Home',
     permissionCount: 0,
   },
+  {
+    name: 'A. Abdul kani',
+    email: 'abdul@ambizcon.com',
+    role: 'Team Member',
+    team: 'Creative',
+    company: 'Ambizcon Health - India',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=AbdulKani',
+    birthday: '22 Jun',
+    dob: '22 Jun',
+    workMode: 'Work From Office',
+    permissionCount: 0,
+  },
   // Australian Team Members (Brisbane Branch)
   {
     name: 'Adriana Ruju',

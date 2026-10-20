@@ -73,7 +73,7 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { DynamicQrKioskModal } from '@/components/attendance/DynamicQrKioskModal';
 import { QrScannerModal } from '@/components/attendance/QrScannerModal';
 import { supabase } from '@/lib/supabase';
-import { formatTimeIST, formatTimeAEST, formatSessionDateIST } from '@/lib/utils';
+import { formatTimeIST, formatTimeAEST, formatSessionDateIST, sanitizeClockOutTime } from '@/lib/utils';
 import { isUserInCompany } from '@/lib/company-filter';
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { FestivalAndLeaveAdminPanel } from '@/components/attendance/FestivalAndLeaveAdminPanel';
@@ -93,6 +93,8 @@ export default function AttendancePage() {
     : currentUser?.company === 'Ambizcon';
   const activeCompanyScope = isAustralia ? 'Ambizcon' : 'Ambizcon Health - India';
   const isTeamLead = roleLower.includes('lead') || isSuperAdmin;
+  const isPureTL = !isSuperAdmin && (roleLower.includes('lead') || currentUser?.role === 'Team Lead');
+  const isEmployee = !isSuperAdmin && !isPureTL;
   const isReception = roleLower.includes('reception');
   const canAccessKiosk = isSuperAdmin || isTeamLead || isReception;
   const [liveAttendanceRecords, setLiveAttendanceRecords] = useState<any[]>([]);
@@ -106,6 +108,30 @@ export default function AttendancePage() {
 
   // Daily Present & Hours Bar Chart Toggle State ('both' | 'present' | 'hours')
   const [attendanceBarMode, setAttendanceBarMode] = useState<'both' | 'present' | 'hours'>('both');
+
+  // Role-Based Chart Scope:
+  // - Employee: personal view only
+  // - TL: team aggregate, personal, and team members drill-down
+  // - Admin: company all, team-wise, and individual drill-down
+  const [chartScopeTeam, setChartScopeTeam] = useState<string>('All');
+  const [chartScopeUser, setChartScopeUser] = useState<string>('all');
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const rLower = (currentUser.role || '').toLowerCase();
+    const isSA = rLower.includes('admin') || currentUser.email === 'anirudh@ambizcon.com' || currentUser.email === 'mathan@ambizcon.com';
+    const isTL = rLower.includes('lead') && !isSA;
+    if (isSA) {
+      setChartScopeTeam('All');
+      setChartScopeUser('all');
+    } else if (isTL) {
+      setChartScopeTeam(currentUser.team || 'Development');
+      setChartScopeUser('team');
+    } else {
+      setChartScopeTeam(currentUser.team || 'Development');
+      setChartScopeUser('me');
+    }
+  }, [currentUser]);
 
   // Time Zones
   const [chennaiTimeStr, setChennaiTimeStr] = useState('');
@@ -558,37 +584,151 @@ export default function AttendancePage() {
   const monthlyAvgDayStr = '8h 15m';
   const monthlyShiftsCount = 21 + (isClockedIn ? 1 : 0);
 
-  // Daily Present & Total Hours Bar Chart Analytics Data (Calculated dynamically)
-  const dailyAttendanceChartData = (() => {
-    const baseDays = [
-      { day: 'Mon', fullDay: 'Monday', basePresent: isAustralia ? 3 : 14, baseHrs: isAustralia ? 24.5 : 116.0 },
-      { day: 'Tue', fullDay: 'Tuesday', basePresent: isAustralia ? 3 : 15, baseHrs: isAustralia ? 25.0 : 122.5 },
-      { day: 'Wed', fullDay: 'Wednesday', basePresent: isAustralia ? 3 : 14, baseHrs: isAustralia ? 24.0 : 118.0 },
-      { day: 'Thu', fullDay: 'Thursday', basePresent: isAustralia ? 2 : 15, baseHrs: isAustralia ? 22.5 : 124.0 },
-      { day: 'Fri', fullDay: 'Friday', basePresent: isAustralia ? 3 : 13, baseHrs: isAustralia ? 23.5 : 112.5 },
-      { day: 'Sat', fullDay: 'Saturday', basePresent: isAustralia ? 1 : 5, baseHrs: isAustralia ? 8.0 : 42.0 },
-      { day: 'Sun', fullDay: 'Sunday', basePresent: 0, baseHrs: 0 },
+  // Determine if viewing an individual member (Personal for Employee, or drilldown for TL/Admin)
+  const isIndividualView =
+    isEmployee ||
+    chartScopeUser === 'me' ||
+    (chartScopeUser !== 'all' && chartScopeUser !== 'team');
+
+  const selectedTargetUser = useMemo(() => {
+    if (isEmployee || chartScopeUser === 'me') {
+      return currentUser;
+    }
+    if (chartScopeUser !== 'all' && chartScopeUser !== 'team') {
+      return (
+        rosterUsers.find(
+          (u) =>
+            u.email?.toLowerCase() === chartScopeUser.toLowerCase() ||
+            u.name?.toLowerCase() === chartScopeUser.toLowerCase() ||
+            u._id === chartScopeUser
+        ) || currentUser
+      );
+    }
+    return null;
+  }, [isEmployee, chartScopeUser, currentUser, rosterUsers]);
+
+  // Daily Present & Total Hours Bar Chart Analytics Data (Scoped dynamically by Role, Team, or Individual)
+  const dailyAttendanceChartData = useMemo(() => {
+    const dayLabels = [
+      { key: 1, day: 'Mon', fullDay: 'Monday', baseHrs: 8.5 },
+      { key: 2, day: 'Tue', fullDay: 'Tuesday', baseHrs: 8.25 },
+      { key: 3, day: 'Wed', fullDay: 'Wednesday', baseHrs: 8.75 },
+      { key: 4, day: 'Thu', fullDay: 'Thursday', baseHrs: 8.33 },
+      { key: 5, day: 'Fri', fullDay: 'Friday', baseHrs: 8.0 },
+      { key: 6, day: 'Sat', fullDay: 'Saturday', baseHrs: 0 },
+      { key: 7, day: 'Sun', fullDay: 'Sunday', baseHrs: 0 },
     ];
 
-    return baseDays.map((d, index) => {
-      const dayIndex = index + 1; // 1: Mon ... 7: Sun
-      const isPast = currentDayOfWeek === 0 ? true : currentDayOfWeek > dayIndex;
-      const isToday = (currentDayOfWeek === 0 && dayIndex === 7) || currentDayOfWeek === dayIndex;
+    const currentDayIdx = currentDayOfWeek === 0 ? 7 : currentDayOfWeek; // 1: Mon ... 7: Sun
 
+    if (isIndividualView && selectedTargetUser) {
+      // Individual View: personal status for this specific user
+      const targetIsMe =
+        selectedTargetUser.email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
+        selectedTargetUser._id === currentUser?._id;
+
+      return dayLabels.map((d) => {
+        const isPast = currentDayIdx > d.key;
+        const isToday = currentDayIdx === d.key;
+        let present = 0;
+        let hours = 0;
+
+        if (d.day === 'Sun' || d.day === 'Sat') {
+          present = 0;
+          hours = 0;
+        } else if (isPast) {
+          present = 1;
+          hours = d.baseHrs;
+        } else if (isToday) {
+          if (targetIsMe) {
+            present = isClockedIn ? 1 : 0;
+            hours = isClockedIn ? Math.round((workedSeconds / 3600) * 10) / 10 : 0;
+          } else {
+            const activeShift = (liveAttendanceRecords || []).find(
+              (r) =>
+                (r.user_email?.toLowerCase() === selectedTargetUser.email?.toLowerCase() ||
+                  r.user_name?.toLowerCase() === selectedTargetUser.name?.toLowerCase()) &&
+                (r.session_date?.includes('Today') ||
+                  r.created_at?.slice(0, 10) === new Date().toISOString().slice(0, 10))
+            );
+            if (activeShift) {
+              present = 1;
+              if (activeShift.status === 'working') {
+                const startMs = new Date(activeShift.created_at || Date.now()).getTime();
+                const diffSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+                hours = Math.round((diffSecs / 3600) * 10) / 10;
+              } else {
+                hours = activeShift.worked_seconds
+                  ? Math.round((activeShift.worked_seconds / 3600) * 10) / 10
+                  : d.baseHrs;
+              }
+            } else {
+              present = 0;
+              hours = 0;
+            }
+          }
+        } else {
+          present = 0;
+          hours = 0;
+        }
+
+        return {
+          day: d.day,
+          fullDay: d.fullDay,
+          present,
+          hours,
+          avgHours: hours,
+          isToday,
+        };
+      });
+    }
+
+    // Team or Workspace View
+    const effectiveTeam = isPureTL ? (currentUser?.team || 'Development') : chartScopeTeam;
+    const scopedMembers = rosterUsers.filter((u) => {
+      if (effectiveTeam !== 'All' && u.team !== effectiveTeam) return false;
+      if (isAustralia) {
+        return u.company === 'Ambizcon' || u.role === 'Super Admin';
+      }
+      return u.company !== 'Ambizcon';
+    });
+    const totalTeamCount = scopedMembers.length || (isAustralia ? 3 : (effectiveTeam === 'All' ? 15 : 5));
+
+    return dayLabels.map((d) => {
+      const isPast = currentDayIdx > d.key;
+      const isToday = currentDayIdx === d.key;
       let present = 0;
       let hours = 0;
 
       if (d.day === 'Sun') {
         present = 0;
         hours = 0;
+      } else if (d.day === 'Sat') {
+        present = Math.max(1, Math.round(totalTeamCount * 0.25));
+        hours = Math.round(present * 8.0 * 10) / 10;
       } else if (isPast) {
-        present = d.basePresent;
-        hours = d.baseHrs;
+        present = totalTeamCount;
+        hours = Math.round(totalTeamCount * d.baseHrs * 10) / 10;
       } else if (isToday) {
-        present = isClockedIn ? d.basePresent : Math.max(1, d.basePresent - 1);
-        hours = isClockedIn
-          ? Math.round((d.baseHrs * 0.75 + workedSeconds / 3600) * 10) / 10
-          : Math.round(d.baseHrs * 0.65 * 10) / 10;
+        const todayRecords = (liveAttendanceRecords || []).filter((r) => {
+          const matchTeam = effectiveTeam === 'All' || r.user_team === effectiveTeam;
+          const isDateToday =
+            (r.session_date && r.session_date.includes('Today')) ||
+            (r.created_at && r.created_at.slice(0, 10) === new Date().toISOString().slice(0, 10));
+          return matchTeam && isDateToday;
+        });
+
+        const currentInTeam = effectiveTeam === 'All' || currentUser?.team === effectiveTeam;
+        let activeHeadcount = todayRecords.length;
+        if (
+          isClockedIn &&
+          currentInTeam &&
+          !todayRecords.some((r) => r.user_email?.toLowerCase() === currentUser?.email?.toLowerCase())
+        ) {
+          activeHeadcount += 1;
+        }
+        present = Math.min(totalTeamCount, Math.max(activeHeadcount, Math.round(totalTeamCount * 0.85)));
+        hours = Math.round(present * (d.baseHrs * 0.75 + (isClockedIn ? workedSeconds / 3600 : 0)) * 10) / 10;
       } else {
         present = 0;
         hours = 0;
@@ -597,13 +737,37 @@ export default function AttendancePage() {
       return {
         day: d.day,
         fullDay: d.fullDay,
-        present: present,
-        hours: hours,
+        present,
+        hours,
         avgHours: present > 0 ? +(hours / present).toFixed(1) : 0,
         isToday,
       };
     });
-  })();
+  }, [
+    isIndividualView,
+    selectedTargetUser,
+    currentUser,
+    currentDayOfWeek,
+    isClockedIn,
+    workedSeconds,
+    liveAttendanceRecords,
+    isPureTL,
+    chartScopeTeam,
+    rosterUsers,
+    isAustralia,
+  ]);
+
+  const maxChartPresent = useMemo(() => {
+    if (isIndividualView) return 1;
+    const maxVal = Math.max(...dailyAttendanceChartData.map((d) => d.present), 1);
+    return Math.max(maxVal + 1, isAustralia ? 4 : (chartScopeTeam === 'All' ? 18 : 8));
+  }, [isIndividualView, dailyAttendanceChartData, isAustralia, chartScopeTeam]);
+
+  const maxChartHours = useMemo(() => {
+    if (isIndividualView) return 12;
+    const maxVal = Math.max(...dailyAttendanceChartData.map((d) => d.hours), 10);
+    return Math.max(Math.ceil(maxVal * 1.15), isAustralia ? 35 : (chartScopeTeam === 'All' ? 150 : 50));
+  }, [isIndividualView, dailyAttendanceChartData, isAustralia, chartScopeTeam]);
 
   // Calculate Days count dynamically for Leave Application
   const calculatedDays =
@@ -630,6 +794,7 @@ export default function AttendancePage() {
     { name: 'Kavish TG', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
     { name: 'Kasthuri M', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
     { name: 'Ahamed', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
+    { name: 'A. Abdul kani', login: '—', logout: '—', status: 'nopunch', startPct: 0, widthPct: 0, hoursWorked: '0h 00m', weeklyHours: '0h 00m', monthlyHours: '0h 00m', compensation: 'Standard' },
   ];
 
   // Australian Roster for Brisbane Branch View (Global Leadership & Team)
@@ -658,10 +823,10 @@ export default function AttendancePage() {
       const punchLoginTime = livePunch.created_at
         ? (isAustralia ? formatTimeAEST(livePunch.created_at) : formatTimeIST(livePunch.created_at))
         : (livePunch.clock_in || '—');
-      const punchLogoutTime =
-        livePunch.clock_out && livePunch.clock_out !== '—' && livePunch.updated_at && livePunch.status === 'completed'
-          ? (isAustralia ? formatTimeAEST(livePunch.updated_at) : formatTimeIST(livePunch.updated_at))
-          : (livePunch.clock_out || '—');
+      const isPunchAuto =
+        Boolean(livePunch.clock_out && livePunch.clock_out.toLowerCase().includes('auto')) ||
+        Boolean(livePunch.worked_hours && livePunch.worked_hours.toLowerCase().includes('auto'));
+      const punchLogoutTime = sanitizeClockOutTime(livePunch.clock_out, isAustralia, isPunchAuto);
       return {
         ...item,
         login: punchLoginTime,
@@ -1172,14 +1337,8 @@ export default function AttendancePage() {
             dayKey: itemDayKey,
             clockIn: r.created_at ? formatTimeIST(r.created_at) : r.clock_in,
             clockInAest: r.created_at ? formatTimeAEST(r.created_at) : r.clock_in_aest,
-            clockOut:
-              r.clock_out && r.clock_out !== '—' && r.updated_at && r.status === 'completed'
-                ? formatTimeIST(r.updated_at)
-                : (r.clock_out || '—'),
-            clockOutAest:
-              r.clock_out && r.clock_out !== '—' && r.updated_at && r.status === 'completed'
-                ? formatTimeAEST(r.updated_at)
-                : (r.clock_out_aest || '—'),
+            clockOut: sanitizeClockOutTime(r.clock_out, false, isAuto),
+            clockOutAest: sanitizeClockOutTime(r.clock_out_aest || r.clock_out, true, isAuto),
             workMode: r.work_mode || 'Work From Office',
             ipAddress: r.ip_address || '192.168.1.104',
             location: r.location || 'Anna Nagar, Chennai',
@@ -1270,9 +1429,12 @@ export default function AttendancePage() {
         login = matchRec.created_at
           ? (isAustralia ? formatTimeAEST(matchRec.created_at) : formatTimeIST(matchRec.created_at))
           : (matchRec.clock_in || '—');
-        logout = matchRec.clock_out && matchRec.clock_out !== '—' && matchRec.updated_at && matchRec.status === 'completed'
-          ? (isAustralia ? formatTimeAEST(matchRec.updated_at) : formatTimeIST(matchRec.updated_at))
-          : (matchRec.status === 'working' ? 'Active Shift' : (matchRec.clock_out || '—'));
+        const isMatchAuto =
+          Boolean(matchRec.clock_out && matchRec.clock_out.toLowerCase().includes('auto')) ||
+          Boolean(matchRec.worked_hours && matchRec.worked_hours.toLowerCase().includes('auto'));
+        logout = matchRec.status === 'working'
+          ? 'Active Shift'
+          : sanitizeClockOutTime(matchRec.clock_out, isAustralia, isMatchAuto);
         totalHours = matchRec.worked_hours || (matchRec.status === 'working' ? 'Live Shift' : '0h 00m');
         workMode = matchRec.work_mode || workMode;
       } else if (onLeave) {
@@ -1889,86 +2051,48 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* WEEKLY & MONTHLY ATTENDANCE SUMMARY WIDGETS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            {/* Weekly Summary Widget */}
-            <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-emerald-500" />
-                    This Week's Attendance Summary
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Daily breakdown of hours worked for current week</p>
-                </div>
-                <Badge variant="outline" className="text-xs font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-                  Mon – Fri
-                </Badge>
+          {/* MONTHLY ATTENDANCE SUMMARY WIDGET */}
+          <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-emerald-500" />
+                  Monthly Attendance Summary
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Aggregated metrics for current month (October 2026)</p>
               </div>
+              <Badge variant="outline" className="text-xs font-mono">
+                Monthly Stats
+              </Badge>
+            </div>
 
-              <div className="space-y-2 text-xs">
-                {weeklyDayRows.map((d) => (
-                  <div key={d.name} className="flex justify-between items-center py-1.5 border-b border-zinc-100 dark:border-zinc-800/50">
-                    <span className={`font-semibold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground'}`}>
-                      {d.name} {d.isToday ? '(Today)' : ''}
-                    </span>
-                    <span className={`font-mono font-bold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
-                      {d.formattedStr}
-                    </span>
-                  </div>
-                ))}
-                <div className="flex justify-between items-center pt-2 font-bold text-sm text-foreground">
-                  <span>Total Weekly Hours:</span>
-                  <span className="font-mono text-emerald-600 dark:text-emerald-400 font-extrabold">
-                    {formattedTotalWeekly}
-                  </span>
-                </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-2">
+              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Days Worked</span>
+                <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
+                  {monthlyWorkedDays} Days
+                </span>
               </div>
-            </Card>
-
-            {/* Monthly Summary Widget */}
-            <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4 text-emerald-500" />
-                    Monthly Attendance Summary
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Aggregated metrics for current month (October 2026)</p>
-                </div>
-                <Badge variant="outline" className="text-xs font-mono">
-                  Monthly Stats
-                </Badge>
+              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Total Worked Hours</span>
+                <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
+                  {monthlyTotalHoursStr}
+                </span>
               </div>
-
-              <div className="grid grid-cols-2 gap-4 py-2">
-                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Days Worked</span>
-                  <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
-                    {monthlyWorkedDays} Days
-                  </span>
-                </div>
-                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Total Worked Hours</span>
-                  <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
-                    {monthlyTotalHoursStr}
-                  </span>
-                </div>
-                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Average / Day</span>
-                  <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
-                    {monthlyAvgDayStr}
-                  </span>
-                </div>
-                <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Completed Shifts</span>
-                  <span className="text-2xl font-extrabold text-brand-500 font-mono mt-1 block">
-                    {monthlyShiftsCount} Shifts
-                  </span>
-                </div>
+              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Average / Day</span>
+                <span className="text-2xl font-extrabold text-foreground font-mono mt-1 block">
+                  {monthlyAvgDayStr}
+                </span>
               </div>
-            </Card>
-          </div>
+              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Completed Shifts</span>
+                <span className="text-2xl font-extrabold text-brand-500 font-mono mt-1 block">
+                  {monthlyShiftsCount} Shifts
+                </span>
+              </div>
+            </div>
+          </Card>
 
           {/* DAILY PRESENT & HOURS BAR CHART ANALYTICS CARD */}
           <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80 shadow-sm">
@@ -1977,70 +2101,186 @@ export default function AttendancePage() {
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-emerald-500" />
-                    Daily Attendance & Working Hours Trends
+                    {isIndividualView
+                      ? selectedTargetUser && selectedTargetUser.email !== currentUser.email
+                        ? `${selectedTargetUser.name} — Attendance & Hours Trends`
+                        : 'Personal Attendance & Daily Hours Trends'
+                      : isPureTL
+                      ? `${currentUser?.team} Squad Attendance & Working Hours Trends`
+                      : chartScopeTeam !== 'All'
+                      ? `${chartScopeTeam} Team Attendance & Working Hours Trends`
+                      : 'Daily Attendance & Working Hours Trends'}
                   </h3>
                   <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/20 text-[10px] font-bold">
-                    INTERACTIVE BAR ANALYTICS
+                    {isIndividualView ? 'PERSONAL VIEW' : isPureTL ? 'TEAM VIEW' : 'INTERACTIVE ANALYTICS'}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Real-time weekly breakdown comparing active present headcount and aggregate hours worked.
+                  {isIndividualView
+                    ? selectedTargetUser && selectedTargetUser.email !== currentUser.email
+                      ? `Weekly breakdown of daily attendance status and logged working hours for ${selectedTargetUser.name}.`
+                      : 'Personal weekly breakdown comparing your daily attendance status and logged working hours.'
+                    : isPureTL
+                    ? `Real-time weekly breakdown comparing active present headcount and aggregate hours worked across ${currentUser?.team} squad.`
+                    : 'Real-time weekly breakdown comparing active present headcount and aggregate hours worked across workspace.'}
                 </p>
               </div>
 
-              {/* Interactive View Filter Toggle: Show Both | Daily Present Only | Daily Hours Only */}
-              <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 self-start lg:self-auto">
-                <button
-                  type="button"
-                  onClick={() => setAttendanceBarMode('both')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
-                    attendanceBarMode === 'both'
-                      ? 'bg-brand-600 text-white shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/50 dark:hover:bg-zinc-800'
-                  }`}
-                >
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  Show Both
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAttendanceBarMode('present')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
-                    attendanceBarMode === 'present'
-                      ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/50 dark:hover:bg-zinc-800'
-                  }`}
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  Daily Present
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAttendanceBarMode('hours')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
-                    attendanceBarMode === 'hours'
-                      ? 'bg-brand-600 text-white shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/50 dark:hover:bg-zinc-800'
-                  }`}
-                >
-                  <Clock className="h-3.5 w-3.5" />
-                  Daily Hours
-                </button>
+              {/* Controls Toolbar: Role Scoping & Bar Mode Toggle */}
+              <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
+                {/* 1. Scoping Controls */}
+                {isEmployee ? (
+                  // Regular Employee: Personal badge (read-only scope)
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                    <Users className="h-3.5 w-3.5" />
+                    <span>Personal: {currentUser.name}</span>
+                  </div>
+                ) : isPureTL ? (
+                  // Team Lead: Team aggregate vs My Personal + Team Member drill-down
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80">
+                      <button
+                        type="button"
+                        onClick={() => setChartScopeUser('team')}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                          chartScopeUser === 'team'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        👥 {currentUser?.team} Team
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChartScopeUser('me')}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                          chartScopeUser === 'me'
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        👤 My Personal
+                      </button>
+                    </div>
+                    <select
+                      value={chartScopeUser === 'team' || chartScopeUser === 'me' ? '' : chartScopeUser}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setChartScopeUser(e.target.value);
+                        }
+                      }}
+                      className="bg-background border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl px-2.5 py-1 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    >
+                      <option value="" disabled>Drill-down Team Member...</option>
+                      {rosterUsers
+                        .filter((u) => u.team === currentUser?.team)
+                        .map((u) => (
+                          <option key={u.email || u.name} value={u.email || u.name}>
+                            {u.name} {u.email === currentUser?.email ? '(You)' : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                ) : (
+                  // Super Admin: Team-wise filter + Individual member drill-down
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={chartScopeTeam}
+                      onChange={(e) => {
+                        setChartScopeTeam(e.target.value);
+                        setChartScopeUser('all');
+                      }}
+                      className="bg-background border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl px-2.5 py-1 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    >
+                      <option value="All">All Workspace Teams</option>
+                      <option value="Development">Development Team</option>
+                      <option value="Marketing">Marketing Team</option>
+                      <option value="Creative">Creative Team</option>
+                    </select>
+
+                    <select
+                      value={chartScopeUser}
+                      onChange={(e) => setChartScopeUser(e.target.value)}
+                      className="bg-background border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl px-2.5 py-1 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    >
+                      <option value="all">All Members (Aggregate)</option>
+                      {rosterUsers
+                        .filter((u) => chartScopeTeam === 'All' || u.team === chartScopeTeam)
+                        .map((u) => (
+                          <option key={u.email || u.name} value={u.email || u.name}>
+                            {u.name} ({u.team})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* 2. Interactive View Filter Toggle: Show Both | Daily Present Only | Daily Hours Only */}
+                <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setAttendanceBarMode('both')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                      attendanceBarMode === 'both'
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/50 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    Show Both
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttendanceBarMode('present')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                      attendanceBarMode === 'present'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/50 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    Daily Present
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttendanceBarMode('hours')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                      attendanceBarMode === 'hours'
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/50 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    Daily Hours
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Quick Stat Pill Overview */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Today's Present</span>
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">
+                  {isIndividualView ? "Today's Status" : "Today's Present"}
+                </span>
                 <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-0.5 block">
-                  {dailyAttendanceChartData.find((d) => d.isToday)?.present || (isAustralia ? 3 : 15)} Members
+                  {isIndividualView ? (
+                    dailyAttendanceChartData.find((d) => d.isToday)?.present ? (
+                      'Present (1 Member)'
+                    ) : (
+                      'Not Clocked In'
+                    )
+                  ) : (
+                    `${dailyAttendanceChartData.find((d) => d.isToday)?.present || 0} Members`
+                  )}
                 </span>
               </div>
               <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Today's Hours</span>
+                <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">
+                  {isIndividualView ? "Today's Hours" : "Today's Total Hours"}
+                </span>
                 <span className="text-xl font-extrabold text-brand-500 font-mono mt-0.5 block">
-                  {dailyAttendanceChartData.find((d) => d.isToday)?.hours || (isAustralia ? 24 : 118)} hrs
+                  {dailyAttendanceChartData.find((d) => d.isToday)?.hours || 0} hrs
                 </span>
               </div>
               <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
@@ -2057,21 +2297,49 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            {/* Recharts Bar Chart Container */}
-            <div className="h-[280px] w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyAttendanceChartData} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
-                  <XAxis
-                    dataKey="day"
-                    stroke="#888888"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    fontFamily="monospace"
-                  />
-                  {attendanceBarMode === 'both' ? (
-                    <>
+            {/* Unified Bar Chart & Weekly Attendance Summary Grid */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch pt-2">
+              {/* Left Side: Interactive Bar Chart */}
+              <div className="xl:col-span-8 h-[310px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    key={`barchart-${attendanceBarMode}-${chartScopeTeam}-${chartScopeUser}-${isIndividualView ? 'ind' : 'grp'}`}
+                    data={dailyAttendanceChartData}
+                    margin={{ top: 10, right: 20, left: -10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
+                    <XAxis
+                      dataKey="day"
+                      stroke="#888888"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      fontFamily="monospace"
+                    />
+                    {attendanceBarMode === 'both' ? (
+                      <>
+                        <YAxis
+                          yAxisId="left"
+                          stroke="#10b981"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          fontFamily="monospace"
+                          domain={[0, maxChartPresent]}
+                          ticks={isIndividualView ? [0, 1] : undefined}
+                        />
+                        <YAxis
+                          yAxisId="right"
+                          orientation="right"
+                          stroke="#3b82f6"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          fontFamily="monospace"
+                          domain={[0, maxChartHours]}
+                        />
+                      </>
+                    ) : attendanceBarMode === 'present' ? (
                       <YAxis
                         yAxisId="left"
                         stroke="#10b981"
@@ -2079,108 +2347,141 @@ export default function AttendancePage() {
                         tickLine={false}
                         axisLine={false}
                         fontFamily="monospace"
-                        domain={[0, isAustralia ? 4 : 18]}
+                        domain={[0, maxChartPresent]}
+                        ticks={isIndividualView ? [0, 1] : undefined}
                       />
+                    ) : (
                       <YAxis
                         yAxisId="right"
-                        orientation="right"
                         stroke="#3b82f6"
                         fontSize={11}
                         tickLine={false}
                         axisLine={false}
                         fontFamily="monospace"
-                        domain={[0, isAustralia ? 35 : 150]}
+                        domain={[0, maxChartHours]}
                       />
-                    </>
-                  ) : attendanceBarMode === 'present' ? (
-                    <YAxis
-                      stroke="#10b981"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                      fontFamily="monospace"
-                      domain={[0, isAustralia ? 4 : 18]}
-                    />
-                  ) : (
-                    <YAxis
-                      stroke="#3b82f6"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                      fontFamily="monospace"
-                      domain={[0, isAustralia ? 35 : 150]}
-                    />
-                  )}
-                  <Tooltip
-                    content={({ active, payload }: any) => {
-                      if (active && payload && payload.length) {
-                        const d = payload[0].payload;
-                        return (
-                          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background/95 backdrop-blur-md p-3.5 shadow-xl text-xs space-y-1.5 min-w-[180px]">
-                            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                              <span className="font-bold text-foreground">{d.fullDay}</span>
-                              {d.isToday && (
-                                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">
-                                  Today
-                                </span>
+                    )}
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background/95 backdrop-blur-md p-3.5 shadow-xl text-xs space-y-1.5 min-w-[180px]">
+                              <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                                <span className="font-bold text-foreground">{d.fullDay}</span>
+                                {d.isToday && (
+                                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">
+                                    Today
+                                  </span>
+                                )}
+                              </div>
+                              {(attendanceBarMode === 'both' || attendanceBarMode === 'present') && (
+                                <div className="flex items-center justify-between gap-3 text-emerald-600 dark:text-emerald-400 font-medium">
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
+                                    {isIndividualView ? 'Attendance:' : 'Daily Present:'}
+                                  </span>
+                                  <span className="font-mono font-bold">
+                                    {isIndividualView ? (d.present ? 'Present' : 'Absent') : `${d.present} Members`}
+                                  </span>
+                                </div>
+                              )}
+                              {(attendanceBarMode === 'both' || attendanceBarMode === 'hours') && (
+                                <div className="flex items-center justify-between gap-3 text-brand-600 dark:text-brand-400 font-medium">
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="h-2 w-2 rounded-full bg-brand-500 inline-block" />
+                                    {isIndividualView ? 'Personal Hours:' : 'Daily Hours:'}
+                                  </span>
+                                  <span className="font-mono font-bold">{d.hours} hrs</span>
+                                </div>
+                              )}
+                              {!isIndividualView && d.present > 0 && d.hours > 0 && (
+                                <div className="flex items-center justify-between gap-3 text-muted-foreground pt-1 border-t border-zinc-100 dark:border-zinc-800 text-[11px]">
+                                  <span>Avg per Member:</span>
+                                  <span className="font-mono font-semibold">{d.avgHours} hrs</span>
+                                </div>
                               )}
                             </div>
-                            {(attendanceBarMode === 'both' || attendanceBarMode === 'present') && (
-                              <div className="flex items-center justify-between gap-3 text-emerald-600 dark:text-emerald-400 font-medium">
-                                <span className="flex items-center gap-1.5">
-                                  <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
-                                  Daily Present:
-                                </span>
-                                <span className="font-mono font-bold">{d.present} Members</span>
-                              </div>
-                            )}
-                            {(attendanceBarMode === 'both' || attendanceBarMode === 'hours') && (
-                              <div className="flex items-center justify-between gap-3 text-brand-600 dark:text-brand-400 font-medium">
-                                <span className="flex items-center gap-1.5">
-                                  <span className="h-2 w-2 rounded-full bg-brand-500 inline-block" />
-                                  Daily Hours:
-                                </span>
-                                <span className="font-mono font-bold">{d.hours} hrs</span>
-                              </div>
-                            )}
-                            {d.present > 0 && d.hours > 0 && (
-                              <div className="flex items-center justify-between gap-3 text-muted-foreground pt-1 border-t border-zinc-100 dark:border-zinc-800 text-[11px]">
-                                <span>Avg per Member:</span>
-                                <span className="font-mono font-semibold">{d.avgHours} hrs</span>
-                              </div>
-                            )}
-                          </div>
-                        );
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend
+                      wrapperStyle={{ paddingTop: 12, fontSize: 12, fontWeight: 600 }}
+                      formatter={(value) =>
+                        value === 'present'
+                          ? isIndividualView
+                            ? 'Attendance Status'
+                            : 'Daily Present (Headcount)'
+                          : isIndividualView
+                          ? 'Working Hours'
+                          : 'Daily Hours (Logged hrs)'
                       }
-                      return null;
-                    }}
-                  />
-                  <Legend
-                    wrapperStyle={{ paddingTop: 12, fontSize: 12, fontWeight: 600 }}
-                    formatter={(value) => (value === 'present' ? 'Daily Present (Headcount)' : 'Daily Hours (Logged hrs)')}
-                  />
-                  {(attendanceBarMode === 'both' || attendanceBarMode === 'present') && (
-                    <Bar
-                      yAxisId={attendanceBarMode === 'both' ? 'left' : undefined}
-                      dataKey="present"
-                      name="present"
-                      fill="#10b981"
-                      radius={[6, 6, 0, 0]}
-                      maxBarSize={45}
                     />
-                  )}
-                  {(attendanceBarMode === 'both' || attendanceBarMode === 'hours') && (
-                    <Bar
-                      yAxisId={attendanceBarMode === 'both' ? 'right' : undefined}
-                      dataKey="hours"
-                      name="hours"
-                      fill="#3b82f6"
-                      radius={[6, 6, 0, 0]}
-                      maxBarSize={45}
-                    />
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
+                    {(attendanceBarMode === 'both' || attendanceBarMode === 'present') && (
+                      <Bar
+                        yAxisId="left"
+                        dataKey="present"
+                        name="present"
+                        fill="#10b981"
+                        radius={[6, 6, 0, 0]}
+                        maxBarSize={45}
+                      />
+                    )}
+                    {(attendanceBarMode === 'both' || attendanceBarMode === 'hours') && (
+                      <Bar
+                        yAxisId="right"
+                        dataKey="hours"
+                        name="hours"
+                        fill="#3b82f6"
+                        radius={[6, 6, 0, 0]}
+                        maxBarSize={45}
+                      />
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Right Side: This Week's Attendance Summary Card */}
+              <div className="xl:col-span-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 p-4 border border-zinc-200/70 dark:border-zinc-800/70 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4 text-emerald-500" />
+                        This Week's Attendance Summary
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Daily breakdown of hours worked for current week
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                      Mon – Fri
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    {weeklyDayRows.map((d) => (
+                      <div key={d.name} className="flex justify-between items-center py-1.5 border-b border-zinc-200/40 dark:border-zinc-800/40 last:border-0">
+                        <span className={`font-semibold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground'}`}>
+                          {d.name} {d.isToday ? '(Today)' : ''}
+                        </span>
+                        <span className={`font-mono font-bold ${d.isToday ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
+                          {d.formattedStr}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-3 mt-2 font-bold text-xs border-t border-zinc-200/80 dark:border-zinc-800/80 text-foreground">
+                  <span>Total Weekly Hours:</span>
+                  <span className="font-mono text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">
+                    {formattedTotalWeekly}
+                  </span>
+                </div>
+              </div>
             </div>
           </Card>
 

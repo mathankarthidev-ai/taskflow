@@ -4,6 +4,9 @@ import React, { useState } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { CompanyBranch } from '@/types';
+import { isUserInCompany } from '@/lib/company-filter';
+import { getUserByEmailAction } from '@/actions/userActions';
+import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -53,6 +56,61 @@ export default function LoginPage() {
     }
   }, [selectedBranch, isAustralia]);
 
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  // Parse any callback error redirect parameters
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('error');
+    if (err === 'domain_restricted') {
+      setErrorMsg('Access Restricted: Only official @ambizcon.com Google Workspace accounts are authorized.');
+      toast.error('Domain restricted to @ambizcon.com');
+    } else if (err === 'branch_mismatch') {
+      const reg = params.get('registered') || '';
+      const sel = params.get('selected') || '';
+      setErrorMsg(`Don't have account in ${sel}. This account is registered under ${reg}. Please switch branch to log in.`);
+      toast.error(`Don't have account in ${sel}`);
+    } else if (err === 'not_registered') {
+      setErrorMsg("Don't have account in Ambizcon directory. Please contact your administrator.");
+      toast.error('Account not registered in directory');
+    } else if (err === 'auth_failed') {
+      setErrorMsg('Google Sign-In was cancelled or could not be completed.');
+    }
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setErrorMsg('');
+    setIsGoogleLoading(true);
+
+    try {
+      const redirectTo = `${window.location.origin}/auth/callback?branch=${encodeURIComponent(selectedBranch)}`;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+            hd: 'ambizcon.com', // Enforce company domain picker
+          },
+        },
+      });
+
+      if (error) {
+        toast.info(
+          'Google Sign-In is active! Paste your Google OAuth Client ID & Secret in your Supabase Auth dashboard to enable live Google accounts.',
+          { duration: 7000 }
+        );
+      }
+    } catch (err: any) {
+      console.error('Google Sign-In error:', err);
+      toast.error(err?.message || 'Failed to initialize Google Sign-In');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   const handleCustomLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -69,29 +127,38 @@ export default function LoginPage() {
       return;
     }
 
+    // 1. Fetch user from Ambizcon directory first
+    const user = await getUserByEmailAction(emailInput.trim());
+    if (!user) {
+      setErrorMsg("Don't have account in Ambizcon directory.");
+      toast.error('Account not found in directory');
+      return;
+    }
+
+    // 2. Strict Cross-Branch Isolation Check BEFORE login
+    const isSuperAdmin = user.role === 'Super Admin' || user.role === 'Admin';
+    const belongsToBranch = isUserInCompany(user, selectedBranch);
+
+    if (!belongsToBranch && !isSuperAdmin) {
+      const selectedLabel = selectedBranch === 'Ambizcon' ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health - India (Chennai HQ)';
+      const registeredLabel = user.company === 'Ambizcon' ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health - India (Chennai HQ)';
+      setErrorMsg(`Don't have account in ${selectedLabel}. This account is registered under ${registeredLabel}. Please switch branch to log in.`);
+      toast.error(`Don't have account in ${selectedBranch === 'Ambizcon' ? 'Ambizcon Australia' : 'Ambizcon Health India'}`);
+      return;
+    }
+
+    // 3. Complete authentication session
     const success = await login(emailInput.trim());
     if (success) {
-      const currentUser = useAuthStore.getState().currentUser;
-      const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
-
-      // Auto-assign branch based on employee registration
-      let branchToSet: CompanyBranch = selectedBranch;
-      if (!isSuperAdmin) {
-        if (currentUser?.company === 'Ambizcon') {
-          branchToSet = 'Ambizcon';
-        } else {
-          branchToSet = 'Ambizcon Health - India';
-        }
-      }
-
-      setSelectedCompany(branchToSet);
+      setSelectedCompany(selectedBranch);
       if (typeof document !== 'undefined') {
-        document.documentElement.setAttribute('data-company', branchToSet === 'Ambizcon' ? 'ambizcon' : 'ambizcon-health');
+        document.documentElement.setAttribute('data-company', selectedBranch === 'Ambizcon' ? 'ambizcon' : 'ambizcon-health');
       }
-      toast.success(`Signed in to ${branchToSet}!`);
+      toast.success(`Signed in to ${selectedBranch}!`);
       router.push('/dashboard');
     } else {
-      setErrorMsg('Account not found in Ambizcon directory.');
+      setErrorMsg("Don't have account in Ambizcon directory.");
+      toast.error('Account not found in directory');
     }
   };
 
@@ -239,6 +306,45 @@ export default function LoginPage() {
                   <option value="Ambizcon Health - India">🇮🇳 Ambizcon Health - India (Chennai HQ)</option>
                   <option value="Ambizcon">🇦🇺 Ambizcon (Brisbane HQ)</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Google Sign-In Primary Button */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isGoogleLoading}
+                className="w-full flex items-center justify-center gap-3 h-12 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-50 dark:hover:bg-zinc-900 text-foreground font-bold text-sm shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                title="Sign in with your @ambizcon.com Google Workspace account"
+              >
+                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span>{isGoogleLoading ? 'Connecting Google Workspace...' : 'Sign in with Google Workspace'}</span>
+              </button>
+
+              <div className="relative flex py-3 items-center">
+                <div className="flex-grow border-t border-zinc-200/60 dark:border-zinc-800/60" />
+                <span className="flex-shrink mx-3 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                  or sign in with password
+                </span>
+                <div className="flex-grow border-t border-zinc-200/60 dark:border-zinc-800/60" />
               </div>
             </div>
 

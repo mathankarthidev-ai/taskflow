@@ -340,6 +340,31 @@ export default function ProfilePage() {
               <Badge variant="outline" className="text-xs">
                 {currentUser.team} Team
               </Badge>
+              {/* Registered Branch Logo Badge in Title */}
+              <div
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-bold shadow-xs ${
+                  isAustralia
+                    ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                }`}
+                title={`Registered Branch: ${isAustralia ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health (Chennai HQ)'}`}
+              >
+                {isAustralia ? (
+                  <div className="h-4 w-4 rounded bg-white p-0.5 border border-sky-500/40 flex items-center justify-center shrink-0">
+                    <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
+                  </div>
+                ) : (
+                  <img
+                    src="/ambizcon-logo.png"
+                    alt="IND"
+                    className="h-4 w-4 rounded object-cover border border-emerald-500/30 shrink-0"
+                  />
+                )}
+                <span>{isAustralia ? '🇦🇺 Ambizcon (Brisbane HQ)' : '🇮🇳 Ambizcon Health (Chennai HQ)'}</span>
+                <span className="text-[10px] font-extrabold uppercase px-1 rounded bg-black/5 dark:bg-white/10">
+                  Registered Branch
+                </span>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Personal Employee Profile, Profile Picture Upload, Educational Qualifications &amp; Experience
@@ -369,13 +394,24 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <Badge variant="outline" className={`text-xs font-mono ${
-          isAustralia
-            ? 'text-amber-600 dark:text-amber-400 border-amber-500/30'
-            : 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-        }`}>
-          ● Verified Ambizcon Roster
-        </Badge>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <Badge variant="outline" className={`text-xs font-mono flex items-center gap-1.5 ${
+            isAustralia
+              ? 'text-sky-600 dark:text-sky-400 border-sky-500/30'
+              : 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+          }`}>
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            Verified Ambizcon Roster
+          </Badge>
+          <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+            <img
+              src={isAustralia ? '/ambizcon-australia-icon.png' : '/ambizcon-logo.png'}
+              alt="Branch"
+              className="h-3.5 w-3.5 rounded object-cover"
+            />
+            <span>{isAustralia ? 'Brisbane HQ, Australia' : 'Chennai HQ, India'}</span>
+          </div>
+        </div>
       </div>
 
       {/* Account Info Cards */}

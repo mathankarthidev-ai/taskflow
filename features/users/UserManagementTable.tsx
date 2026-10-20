@@ -25,12 +25,17 @@ import { isUserInCompany, resolveEffectiveCompany } from '@/lib/company-filter';
 import { CompletedPeriod } from '@/lib/completed-tasks-generator';
 import { CompletedTasksExplorerModal } from '@/components/tasks/CompletedTasksExplorerModal';
 import { FestivalAndLeaveAdminPanel } from '@/components/attendance/FestivalAndLeaveAdminPanel';
+import { parseBirthday } from '@/lib/birthday-helpers';
 
 // Format date of birth to strictly Date and Month only (No year)
 export function formatDayMonthOnly(val?: string): string {
   if (!val) return '—';
+  const parsed = parseBirthday(val);
+  if (parsed) {
+    return parsed.formatted;
+  }
   let s = val.replace(/\s*\(\d{4}\)/g, '').trim();
-  const parts = s.split(/[\/\-\.]/);
+  const parts = s.split(/[\/\-\.]/).map((p) => p.trim());
   if (parts.length === 3 && parts[2].length === 4) {
     const day = parts[0].padStart(2, '0');
     const monthNum = parseInt(parts[1], 10);
@@ -203,18 +208,25 @@ export function UserManagementTable() {
 
     setIsSubmitting(true);
     try {
+      const cleanDob = formatDayMonthOnly(newDob.trim() || newBirthday.trim() || '14 Oct');
+      const cleanBirthday = formatDayMonthOnly(newBirthday.trim() || newDob.trim() || '14 Oct');
+
       const created = await createUserAction({
         name: newName.trim(),
         email: newEmail.trim().toLowerCase(),
         role: newRole,
         team: newTeam,
         company: newCompany,
-        dob: newDob.trim() || '14 Oct',
-        birthday: newBirthday.trim() || newDob.trim() || '14 Oct',
+        dob: cleanDob,
+        birthday: cleanBirthday,
         workMode: newWorkMode,
       });
 
       setUsers([created, ...users]);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ambizcon_users_updated'));
+        window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+      }
       toast.success(`User ${created.name} added successfully to ${newCompany}!`);
       setIsAddModalOpen(false);
       setNewName('');
@@ -246,14 +258,17 @@ export function UserManagementTable() {
     if (!editingUser) return;
 
     try {
+      const cleanDob = formatDayMonthOnly(editDob.trim() || editBirthday.trim() || '14 Oct');
+      const cleanBirthday = formatDayMonthOnly(editBirthday.trim() || editDob.trim() || '14 Oct');
+
       const updatedUser = await updateUserAction(editingUser._id, {
         name: editName.trim(),
         email: editEmail.trim().toLowerCase(),
         role: editRole,
         team: editTeam,
         company: editCompany,
-        birthday: editBirthday,
-        dob: editDob,
+        birthday: cleanBirthday,
+        dob: cleanDob,
         workMode: editWorkMode,
       });
 
@@ -266,8 +281,8 @@ export function UserManagementTable() {
             role: editRole,
             team: editTeam,
             company: editCompany,
-            birthday: editBirthday,
-            dob: editDob,
+            birthday: cleanBirthday,
+            dob: cleanDob,
             workMode: editWorkMode,
           };
         }
@@ -275,6 +290,10 @@ export function UserManagementTable() {
       });
 
       setUsers(updated);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ambizcon_users_updated'));
+        window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+      }
 
       if (currentUser && editingUser._id === currentUser._id) {
         const saved = updatedUser || {
@@ -358,7 +377,19 @@ export function UserManagementTable() {
             <Users className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">User Details & Member CRUD Console</h1>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-bold tracking-tight text-foreground">User Details & Member Console</h1>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background text-xs font-bold shadow-xs">
+                <img
+                  src={selectedCompany === 'Ambizcon' ? '/ambizcon-australia-icon.png' : '/ambizcon-logo.png'}
+                  alt="Branch Logo"
+                  className="h-4 w-4 rounded object-cover"
+                />
+                <span className={selectedCompany === 'Ambizcon' ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                  {selectedCompany === 'Ambizcon' ? '🇦🇺 Ambizcon (Brisbane HQ)' : '🇮🇳 Ambizcon Health - India (Chennai HQ)'}
+                </span>
+              </div>
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               Super Admin control panel to edit individual employee details, update roles, and manage team assignments.
             </p>
@@ -596,17 +627,34 @@ export function UserManagementTable() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar src={u.avatar} name={u.name} userId={u._id} email={u.email} size="sm" />
-                        <span className="font-semibold text-foreground">{u.name}</span>
+                        <div>
+                          <span className="font-semibold text-foreground block">{u.name}</span>
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <img
+                              src={effCompany === 'Ambizcon' ? '/ambizcon-australia-icon.png' : '/ambizcon-logo.png'}
+                              alt="Branch Logo"
+                              className="h-3.5 w-3.5 rounded object-cover inline-block shrink-0"
+                            />
+                            {effCompany === 'Ambizcon' ? 'Ambizcon Brisbane' : 'Ambizcon Health Chennai'}
+                          </span>
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant="outline" className="text-[10px] font-semibold whitespace-nowrap">
-                        {effCompany === 'India & Australia'
-                          ? '🌐 India & Australia'
-                          : effCompany === 'Ambizcon'
-                          ? '🇦🇺 Australia'
-                          : '🇮🇳 India'}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <img
+                          src={effCompany === 'Ambizcon' ? '/ambizcon-australia-icon.png' : '/ambizcon-logo.png'}
+                          alt="Logo"
+                          className="h-4 w-4 rounded object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
+                        />
+                        <Badge variant="outline" className="text-[10px] font-semibold whitespace-nowrap">
+                          {effCompany === 'India & Australia'
+                            ? '🌐 India & Australia'
+                            : effCompany === 'Ambizcon'
+                            ? '🇦🇺 Australia'
+                            : '🇮🇳 India'}
+                        </Badge>
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{u.email}</td>
                     <td className="px-4 py-3 font-medium">{u.team}</td>
@@ -740,7 +788,15 @@ export function UserManagementTable() {
                     <div className="flex items-center gap-3">
                       <Avatar src={u.avatar} name={u.name} userId={u._id} email={u.email} size="sm" />
                       <div>
-                        <span className="font-bold text-foreground block">{u.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-foreground">{u.name}</span>
+                          <img
+                            src={resolveEffectiveCompany(u) === 'Ambizcon' ? '/ambizcon-australia-icon.png' : '/ambizcon-logo.png'}
+                            alt="Branch Logo"
+                            className="h-3.5 w-3.5 rounded object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
+                            title={`Registered at: ${resolveEffectiveCompany(u)}`}
+                          />
+                        </div>
                         <span className="text-[10px] text-muted-foreground">{u.email} · {u.team} Team</span>
                       </div>
                     </div>

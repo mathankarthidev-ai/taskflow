@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { attendanceDb } from '@/lib/attendance-db';
 import { supabase } from '@/lib/supabase';
-import { formatTimeIST, formatTimeAEST } from '@/lib/utils';
+import { formatTimeIST, formatTimeAEST, sanitizeClockOutTime } from '@/lib/utils';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -30,6 +30,9 @@ export async function GET(req: Request) {
       if (!error && data && data.length > 0) {
         const latest = data[0];
         const isWorking = latest.status === 'working' && (!latest.clock_out || latest.clock_out === '—');
+        const isAuto =
+          Boolean(latest.clock_out && latest.clock_out.toLowerCase().includes('auto')) ||
+          Boolean(latest.worked_hours && latest.worked_hours.toLowerCase().includes('auto'));
         return NextResponse.json({
           success: true,
           source: 'supabase',
@@ -37,14 +40,8 @@ export async function GET(req: Request) {
           status: isWorking ? 'working' : 'completed',
           clockIn: latest.created_at ? formatTimeIST(latest.created_at) : latest.clock_in,
           clockInAest: latest.created_at ? formatTimeAEST(latest.created_at) : latest.clock_in_aest,
-          clockOut:
-            latest.clock_out && latest.clock_out !== '—' && latest.updated_at && latest.status === 'completed'
-              ? formatTimeIST(latest.updated_at)
-              : (latest.clock_out || '—'),
-          clockOutAest:
-            latest.clock_out && latest.clock_out !== '—' && latest.updated_at && latest.status === 'completed'
-              ? formatTimeAEST(latest.updated_at)
-              : (latest.clock_out_aest || '—'),
+          clockOut: sanitizeClockOutTime(latest.clock_out, false, isAuto),
+          clockOutAest: sanitizeClockOutTime(latest.clock_out_aest || latest.clock_out, true, isAuto),
           workedHours: latest.worked_hours || '0h 00m',
           sessionDate: latest.session_date,
           attendance: latest,

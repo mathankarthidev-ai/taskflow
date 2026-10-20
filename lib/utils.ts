@@ -126,3 +126,20 @@ export function formatSessionDateIST(dateInput: string | Date | number = new Dat
     year: 'numeric',
   })})`;
 }
+
+export function sanitizeClockOutTime(
+  clockOut?: string | null,
+  isAest: boolean = false,
+  isAutoClosed: boolean = false
+): string {
+  if (isAutoClosed || (clockOut && clockOut.toLowerCase().includes('auto'))) {
+    return isAest ? '08:00 pm AEST' : '08:00 pm IST';
+  }
+  if (!clockOut || clockOut === '—') return '—';
+  const str = String(clockOut).trim();
+  if (str.includes('T') || (!str.toLowerCase().includes('m') && !isNaN(Date.parse(str)))) {
+    return isAest ? formatTimeAEST(str) : formatTimeIST(str);
+  }
+  const cleaned = str.replace(/\s*\([^)]*\)/g, '').trim();
+  return cleaned || str;
+}

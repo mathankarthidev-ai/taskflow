@@ -182,6 +182,28 @@ export function DashboardOverview() {
               }`}>
                 {currentUser.role} • {currentUser.team}
               </Badge>
+              {/* Registered Branch Logo Badge */}
+              <div
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-bold shadow-xs ${
+                  isAustralia
+                    ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                }`}
+                title={`Registered Branch: ${isAustralia ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health (Chennai HQ)'}`}
+              >
+                {isAustralia ? (
+                  <div className="h-4 w-4 rounded bg-white p-0.5 border border-sky-500/40 flex items-center justify-center shrink-0">
+                    <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
+                  </div>
+                ) : (
+                  <img
+                    src="/ambizcon-logo.png"
+                    alt="IND"
+                    className="h-4 w-4 rounded object-cover border border-emerald-500/30 shrink-0"
+                  />
+                )}
+                <span>{isAustralia ? '🇦🇺 Ambizcon (Brisbane HQ)' : '🇮🇳 Ambizcon Health (Chennai HQ)'}</span>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground mt-1 font-medium">
               You have <span className="font-bold text-foreground">{myAssignedTasks.length} assigned tasks</span> pending on your workspace board today.

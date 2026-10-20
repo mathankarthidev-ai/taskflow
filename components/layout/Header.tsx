@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import {
@@ -39,6 +39,9 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useSearchStore } from '@/store/useSearchStore';
 import { useTaskStore } from '@/store/useTaskStore';
 import { fetchTasksAction } from '@/actions/taskActions';
+import { fetchAllUsersAction } from '@/actions/userActions';
+import { generateMonthWiseBirthdays } from '@/lib/birthday-helpers';
+import type { User } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
@@ -69,65 +72,8 @@ interface HeaderProps {
   onMobileMenuToggle?: () => void;
 }
 
-const MONTH_WISE_BIRTHDAYS = [
-  {
-    month: 'March',
-    users: [
-      { name: 'Thanikaivel Arumugam', date: '17 Mar', team: 'Development', role: 'Team Member' },
-      { name: 'Mathanmk', date: '14 Mar', team: 'Development', role: 'Team Member' },
-    ],
-  },
-  {
-    month: 'April',
-    users: [
-      { name: 'Deva Priya D A', date: '16 Apr', team: 'Creative', role: 'Team Lead' },
-    ],
-  },
-  {
-    month: 'May',
-    users: [],
-  },
-  {
-    month: 'June',
-    users: [
-      { name: 'Kiruthikashri M', date: '07 Jun', team: 'Marketing', role: 'Team Member' },
-      { name: 'Adriana Ruju', date: '12 Jun', team: 'Marketing', role: 'Team Member (Australia)' },
-      { name: 'Anirudh', date: '29 Jun', team: 'Development', role: 'Super Admin (India & AU)' },
-    ],
-  },
-  {
-    month: 'July',
-    users: [{ name: 'Naraine R', date: '10 Jul', team: 'Development', role: 'Team Member' }],
-  },
-  {
-    month: 'August',
-    users: [{ name: 'Kavish TG', date: '02 Aug', team: 'Creative', role: 'Team Member' }],
-  },
-  {
-    month: 'September',
-    users: [{ name: 'B. Siddesh', date: '23 Sep', team: 'Marketing', role: 'Team Member' }],
-  },
-  {
-    month: 'October',
-    users: [
-      { name: 'Kennath Franklin J', date: '14 Oct', team: 'Marketing', role: 'Team Lead' },
-      { name: 'Mathan P', date: '16 Oct', team: 'Development', role: 'Super Admin' },
-      { name: 'Mathi Pandian', date: '16 Oct', team: 'Marketing', role: 'Team Member' },
-      { name: 'Kasthuri M', date: '28 Oct', team: 'Creative', role: 'Team Member' },
-    ],
-  },
-  {
-    month: 'November',
-    users: [
-      { name: 'V. Sathish Kumar', date: '16 Nov', team: 'Creative', role: 'Team Member' },
-      { name: 'Ahamed', date: '15 Nov', team: 'Creative', role: 'Team Member' },
-    ],
-  },
-  {
-    month: 'December',
-    users: [{ name: 'Aravind Kalaivanan', date: '30 Dec', team: 'Development', role: 'Team Lead' }],
-  },
-];
+// Pre-computed seed birthday list as initial instant fallback
+const INITIAL_MONTH_WISE_BIRTHDAYS = generateMonthWiseBirthdays();
 
 export function Header({ onMobileMenuToggle }: HeaderProps) {
   const router = useRouter();
@@ -154,6 +100,44 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   type ActiveMenu = 'company' | 'birthday' | 'health' | 'notif' | 'persona' | null;
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
   const [showBirthdaysInProfile, setShowBirthdaysInProfile] = useState(false);
+  const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
+
+  // Automatically sync registered members so birthdays always appear dynamically
+  useEffect(() => {
+    let isMounted = true;
+    const loadRegisteredUsers = async () => {
+      try {
+        const users = await fetchAllUsersAction();
+        if (isMounted && Array.isArray(users) && users.length > 0) {
+          setRegisteredUsers(users);
+        }
+      } catch (err) {
+        console.warn('Could not load registered users for birthday roster:', err);
+      }
+    };
+
+    loadRegisteredUsers();
+
+    const handleUsersSync = () => {
+      loadRegisteredUsers();
+    };
+
+    window.addEventListener('ambizcon_users_updated', handleUsersSync);
+    window.addEventListener('ambizcon_workspace_refresh', handleUsersSync);
+    window.addEventListener('storage', handleUsersSync);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('ambizcon_users_updated', handleUsersSync);
+      window.removeEventListener('ambizcon_workspace_refresh', handleUsersSync);
+      window.removeEventListener('storage', handleUsersSync);
+    };
+  }, []);
+
+  const dynamicMonthWiseBirthdays = useMemo(() => {
+    return generateMonthWiseBirthdays(registeredUsers.length > 0 ? registeredUsers : undefined);
+  }, [registeredUsers]);
+
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -787,7 +771,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         </button>
 
         {/* Company Branch Switcher: Super Admin Only */}
-        {isSuperAdmin && (
+        {isSuperAdmin ? (
           <div className="relative header-dropdown-menu">
             <button
               onClick={() => toggleMenu('company')}
@@ -887,6 +871,42 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 </button>
               </div>
             )}
+          </div>
+        ) : (
+          <div
+            className={`flex h-10 items-center gap-2 rounded-xl border px-2.5 sm:px-3 text-xs font-bold shadow-xs shrink-0 ${
+              isAustralia
+                ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+            }`}
+            title={`Registered Branch: ${isAustralia ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health (Chennai HQ)'}`}
+          >
+            {isAustralia ? (
+              <div className="h-5 w-5 rounded-md bg-white p-0.5 border border-sky-500/40 flex items-center justify-center shrink-0">
+                <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
+              </div>
+            ) : (
+              <img
+                src="/ambizcon-logo.png"
+                alt="IND"
+                className="h-5 w-5 rounded-md object-cover border border-emerald-500/30 shrink-0"
+              />
+            )}
+            <span className="hidden md:inline-flex items-center gap-1.5 font-bold">
+              {isAustralia ? '🇦🇺 Ambizcon (Brisbane)' : '🇮🇳 Ambizcon Health (Chennai)'}
+            </span>
+            <span className="md:hidden font-bold">
+              {isAustralia ? '🇦🇺 AUS' : '🇮🇳 IND'}
+            </span>
+            <span
+              className={`hidden lg:inline-flex px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
+                isAustralia
+                  ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                  : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+              }`}
+            >
+              Registered
+            </span>
           </div>
         )}
       </div>
@@ -1486,10 +1506,13 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                   {showBirthdaysInProfile && (
                     <div className="p-2 pt-0 border-t border-amber-500/20 max-h-56 overflow-y-auto space-y-2 bg-background/50">
                       <div className="pt-2 flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                        <span>{isAustralia ? 'Ambizcon AU' : 'Ambizcon Health'}</span>
-                        <span className="text-amber-600 font-mono">12 Months</span>
+                        <span className="flex items-center gap-1">
+                          <Cake className="h-3 w-3 text-amber-500" />
+                          {isAustralia ? '🇦🇺 Ambizcon (Brisbane)' : '🇮🇳 Ambizcon Health (Chennai)'}
+                        </span>
+                        <span className="text-amber-600 font-mono font-bold">12 Months Roster</span>
                       </div>
-                      {MONTH_WISE_BIRTHDAYS.map((m) => {
+                      {dynamicMonthWiseBirthdays.map((m) => {
                         const branchUsers = m.users.filter((u) =>
                           isUserInCompany(u, isAustralia ? 'Ambizcon' : 'Ambizcon Health - India')
                         );
@@ -1497,11 +1520,11 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                         return (
                           <div key={m.month} className="space-y-1">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block border-b border-zinc-200/40 dark:border-zinc-800/40 pb-0.5">
-                              {m.month}
+                              {m.month} ({branchUsers.length})
                             </span>
                             {branchUsers.map((u) => (
                               <div
-                                key={u.name}
+                                key={u.email || u.name}
                                 className="flex items-center justify-between p-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 text-xs"
                               >
                                 <div className="min-w-0 pr-1">
@@ -1514,7 +1537,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                                 </div>
                                 <Badge
                                   variant="outline"
-                                  className="font-mono text-[9px] text-amber-600 border-amber-500/30 shrink-0"
+                                  className="font-mono text-[9px] text-amber-600 border-amber-500/30 shrink-0 font-bold"
                                 >
                                   {u.date}
                                 </Badge>

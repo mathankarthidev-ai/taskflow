@@ -270,7 +270,9 @@ INSERT INTO public.users (id, name, email, role, team, company, avatar, birthday
   ('usr_12', 'V. Sathish Kumar', 'sathish@ambizcon.com', 'Team Member', 'Creative', 'Ambizcon Health - India', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sathish', '29 Oct', '29/10/1998', 'Work From Office', ARRAY['UI/UX', 'Figma', 'Branding', 'Tailwind', 'Photoshop']),
   ('usr_13', 'Kavish TG', 'kavish@ambizcon.com', 'Team Member', 'Creative', 'Ambizcon Health - India', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kavish', '01 Sep', '01/09/2000', 'Work From Office', ARRAY['UI/UX', 'Figma', 'Branding', 'Tailwind', 'Photoshop']),
   ('usr_14', 'Kasthuri M', 'kasthuri@ambizcon.com', 'Team Member', 'Creative', 'Ambizcon Health - India', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kasthuri', '31 Aug', '31/08/2000', 'Work From Office', ARRAY['UI/UX', 'Figma', 'Branding', 'Tailwind', 'Photoshop']),
-  ('usr_15', 'Adriana Ruju', 'adriana@ambizcon.com', 'Team Member', 'Marketing', 'Ambizcon', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Adriana', '14 Feb', '14/02/1998', 'Work From Office', ARRAY['Google Ads', 'SEO', 'GSC', 'GA4', 'Meta Ads', 'Copywriting'])
+  ('usr_15', 'Adriana Ruju', 'adriana@ambizcon.com', 'Team Member', 'Marketing', 'Ambizcon', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Adriana', '14 Feb', '14/02/1998', 'Work From Office', ARRAY['Google Ads', 'SEO', 'GSC', 'GA4', 'Meta Ads', 'Copywriting']),
+  ('usr_16', 'Ahamed', 'ahamed@ambizcon.com', 'Team Member', 'Creative', 'Ambizcon Health - India', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ahamed', '15 Nov', '15/11/2000', 'Work From Home', ARRAY['UI/UX', 'Figma', 'Branding', 'Tailwind', 'Photoshop']),
+  ('usr_17', 'A. Abdul kani', 'abdul@ambizcon.com', 'Team Member', 'Creative', 'Ambizcon Health - India', 'https://api.dicebear.com/7.x/avataaars/svg?seed=AbdulKani', '22 Jun', '22/06/2005', 'Work From Office', ARRAY['UI/UX', 'Figma', 'Branding', 'Tailwind', 'Photoshop'])
 ON CONFLICT (email) DO UPDATE SET
   name = EXCLUDED.name,
   role = EXCLUDED.role,
