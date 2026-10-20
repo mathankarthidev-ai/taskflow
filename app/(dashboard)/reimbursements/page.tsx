@@ -646,6 +646,10 @@ export default function ReimbursementsPage() {
       const nextClaims = [created, ...claims];
       setClaims(nextClaims);
       saveClaimsToStorage(nextClaims);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ambizcon_reimbursements_updated'));
+        window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+      }
       toast.success(
         isDraft
           ? `Claim ${created.claimNo} saved as DRAFT!`
@@ -693,6 +697,10 @@ export default function ReimbursementsPage() {
     });
     setClaims(nextClaims);
     saveClaimsToStorage(nextClaims);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ambizcon_reimbursements_updated'));
+      window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+    }
     toast.success(`Claim approved by Admin! Receipt reduced to normal.`);
   };
 
@@ -708,6 +716,10 @@ export default function ReimbursementsPage() {
     });
     setClaims(nextClaims);
     saveClaimsToStorage(nextClaims);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ambizcon_reimbursements_updated'));
+      window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+    }
     toast.success(`Claim marked as PAID OUT! Payout record archived.`);
   };
 
@@ -754,6 +766,10 @@ export default function ReimbursementsPage() {
     });
     setClaims(nextClaims);
     saveClaimsToStorage(nextClaims);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ambizcon_reimbursements_updated'));
+      window.dispatchEvent(new CustomEvent('ambizcon_workspace_refresh'));
+    }
     toast.error(`Claim rejected by Admin with documented reason. Receipt reduced to normal.`);
     setRejectionModalClaimId(null);
   };
