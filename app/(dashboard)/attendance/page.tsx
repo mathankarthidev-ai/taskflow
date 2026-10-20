@@ -544,45 +544,22 @@ export default function AttendancePage() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Dynamic Weekly & Monthly Attendance Aggregator (Mon - Fri calculation)
-  const currentDayOfWeek = new Date().getDay(); // 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
-
-  const weekDaysConfig = [
-    { name: 'Monday', dayIndex: 1, baseSecs: 8.5 * 3600 },
-    { name: 'Tuesday', dayIndex: 2, baseSecs: 8.25 * 3600 },
-    { name: 'Wednesday', dayIndex: 3, baseSecs: 8.75 * 3600 },
-    { name: 'Thursday', dayIndex: 4, baseSecs: 8.33 * 3600 },
-    { name: 'Friday', dayIndex: 5, baseSecs: 8.0 * 3600 },
-  ];
-
-  let calculatedWeeklyTotalSecs = 0;
-  const weeklyDayRows = weekDaysConfig.map((d) => {
-    let daySecs = 0;
-    const isToday = currentDayOfWeek === d.dayIndex;
-    if (isToday) {
-      daySecs = isClockedIn ? workedSeconds : d.baseSecs;
-    } else if (currentDayOfWeek > d.dayIndex || currentDayOfWeek === 0) {
-      daySecs = d.baseSecs;
-    } else {
-      daySecs = 0;
+  // Helper to parse worked seconds accurately from real database records
+  const parseWorkedSecondsHelper = (rec: any): number => {
+    if (typeof rec?.worked_seconds === 'number' && rec.worked_seconds > 0) {
+      return rec.worked_seconds;
     }
-    calculatedWeeklyTotalSecs += daySecs;
-
-    const hrs = Math.floor(daySecs / 3600);
-    const mins = Math.floor((daySecs % 3600) / 60);
-    const formattedStr = daySecs > 0 ? `${hrs}h ${mins < 10 ? '0' : ''}${mins}m` : '0h 00m';
-
-    return { name: d.name, formattedStr, daySecs, isToday };
-  });
-
-  const totWeeklyHrs = Math.floor(calculatedWeeklyTotalSecs / 3600);
-  const totWeeklyMins = Math.floor((calculatedWeeklyTotalSecs % 3600) / 60);
-  const formattedTotalWeekly = `${totWeeklyHrs}h ${totWeeklyMins < 10 ? '0' : ''}${totWeeklyMins}m`;
-
-  const monthlyWorkedDays = 21 + (isClockedIn ? 1 : 0);
-  const monthlyTotalHoursStr = `${168 + totWeeklyHrs}h ${totWeeklyMins < 10 ? '0' : ''}${totWeeklyMins}m`;
-  const monthlyAvgDayStr = '8h 15m';
-  const monthlyShiftsCount = 21 + (isClockedIn ? 1 : 0);
+    const str = rec?.worked_hours || rec?.hoursWorked || '';
+    if (typeof str === 'string') {
+      const match = str.match(/(\d+)\s*h(?:ours?)?(?:\s*(\d+)\s*m)?/i);
+      if (match) {
+        const h = parseInt(match[1] || '0', 10);
+        const m = parseInt(match[2] || '0', 10);
+        return h * 3600 + m * 60;
+      }
+    }
+    return 0;
+  };
 
   // Determine if viewing an individual member (Personal for Employee, or drilldown for TL/Admin)
   const isIndividualView =
@@ -607,155 +584,328 @@ export default function AttendancePage() {
     return null;
   }, [isEmployee, chartScopeUser, currentUser, rosterUsers]);
 
-  // Daily Present & Total Hours Bar Chart Analytics Data (Scoped dynamically by Role, Team, or Individual)
+  // 100% Real Attendance & Working Hours Trends Bar Chart Data (Scoped dynamically by Role, Team, or Individual)
   const dailyAttendanceChartData = useMemo(() => {
-    const dayLabels = [
-      { key: 1, day: 'Mon', fullDay: 'Monday', baseHrs: 8.5 },
-      { key: 2, day: 'Tue', fullDay: 'Tuesday', baseHrs: 8.25 },
-      { key: 3, day: 'Wed', fullDay: 'Wednesday', baseHrs: 8.75 },
-      { key: 4, day: 'Thu', fullDay: 'Thursday', baseHrs: 8.33 },
-      { key: 5, day: 'Fri', fullDay: 'Friday', baseHrs: 8.0 },
-      { key: 6, day: 'Sat', fullDay: 'Saturday', baseHrs: 0 },
-      { key: 7, day: 'Sun', fullDay: 'Sunday', baseHrs: 0 },
+    // Current IST Date & Monday-to-Sunday Week Calculation
+    const now = new Date();
+    const todayDateKey = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const dayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+
+    const dayConfigs = [
+      { key: 1, day: 'Mon', fullDay: 'Monday' },
+      { key: 2, day: 'Tue', fullDay: 'Tuesday' },
+      { key: 3, day: 'Wed', fullDay: 'Wednesday' },
+      { key: 4, day: 'Thu', fullDay: 'Thursday' },
+      { key: 5, day: 'Fri', fullDay: 'Friday' },
+      { key: 6, day: 'Sat', fullDay: 'Saturday' },
+      { key: 7, day: 'Sun', fullDay: 'Sunday' },
     ];
 
-    const currentDayIdx = currentDayOfWeek === 0 ? 7 : currentDayOfWeek; // 1: Mon ... 7: Sun
+    const weekDays = dayConfigs.map((cfg, idx) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + idx);
+      const dateKey = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      const isToday = dateKey === todayDateKey;
+      return {
+        ...cfg,
+        dateKey,
+        isToday,
+      };
+    });
 
     if (isIndividualView && selectedTargetUser) {
-      // Individual View: personal status for this specific user
+      // Individual View: 100% Real database logs for this specific user
       const targetIsMe =
-        selectedTargetUser.email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
-        selectedTargetUser._id === currentUser?._id;
+        currentUser &&
+        (selectedTargetUser.email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
+          selectedTargetUser._id === currentUser?._id);
 
-      return dayLabels.map((d) => {
-        const isPast = currentDayIdx > d.key;
-        const isToday = currentDayIdx === d.key;
+      const targetEmail = (selectedTargetUser.email || '').toLowerCase().trim();
+      const targetId = String(selectedTargetUser._id || selectedTargetUser.id || '').trim();
+      const targetName = (selectedTargetUser.name || '').toLowerCase().trim();
+
+      return weekDays.map((d) => {
+        // Find all real database records for this user on this specific day
+        const dayRecs = (liveAttendanceRecords || []).filter((r) => {
+          const rDateKey = r.created_at
+            ? new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+            : (r.dayKey || '');
+          if (rDateKey !== d.dateKey) return false;
+
+          const recEmail = (r.user_email || '').toLowerCase().trim();
+          const recId = String(r.user_id || '').trim();
+          const recName = (r.user_name || '').toLowerCase().trim();
+
+          if (targetEmail && recEmail && targetEmail === recEmail) return true;
+          if (targetId && recId && targetId === recId) return true;
+          if (targetName && recName && (targetName === recName || recName.includes(targetName) || targetName.includes(recName))) return true;
+          return false;
+        });
+
+        let daySecs = 0;
         let present = 0;
-        let hours = 0;
 
-        if (d.day === 'Sun' || d.day === 'Sat') {
-          present = 0;
-          hours = 0;
-        } else if (isPast) {
-          present = 1;
-          hours = d.baseHrs;
-        } else if (isToday) {
+        if (d.isToday) {
           if (targetIsMe) {
-            present = isClockedIn ? 1 : 0;
-            hours = isClockedIn ? Math.round((workedSeconds / 3600) * 10) / 10 : 0;
-          } else {
-            const activeShift = (liveAttendanceRecords || []).find(
-              (r) =>
-                (r.user_email?.toLowerCase() === selectedTargetUser.email?.toLowerCase() ||
-                  r.user_name?.toLowerCase() === selectedTargetUser.name?.toLowerCase()) &&
-                (r.session_date?.includes('Today') ||
-                  r.created_at?.slice(0, 10) === new Date().toISOString().slice(0, 10))
-            );
-            if (activeShift) {
+            if (isClockedIn) {
               present = 1;
-              if (activeShift.status === 'working') {
-                const startMs = new Date(activeShift.created_at || Date.now()).getTime();
-                const diffSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-                hours = Math.round((diffSecs / 3600) * 10) / 10;
-              } else {
-                hours = activeShift.worked_seconds
-                  ? Math.round((activeShift.worked_seconds / 3600) * 10) / 10
-                  : d.baseHrs;
-              }
-            } else {
-              present = 0;
-              hours = 0;
+              daySecs = workedSeconds;
+            } else if (dayRecs.length > 0) {
+              present = 1;
+              daySecs = dayRecs.reduce((sum, r) => sum + parseWorkedSecondsHelper(r), 0);
+            }
+          } else {
+            const activePunch = dayRecs.find((r) => r.status === 'working' && (!r.clock_out || r.clock_out === '—'));
+            if (activePunch) {
+              present = 1;
+              const startMs = new Date(activePunch.created_at || Date.now()).getTime();
+              daySecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+            } else if (dayRecs.length > 0) {
+              present = 1;
+              daySecs = dayRecs.reduce((sum, r) => sum + parseWorkedSecondsHelper(r), 0);
             }
           }
         } else {
-          present = 0;
-          hours = 0;
+          // Past or future days: Strictly real database records (0 if not clocked in)
+          if (dayRecs.length > 0) {
+            present = 1;
+            daySecs = dayRecs.reduce((sum, r) => sum + parseWorkedSecondsHelper(r), 0);
+          } else {
+            present = 0;
+            daySecs = 0;
+          }
         }
 
+        const hours = Math.round((daySecs / 3600) * 10) / 10;
         return {
           day: d.day,
           fullDay: d.fullDay,
           present,
           hours,
           avgHours: hours,
-          isToday,
+          isToday: d.isToday,
+          daySecs,
         };
       });
     }
 
-    // Team or Workspace View
+    // Team or Workspace View: Strictly real database headcount & hours
     const effectiveTeam = isPureTL ? (currentUser?.team || 'Development') : chartScopeTeam;
-    const scopedMembers = rosterUsers.filter((u) => {
-      if (effectiveTeam !== 'All' && u.team !== effectiveTeam) return false;
-      if (isAustralia) {
-        return u.company === 'Ambizcon' || u.role === 'Super Admin';
-      }
-      return u.company !== 'Ambizcon';
-    });
-    const totalTeamCount = scopedMembers.length || (isAustralia ? 3 : (effectiveTeam === 'All' ? 15 : 5));
 
-    return dayLabels.map((d) => {
-      const isPast = currentDayIdx > d.key;
-      const isToday = currentDayIdx === d.key;
-      let present = 0;
-      let hours = 0;
+    return weekDays.map((d) => {
+      const dayRecs = (liveAttendanceRecords || []).filter((r) => {
+        const rDateKey = r.created_at
+          ? new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+          : (r.dayKey || '');
+        if (rDateKey !== d.dateKey) return false;
 
-      if (d.day === 'Sun') {
-        present = 0;
-        hours = 0;
-      } else if (d.day === 'Sat') {
-        present = Math.max(1, Math.round(totalTeamCount * 0.25));
-        hours = Math.round(present * 8.0 * 10) / 10;
-      } else if (isPast) {
-        present = totalTeamCount;
-        hours = Math.round(totalTeamCount * d.baseHrs * 10) / 10;
-      } else if (isToday) {
-        const todayRecords = (liveAttendanceRecords || []).filter((r) => {
-          const matchTeam = effectiveTeam === 'All' || r.user_team === effectiveTeam;
-          const isDateToday =
-            (r.session_date && r.session_date.includes('Today')) ||
-            (r.created_at && r.created_at.slice(0, 10) === new Date().toISOString().slice(0, 10));
-          return matchTeam && isDateToday;
-        });
+        const matchesBranch = isUserInCompany(
+          { userId: r.user_id, email: r.user_email, name: r.user_name, company: r.company },
+          activeCompanyScope
+        );
+        if (!matchesBranch) return false;
 
-        const currentInTeam = effectiveTeam === 'All' || currentUser?.team === effectiveTeam;
-        let activeHeadcount = todayRecords.length;
-        if (
-          isClockedIn &&
-          currentInTeam &&
-          !todayRecords.some((r) => r.user_email?.toLowerCase() === currentUser?.email?.toLowerCase())
-        ) {
-          activeHeadcount += 1;
+        if (effectiveTeam !== 'All' && r.user_team !== effectiveTeam) return false;
+        return true;
+      });
+
+      const userSet = new Set(dayRecs.map((r) => (r.user_email || r.user_id || r.user_name || '').toLowerCase()));
+
+      let totalDaySecs = 0;
+      dayRecs.forEach((r) => {
+        const isMe =
+          currentUser &&
+          (r.user_email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
+            r.user_id === currentUser?._id);
+        if (d.isToday && isMe && isClockedIn) {
+          totalDaySecs += workedSeconds;
+        } else if (r.status === 'working' && (!r.clock_out || r.clock_out === '—')) {
+          const startMs = new Date(r.created_at || Date.now()).getTime();
+          totalDaySecs += Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+        } else {
+          totalDaySecs += parseWorkedSecondsHelper(r);
         }
-        present = Math.min(totalTeamCount, Math.max(activeHeadcount, Math.round(totalTeamCount * 0.85)));
-        hours = Math.round(present * (d.baseHrs * 0.75 + (isClockedIn ? workedSeconds / 3600 : 0)) * 10) / 10;
-      } else {
-        present = 0;
-        hours = 0;
+      });
+
+      if (d.isToday && isClockedIn) {
+        const matchesBranch = isUserInCompany(currentUser, activeCompanyScope);
+        const matchesTeam = effectiveTeam === 'All' || currentUser?.team === effectiveTeam;
+        if (matchesBranch && matchesTeam) {
+          const myId = (currentUser.email || currentUser._id || currentUser.name || '').toLowerCase();
+          if (!userSet.has(myId)) {
+            userSet.add(myId);
+            totalDaySecs += workedSeconds;
+          }
+        }
       }
+
+      const present = userSet.size;
+      const hours = Math.round((totalDaySecs / 3600) * 10) / 10;
+      const avgHours = present > 0 ? +(hours / present).toFixed(1) : 0;
 
       return {
         day: d.day,
         fullDay: d.fullDay,
         present,
         hours,
-        avgHours: present > 0 ? +(hours / present).toFixed(1) : 0,
-        isToday,
+        avgHours,
+        isToday: d.isToday,
+        daySecs: totalDaySecs,
       };
     });
   }, [
     isIndividualView,
     selectedTargetUser,
     currentUser,
-    currentDayOfWeek,
     isClockedIn,
     workedSeconds,
     liveAttendanceRecords,
     isPureTL,
     chartScopeTeam,
-    rosterUsers,
-    isAustralia,
+    activeCompanyScope,
   ]);
+
+  // Derived 100% Real Weekly Mon - Fri Breakdown for "This Week's Attendance Summary"
+  const weeklyDayRows = useMemo(() => {
+    return dailyAttendanceChartData.slice(0, 5).map((d) => {
+      const daySecs = d.daySecs || Math.round(d.hours * 3600);
+      const hrs = Math.floor(daySecs / 3600);
+      const mins = Math.floor((daySecs % 3600) / 60);
+      const formattedStr = daySecs > 0 ? `${hrs}h ${mins < 10 ? '0' : ''}${mins}m` : '0h 00m';
+      return {
+        name: d.fullDay,
+        formattedStr,
+        daySecs,
+        isToday: d.isToday,
+      };
+    });
+  }, [dailyAttendanceChartData]);
+
+  const calculatedWeeklyTotalSecs = useMemo(() => {
+    return weeklyDayRows.reduce((acc, r) => acc + r.daySecs, 0);
+  }, [weeklyDayRows]);
+
+  const totWeeklyHrs = Math.floor(calculatedWeeklyTotalSecs / 3600);
+  const totWeeklyMins = Math.floor((calculatedWeeklyTotalSecs % 3600) / 60);
+  const formattedTotalWeekly = `${totWeeklyHrs}h ${totWeeklyMins < 10 ? '0' : ''}${totWeeklyMins}m`;
+
+  // 100% Real Monthly Attendance Metrics (October 2026)
+  const monthlyStats = useMemo(() => {
+    const currentMonthKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(0, 7);
+    const nowDayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+    let monthRecords: any[] = [];
+    if (isIndividualView && selectedTargetUser) {
+      const targetEmail = (selectedTargetUser.email || '').toLowerCase().trim();
+      const targetId = String(selectedTargetUser._id || selectedTargetUser.id || '').trim();
+      const targetName = (selectedTargetUser.name || '').toLowerCase().trim();
+
+      monthRecords = (liveAttendanceRecords || []).filter((r) => {
+        const rDayKey = r.created_at
+          ? new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+          : (r.dayKey || '');
+        if (!rDayKey.startsWith(currentMonthKey)) return false;
+
+        const recEmail = (r.user_email || '').toLowerCase().trim();
+        const recId = String(r.user_id || '').trim();
+        const recName = (r.user_name || '').toLowerCase().trim();
+
+        if (targetEmail && recEmail && targetEmail === recEmail) return true;
+        if (targetId && recId && targetId === recId) return true;
+        if (targetName && recName && (targetName === recName || recName.includes(targetName) || targetName.includes(recName))) return true;
+        return false;
+      });
+    } else {
+      const effectiveTeam = isPureTL ? (currentUser?.team || 'Development') : chartScopeTeam;
+      monthRecords = (liveAttendanceRecords || []).filter((r) => {
+        const rDayKey = r.created_at
+          ? new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+          : (r.dayKey || '');
+        if (!rDayKey.startsWith(currentMonthKey)) return false;
+
+        const matchesBranch = isUserInCompany(
+          { userId: r.user_id, email: r.user_email, name: r.user_name, company: r.company },
+          activeCompanyScope
+        );
+        if (!matchesBranch) return false;
+        if (effectiveTeam !== 'All' && r.user_team !== effectiveTeam) return false;
+        return true;
+      });
+    }
+
+    const uniqueDates = new Set(
+      monthRecords.map((r) =>
+        r.created_at
+          ? new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+          : (r.dayKey || '')
+      )
+    );
+
+    let totalSecs = 0;
+    monthRecords.forEach((r) => {
+      const rDayKey = r.created_at
+        ? new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+        : (r.dayKey || '');
+      const isMe =
+        currentUser &&
+        (r.user_email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
+          r.user_id === currentUser?._id);
+      if (rDayKey === nowDayKey && isMe && isClockedIn) {
+        totalSecs += workedSeconds;
+      } else if (r.status === 'working' && (!r.clock_out || r.clock_out === '—')) {
+        const startMs = new Date(r.created_at || Date.now()).getTime();
+        totalSecs += Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+      } else {
+        totalSecs += parseWorkedSecondsHelper(r);
+      }
+    });
+
+    if (isClockedIn && (isIndividualView ? selectedTargetUser?._id === currentUser?._id : true)) {
+      uniqueDates.add(nowDayKey);
+    }
+
+    const workedDays = uniqueDates.size;
+    const completedShifts = monthRecords.filter(
+      (r) => r.status === 'completed' || (r.clock_out && r.clock_out !== '—')
+    ).length;
+    const shiftsCount = completedShifts + (isClockedIn ? 1 : 0);
+
+    const totHrs = Math.floor(totalSecs / 3600);
+    const totMins = Math.floor((totalSecs % 3600) / 60);
+    const totalHoursStr = `${totHrs}h ${totMins < 10 ? '0' : ''}${totMins}m`;
+
+    const avgDailySecs = workedDays > 0 ? Math.floor(totalSecs / workedDays) : 0;
+    const avgHrs = Math.floor(avgDailySecs / 3600);
+    const avgMins = Math.floor((avgDailySecs % 3600) / 60);
+    const avgDayStr = `${avgHrs}h ${avgMins < 10 ? '0' : ''}${avgMins}m`;
+
+    return {
+      workedDays,
+      totalHoursStr,
+      avgDayStr,
+      shiftsCount,
+    };
+  }, [
+    liveAttendanceRecords,
+    isIndividualView,
+    selectedTargetUser,
+    isPureTL,
+    currentUser,
+    chartScopeTeam,
+    activeCompanyScope,
+    isClockedIn,
+    workedSeconds,
+  ]);
+
+  const {
+    workedDays: monthlyWorkedDays,
+    totalHoursStr: monthlyTotalHoursStr,
+    avgDayStr: monthlyAvgDayStr,
+    shiftsCount: monthlyShiftsCount,
+  } = monthlyStats;
 
   const maxChartPresent = useMemo(() => {
     if (isIndividualView) return 1;
@@ -2292,7 +2442,19 @@ export default function AttendancePage() {
               <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
                 <span className="text-[10px] font-extrabold uppercase text-muted-foreground block">Avg Shift Length</span>
                 <span className="text-xl font-extrabold text-purple-600 dark:text-purple-400 font-mono mt-0.5 block">
-                  8.2 hrs / day
+                  {(() => {
+                    const daysWithShifts = dailyAttendanceChartData.filter((d) => d.present > 0 && d.hours > 0);
+                    const totalWeeklyHours = dailyAttendanceChartData.reduce((acc, curr) => acc + curr.hours, 0);
+                    if (isIndividualView) {
+                      return daysWithShifts.length > 0
+                        ? `${(totalWeeklyHours / daysWithShifts.length).toFixed(1)} hrs / day`
+                        : '0.0 hrs / day';
+                    }
+                    const totalPresentShifts = dailyAttendanceChartData.reduce((acc, curr) => acc + curr.present, 0);
+                    return totalPresentShifts > 0
+                      ? `${(totalWeeklyHours / totalPresentShifts).toFixed(1)} hrs / shift`
+                      : '0.0 hrs / day';
+                  })()}
                 </span>
               </div>
             </div>
