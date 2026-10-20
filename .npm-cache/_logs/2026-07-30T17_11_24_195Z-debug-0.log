@@ -1,0 +1,747 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.8.0
+2 info using node@v24.13.1
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\NTC\Documents\Codex\2026-07-30\hi-mathan-thanks-for-your-time\.npmrc
+5 silly config load:file:C:\Users\NTC\.npmrc
+6 silly config load:file:C:\Users\NTC\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install
+8 verbose argv "install" "--cache" ".npm-cache" "--no-audit" "--no-fund" "--loglevel" "error"
+9 verbose logfile logs-max:10 dir:C:\Users\NTC\Documents\Codex\2026-07-30\hi-mathan-thanks-for-your-time\.npm-cache\_logs\2026-07-30T17_11_24_195Z-
+10 verbose logfile C:\Users\NTC\Documents\Codex\2026-07-30\hi-mathan-thanks-for-your-time\.npm-cache\_logs\2026-07-30T17_11_24_195Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:2348810240 maxSize:587202560 maxEntrySize:293601280
+13 silly idealTree buildDeps
+14 silly fetch manifest next@^15.5.2
+15 silly packumentCache full:https://registry.npmjs.org/next cache-miss
+16 http cache https://registry.npmjs.org/next 244ms (cache hit)
+17 silly packumentCache full:https://registry.npmjs.org/next set size:31016633 disposed:false
+18 silly fetch manifest @opentelemetry/api@^1.1.0
+19 silly packumentCache full:https://registry.npmjs.org/@opentelemetry%2fapi cache-miss
+20 http cache https://registry.npmjs.org/@opentelemetry%2fapi 17ms (cache hit)
+21 silly packumentCache full:https://registry.npmjs.org/@opentelemetry%2fapi set size:272967 disposed:false
+22 silly fetch manifest @playwright/test@^1.51.1
+23 silly packumentCache full:https://registry.npmjs.org/@playwright%2ftest cache-miss
+24 http cache https://registry.npmjs.org/@playwright%2ftest 143ms (cache hit)
+25 silly packumentCache full:https://registry.npmjs.org/@playwright%2ftest set size:9387384 disposed:false
+26 silly fetch manifest babel-plugin-react-compiler@*
+27 silly packumentCache full:https://registry.npmjs.org/babel-plugin-react-compiler cache-miss
+28 http cache https://registry.npmjs.org/babel-plugin-react-compiler 60ms (cache hit)
+29 silly packumentCache full:https://registry.npmjs.org/babel-plugin-react-compiler set size:1356999 disposed:false
+30 silly fetch manifest react@^19.1.1
+31 silly packumentCache full:https://registry.npmjs.org/react cache-miss
+32 http cache https://registry.npmjs.org/react 55ms (cache hit)
+33 silly packumentCache full:https://registry.npmjs.org/react set size:6849402 disposed:false
+34 silly fetch manifest react-dom@^19.1.1
+35 silly packumentCache full:https://registry.npmjs.org/react-dom cache-miss
+36 http cache https://registry.npmjs.org/react-dom 61ms (cache hit)
+37 silly packumentCache full:https://registry.npmjs.org/react-dom set size:9191033 disposed:false
+38 silly fetch manifest sass@^1.3.0
+39 silly packumentCache full:https://registry.npmjs.org/sass cache-miss
+40 http cache https://registry.npmjs.org/sass 67ms (cache hit)
+41 silly packumentCache full:https://registry.npmjs.org/sass set size:743214 disposed:false
+42 silly placeDep ROOT next@15.5.22 REPLACE for: taskflow@1.0.0 want: ^15.5.2
+43 silly fetch manifest @next/swc-darwin-x64@15.5.22
+44 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-darwin-x64 cache-miss
+45 silly fetch manifest @next/swc-darwin-arm64@15.5.22
+46 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-darwin-arm64 cache-miss
+47 silly fetch manifest @next/swc-linux-x64-gnu@15.5.22
+48 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-linux-x64-gnu cache-miss
+49 http cache https://registry.npmjs.org/@next%2fswc-linux-x64-gnu 196ms (cache hit)
+50 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-linux-x64-gnu set size:5513017 disposed:false
+51 silly fetch manifest @next/swc-linux-x64-musl@15.5.22
+52 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-linux-x64-musl cache-miss
+53 http cache https://registry.npmjs.org/@next%2fswc-darwin-arm64 312ms (cache hit)
+54 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-darwin-arm64 set size:5461135 disposed:false
+55 silly fetch manifest @next/swc-linux-arm64-gnu@15.5.22
+56 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-linux-arm64-gnu cache-miss
+57 http cache https://registry.npmjs.org/@next%2fswc-darwin-x64 469ms (cache hit)
+58 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-darwin-x64 set size:5402210 disposed:false
+59 silly fetch manifest @next/swc-linux-arm64-musl@15.5.22
+60 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-linux-arm64-musl cache-miss
+61 http cache https://registry.npmjs.org/@next%2fswc-linux-arm64-gnu 165ms (cache hit)
+62 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-linux-arm64-gnu set size:5317177 disposed:false
+63 silly fetch manifest @next/swc-win32-arm64-msvc@15.5.22
+64 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-win32-arm64-msvc cache-miss
+65 http cache https://registry.npmjs.org/@next%2fswc-linux-x64-musl 463ms (cache hit)
+66 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-linux-x64-musl set size:5268741 disposed:false
+67 http cache https://registry.npmjs.org/@next%2fswc-linux-arm64-musl 508ms (cache hit)
+68 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-linux-arm64-musl set size:5336103 disposed:false
+69 http cache https://registry.npmjs.org/@next%2fswc-win32-arm64-msvc 855ms (cache hit)
+70 silly packumentCache full:https://registry.npmjs.org/@next%2fswc-win32-arm64-msvc set size:5298675 disposed:false
+71 silly fetch manifest es-abstract@^1.24.0
+72 silly packumentCache full:https://registry.npmjs.org/es-abstract cache-miss
+73 http cache https://registry.npmjs.org/es-abstract 55ms (cache hit)
+74 silly packumentCache full:https://registry.npmjs.org/es-abstract set size:384124 disposed:false
+75 silly placeDep node_modules/array-includes es-abstract@1.24.2 OK for: array-includes@3.1.9 want: ^1.24.0
+76 silly fetch manifest es-abstract@^1.23.2
+77 silly packumentCache full:https://registry.npmjs.org/es-abstract cache-hit
+78 silly placeDep node_modules/array.prototype.findlast es-abstract@1.24.2 OK for: array.prototype.findlast@1.2.5 want: ^1.23.2
+79 silly fetch manifest es-abstract@^1.23.9
+80 silly packumentCache full:https://registry.npmjs.org/es-abstract cache-hit
+81 silly placeDep node_modules/array.prototype.findlastindex es-abstract@1.24.2 OK for: array.prototype.findlastindex@1.2.6 want: ^1.23.9
+82 silly fetch manifest es-abstract@^1.23.5
+83 silly packumentCache full:https://registry.npmjs.org/es-abstract cache-hit
+84 silly placeDep node_modules/array.prototype.flat es-abstract@1.24.2 OK for: array.prototype.flat@1.3.3 want: ^1.23.5
+85 silly placeDep node_modules/array.prototype.flatmap es-abstract@1.24.2 OK for: array.prototype.flatmap@1.3.3 want: ^1.23.5
+86 silly fetch manifest es-abstract@^1.23.3
+87 silly packumentCache full:https://registry.npmjs.org/es-abstract cache-hit
+88 silly placeDep node_modules/array.prototype.tosorted es-abstract@1.24.2 OK for: array.prototype.tosorted@1.1.4 want: ^1.23.3
+89 silly fetch manifest es-abstract@^1.24.2
+90 silly packumentCache full:https://registry.npmjs.org/es-abstract cache-hit
+91 silly placeDep node_modules/es-iterator-helpers es-abstract@1.24.2 OK for: es-iterator-helpers@1.4.0 want: ^1.24.2
+92 silly fetch manifest @esbuild/aix-ppc64@0.28.1
+93 silly packumentCache full:https://registry.npmjs.org/@esbuild%2faix-ppc64 cache-miss
+94 http cache https://registry.npmjs.org/@esbuild%2faix-ppc64 79ms (cache hit)
+95 silly packumentCache full:https://registry.npmjs.org/@esbuild%2faix-ppc64 set size:65972 disposed:false
+96 silly fetch manifest @esbuild/android-arm@0.28.1
+97 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fandroid-arm cache-miss
+98 http cache https://registry.npmjs.org/@esbuild%2fandroid-arm 82ms (cache hit)
+99 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fandroid-arm set size:223400 disposed:false
+100 silly fetch manifest @esbuild/android-arm64@0.28.1
+101 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fandroid-arm64 cache-miss
+102 http cache https://registry.npmjs.org/@esbuild%2fandroid-arm64 43ms (cache hit)
+103 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fandroid-arm64 set size:202366 disposed:false
+104 silly fetch manifest @esbuild/android-x64@0.28.1
+105 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fandroid-x64 cache-miss
+106 http cache https://registry.npmjs.org/@esbuild%2fandroid-x64 59ms (cache hit)
+107 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fandroid-x64 set size:197200 disposed:false
+108 silly fetch manifest @esbuild/darwin-arm64@0.28.1
+109 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fdarwin-arm64 cache-miss
+110 http cache https://registry.npmjs.org/@esbuild%2fdarwin-arm64 18ms (cache hit)
+111 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fdarwin-arm64 set size:199630 disposed:false
+112 silly fetch manifest @esbuild/darwin-x64@0.28.1
+113 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fdarwin-x64 cache-miss
+114 http cache https://registry.npmjs.org/@esbuild%2fdarwin-x64 49ms (cache hit)
+115 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fdarwin-x64 set size:197848 disposed:false
+116 silly fetch manifest @esbuild/freebsd-arm64@0.28.1
+117 silly packumentCache full:https://registry.npmjs.org/@esbuild%2ffreebsd-arm64 cache-miss
+118 http cache https://registry.npmjs.org/@esbuild%2ffreebsd-arm64 33ms (cache hit)
+119 silly packumentCache full:https://registry.npmjs.org/@esbuild%2ffreebsd-arm64 set size:200534 disposed:false
+120 silly fetch manifest @esbuild/freebsd-x64@0.28.1
+121 silly packumentCache full:https://registry.npmjs.org/@esbuild%2ffreebsd-x64 cache-miss
+122 http cache https://registry.npmjs.org/@esbuild%2ffreebsd-x64 43ms (cache hit)
+123 silly packumentCache full:https://registry.npmjs.org/@esbuild%2ffreebsd-x64 set size:198734 disposed:false
+124 silly fetch manifest @esbuild/linux-arm@0.28.1
+125 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-arm cache-miss
+126 http cache https://registry.npmjs.org/@esbuild%2flinux-arm 38ms (cache hit)
+127 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-arm set size:196784 disposed:false
+128 silly fetch manifest @esbuild/linux-arm64@0.28.1
+129 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-arm64 cache-miss
+130 http cache https://registry.npmjs.org/@esbuild%2flinux-arm64 16ms (cache hit)
+131 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-arm64 set size:198939 disposed:false
+132 silly fetch manifest @esbuild/linux-ia32@0.28.1
+133 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-ia32 cache-miss
+134 http cache https://registry.npmjs.org/@esbuild%2flinux-ia32 19ms (cache hit)
+135 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-ia32 set size:197805 disposed:false
+136 silly fetch manifest @esbuild/linux-loong64@0.28.1
+137 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-loong64 cache-miss
+138 http cache https://registry.npmjs.org/@esbuild%2flinux-loong64 19ms (cache hit)
+139 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-loong64 set size:253896 disposed:false
+140 silly fetch manifest @esbuild/linux-mips64el@0.28.1
+141 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-mips64el cache-miss
+142 http cache https://registry.npmjs.org/@esbuild%2flinux-mips64el 27ms (cache hit)
+143 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-mips64el set size:202764 disposed:false
+144 silly fetch manifest @esbuild/linux-ppc64@0.28.1
+145 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-ppc64 cache-miss
+146 http cache https://registry.npmjs.org/@esbuild%2flinux-ppc64 23ms (cache hit)
+147 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-ppc64 set size:200994 disposed:false
+148 silly fetch manifest @esbuild/linux-riscv64@0.28.1
+149 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-riscv64 cache-miss
+150 http cache https://registry.npmjs.org/@esbuild%2flinux-riscv64 38ms (cache hit)
+151 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-riscv64 set size:200662 disposed:false
+152 silly fetch manifest @esbuild/linux-s390x@0.28.1
+153 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-s390x cache-miss
+154 http cache https://registry.npmjs.org/@esbuild%2flinux-s390x 34ms (cache hit)
+155 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-s390x set size:200463 disposed:false
+156 silly fetch manifest @esbuild/linux-x64@0.28.1
+157 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-x64 cache-miss
+158 http cache https://registry.npmjs.org/@esbuild%2flinux-x64 44ms (cache hit)
+159 silly packumentCache full:https://registry.npmjs.org/@esbuild%2flinux-x64 set size:197126 disposed:false
+160 silly fetch manifest @esbuild/netbsd-arm64@0.28.1
+161 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fnetbsd-arm64 cache-miss
+162 http cache https://registry.npmjs.org/@esbuild%2fnetbsd-arm64 229ms (cache hit)
+163 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fnetbsd-arm64 set size:42467 disposed:false
+164 silly fetch manifest @esbuild/netbsd-x64@0.28.1
+165 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fnetbsd-x64 cache-miss
+166 http cache https://registry.npmjs.org/@esbuild%2fnetbsd-x64 46ms (cache hit)
+167 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fnetbsd-x64 set size:195514 disposed:false
+168 silly fetch manifest @esbuild/openbsd-arm64@0.28.1
+169 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fopenbsd-arm64 cache-miss
+170 http cache https://registry.npmjs.org/@esbuild%2fopenbsd-arm64 25ms (cache hit)
+171 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fopenbsd-arm64 set size:47792 disposed:false
+172 silly fetch manifest @esbuild/openbsd-x64@0.28.1
+173 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fopenbsd-x64 cache-miss
+174 http cache https://registry.npmjs.org/@esbuild%2fopenbsd-x64 21ms (cache hit)
+175 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fopenbsd-x64 set size:198745 disposed:false
+176 silly fetch manifest @esbuild/openharmony-arm64@0.28.1
+177 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fopenharmony-arm64 cache-miss
+178 http cache https://registry.npmjs.org/@esbuild%2fopenharmony-arm64 40ms (cache hit)
+179 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fopenharmony-arm64 set size:31189 disposed:false
+180 silly fetch manifest @esbuild/sunos-x64@0.28.1
+181 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fsunos-x64 cache-miss
+182 http cache https://registry.npmjs.org/@esbuild%2fsunos-x64 25ms (cache hit)
+183 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fsunos-x64 set size:197370 disposed:false
+184 silly fetch manifest @esbuild/win32-arm64@0.28.1
+185 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fwin32-arm64 cache-miss
+186 http cache https://registry.npmjs.org/@esbuild%2fwin32-arm64 23ms (cache hit)
+187 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fwin32-arm64 set size:199171 disposed:false
+188 silly fetch manifest @esbuild/win32-ia32@0.28.1
+189 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fwin32-ia32 cache-miss
+190 http cache https://registry.npmjs.org/@esbuild%2fwin32-ia32 18ms (cache hit)
+191 silly packumentCache full:https://registry.npmjs.org/@esbuild%2fwin32-ia32 set size:198030 disposed:false
+192 silly placeDep ROOT @esbuild/aix-ppc64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+193 silly placeDep ROOT @esbuild/android-arm@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+194 silly placeDep ROOT @esbuild/android-arm64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+195 silly placeDep ROOT @esbuild/android-x64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+196 silly placeDep ROOT @esbuild/darwin-arm64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+197 silly placeDep ROOT @esbuild/darwin-x64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+198 silly placeDep ROOT @esbuild/freebsd-arm64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+199 silly placeDep ROOT @esbuild/freebsd-x64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+200 silly placeDep ROOT @esbuild/linux-arm@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+201 silly placeDep ROOT @esbuild/linux-arm64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+202 silly placeDep ROOT @esbuild/linux-ia32@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+203 silly placeDep ROOT @esbuild/linux-loong64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+204 silly placeDep ROOT @esbuild/linux-mips64el@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+205 silly placeDep ROOT @esbuild/linux-ppc64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+206 silly placeDep ROOT @esbuild/linux-riscv64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+207 silly placeDep ROOT @esbuild/linux-s390x@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+208 silly placeDep ROOT @esbuild/linux-x64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+209 silly placeDep ROOT @esbuild/netbsd-arm64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+210 silly placeDep ROOT @esbuild/netbsd-x64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+211 silly placeDep ROOT @esbuild/openbsd-arm64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+212 silly placeDep ROOT @esbuild/openbsd-x64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+213 silly placeDep ROOT @esbuild/openharmony-arm64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+214 silly placeDep ROOT @esbuild/sunos-x64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+215 silly placeDep ROOT @esbuild/win32-arm64@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+216 silly placeDep ROOT @esbuild/win32-ia32@0.28.1 OK for: esbuild@0.28.1 want: 0.28.1
+217 silly placeDep ROOT @next/swc-darwin-arm64@15.5.22 OK for: next@15.5.22 want: 15.5.22
+218 silly placeDep ROOT @next/swc-darwin-x64@15.5.22 OK for: next@15.5.22 want: 15.5.22
+219 silly placeDep ROOT @next/swc-linux-arm64-gnu@15.5.22 OK for: next@15.5.22 want: 15.5.22
+220 silly placeDep ROOT @next/swc-linux-arm64-musl@15.5.22 OK for: next@15.5.22 want: 15.5.22
+221 silly placeDep ROOT @next/swc-linux-x64-gnu@15.5.22 OK for: next@15.5.22 want: 15.5.22
+222 silly placeDep ROOT @next/swc-linux-x64-musl@15.5.22 OK for: next@15.5.22 want: 15.5.22
+223 silly placeDep ROOT @next/swc-win32-arm64-msvc@15.5.22 OK for: next@15.5.22 want: 15.5.22
+224 silly placeDep node_modules/object.fromentries es-abstract@1.24.2 OK for: object.fromentries@2.0.8 want: ^1.23.2
+225 silly placeDep node_modules/object.groupby es-abstract@1.24.2 OK for: object.groupby@1.0.3 want: ^1.23.2
+226 silly placeDep node_modules/string.prototype.includes es-abstract@1.24.2 OK for: string.prototype.includes@2.0.1 want: ^1.23.3
+227 silly fetch manifest es-abstract@^1.23.6
+228 silly packumentCache full:https://registry.npmjs.org/es-abstract cache-hit
+229 silly placeDep node_modules/string.prototype.matchall es-abstract@1.24.2 OK for: string.prototype.matchall@4.0.12 want: ^1.23.6
+230 silly fetch manifest es-abstract@^1.17.5
+231 silly packumentCache full:https://registry.npmjs.org/es-abstract cache-hit
+232 silly placeDep node_modules/string.prototype.repeat es-abstract@1.24.2 OK for: string.prototype.repeat@1.0.0 want: ^1.17.5
+233 silly fetch manifest fsevents@~2.3.3
+234 silly packumentCache full:https://registry.npmjs.org/fsevents cache-miss
+235 http cache https://registry.npmjs.org/fsevents 18ms (cache hit)
+236 silly packumentCache full:https://registry.npmjs.org/fsevents set size:182472 disposed:false
+237 silly placeDep ROOT fsevents@2.3.3 OK for: tsx@4.23.1 want: ~2.3.3
+238 silly fetch manifest @unrs/resolver-binding-darwin-arm64@1.12.2
+239 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-darwin-arm64 cache-miss
+240 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-darwin-arm64 34ms (cache hit)
+241 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-darwin-arm64 set size:63676 disposed:false
+242 silly fetch manifest @unrs/resolver-binding-android-arm64@1.12.2
+243 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-android-arm64 cache-miss
+244 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-android-arm64 34ms (cache hit)
+245 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-android-arm64 set size:17616 disposed:false
+246 silly fetch manifest @unrs/resolver-binding-win32-arm64-msvc@1.12.2
+247 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-win32-arm64-msvc cache-miss
+248 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-win32-arm64-msvc 160ms (cache hit)
+249 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-win32-arm64-msvc set size:64613 disposed:false
+250 silly fetch manifest @unrs/resolver-binding-linux-arm64-gnu@1.12.2
+251 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm64-gnu cache-miss
+252 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm64-gnu 74ms (cache hit)
+253 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm64-gnu set size:65047 disposed:false
+254 silly fetch manifest @unrs/resolver-binding-linux-arm64-musl@1.12.2
+255 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm64-musl cache-miss
+256 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm64-musl 14ms (cache hit)
+257 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm64-musl set size:65257 disposed:false
+258 silly fetch manifest @unrs/resolver-binding-openharmony-arm64@1.12.2
+259 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-openharmony-arm64 cache-miss
+260 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-openharmony-arm64 37ms (cache hit)
+261 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-openharmony-arm64 set size:7350 disposed:false
+262 silly fetch manifest @unrs/resolver-binding-android-arm-eabi@1.12.2
+263 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-android-arm-eabi cache-miss
+264 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-android-arm-eabi 52ms (cache hit)
+265 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-android-arm-eabi set size:17797 disposed:false
+266 silly fetch manifest @unrs/resolver-binding-linux-arm-gnueabihf@1.12.2
+267 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm-gnueabihf cache-miss
+268 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm-gnueabihf 108ms (cache hit)
+269 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm-gnueabihf set size:65279 disposed:false
+270 silly fetch manifest @unrs/resolver-binding-linux-arm-musleabihf@1.12.2
+271 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm-musleabihf cache-miss
+272 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm-musleabihf 26ms (cache hit)
+273 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-arm-musleabihf set size:65533 disposed:false
+274 silly fetch manifest @unrs/resolver-binding-win32-ia32-msvc@1.12.2
+275 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-win32-ia32-msvc cache-miss
+276 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-win32-ia32-msvc 44ms (cache hit)
+277 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-win32-ia32-msvc set size:64317 disposed:false
+278 silly fetch manifest @unrs/resolver-binding-linux-loong64-gnu@1.12.2
+279 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-loong64-gnu cache-miss
+280 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-loong64-gnu 85ms (cache hit)
+281 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-loong64-gnu set size:4107 disposed:false
+282 silly fetch manifest @unrs/resolver-binding-linux-loong64-musl@1.12.2
+283 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-loong64-musl cache-miss
+284 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-loong64-musl 299ms (cache hit)
+285 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-loong64-musl set size:4124 disposed:false
+286 silly fetch manifest @unrs/resolver-binding-linux-ppc64-gnu@1.12.2
+287 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-ppc64-gnu cache-miss
+288 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-ppc64-gnu 207ms (cache hit)
+289 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-ppc64-gnu set size:65057 disposed:false
+290 silly fetch manifest @unrs/resolver-binding-linux-riscv64-gnu@1.12.2
+291 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-riscv64-gnu cache-miss
+292 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-riscv64-gnu 34ms (cache hit)
+293 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-riscv64-gnu set size:56387 disposed:false
+294 silly fetch manifest @unrs/resolver-binding-linux-riscv64-musl@1.12.2
+295 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-riscv64-musl cache-miss
+296 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-riscv64-musl 51ms (cache hit)
+297 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-riscv64-musl set size:45710 disposed:false
+298 silly fetch manifest @unrs/resolver-binding-linux-s390x-gnu@1.12.2
+299 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-s390x-gnu cache-miss
+300 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-s390x-gnu 98ms (cache hit)
+301 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-s390x-gnu set size:65047 disposed:false
+302 silly fetch manifest @unrs/resolver-binding-wasm32-wasi@1.12.2
+303 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-wasm32-wasi cache-miss
+304 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-wasm32-wasi 60ms (cache hit)
+305 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-wasm32-wasi set size:67358 disposed:false
+306 silly fetch manifest @unrs/resolver-binding-darwin-x64@1.12.2
+307 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-darwin-x64 cache-miss
+308 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-darwin-x64 124ms (cache hit)
+309 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-darwin-x64 set size:63092 disposed:false
+310 silly fetch manifest @unrs/resolver-binding-freebsd-x64@1.12.2
+311 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-freebsd-x64 cache-miss
+312 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-freebsd-x64 82ms (cache hit)
+313 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-freebsd-x64 set size:63388 disposed:false
+314 silly fetch manifest @unrs/resolver-binding-linux-x64-gnu@1.12.2
+315 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-x64-gnu cache-miss
+316 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-x64-gnu 21ms (cache hit)
+317 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-x64-gnu set size:64469 disposed:false
+318 silly fetch manifest @unrs/resolver-binding-linux-x64-musl@1.12.2
+319 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-x64-musl cache-miss
+320 http cache https://registry.npmjs.org/@unrs%2fresolver-binding-linux-x64-musl 21ms (cache hit)
+321 silly packumentCache full:https://registry.npmjs.org/@unrs%2fresolver-binding-linux-x64-musl set size:64685 disposed:false
+322 silly placeDep ROOT @unrs/resolver-binding-android-arm-eabi@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+323 silly placeDep ROOT @unrs/resolver-binding-android-arm64@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+324 silly placeDep ROOT @unrs/resolver-binding-darwin-arm64@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+325 silly placeDep ROOT @unrs/resolver-binding-darwin-x64@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+326 silly placeDep ROOT @unrs/resolver-binding-freebsd-x64@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+327 silly placeDep ROOT @unrs/resolver-binding-linux-arm-gnueabihf@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+328 silly placeDep ROOT @unrs/resolver-binding-linux-arm-musleabihf@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+329 silly placeDep ROOT @unrs/resolver-binding-linux-arm64-gnu@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+330 silly placeDep ROOT @unrs/resolver-binding-linux-arm64-musl@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+331 silly placeDep ROOT @unrs/resolver-binding-linux-loong64-gnu@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+332 silly placeDep ROOT @unrs/resolver-binding-linux-loong64-musl@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+333 silly placeDep ROOT @unrs/resolver-binding-linux-ppc64-gnu@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+334 silly placeDep ROOT @unrs/resolver-binding-linux-riscv64-gnu@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+335 silly placeDep ROOT @unrs/resolver-binding-linux-riscv64-musl@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+336 silly placeDep ROOT @unrs/resolver-binding-linux-s390x-gnu@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+337 silly placeDep ROOT @unrs/resolver-binding-linux-x64-gnu@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+338 silly placeDep ROOT @unrs/resolver-binding-linux-x64-musl@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+339 silly placeDep ROOT @unrs/resolver-binding-openharmony-arm64@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+340 silly placeDep ROOT @unrs/resolver-binding-wasm32-wasi@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+341 silly placeDep ROOT @unrs/resolver-binding-win32-arm64-msvc@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+342 silly placeDep ROOT @unrs/resolver-binding-win32-ia32-msvc@1.12.2 OK for: unrs-resolver@1.12.2 want: 1.12.2
+343 silly fetch manifest @napi-rs/wasm-runtime@^1.1.4
+344 silly packumentCache full:https://registry.npmjs.org/@napi-rs%2fwasm-runtime cache-miss
+345 silly fetch manifest @emnapi/core@1.10.0
+346 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore cache-miss
+347 silly fetch manifest @emnapi/runtime@1.10.0
+348 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime cache-miss
+349 http cache https://registry.npmjs.org/@napi-rs%2fwasm-runtime 78ms (cache hit)
+350 silly packumentCache full:https://registry.npmjs.org/@napi-rs%2fwasm-runtime set size:82241 disposed:false
+351 http cache https://registry.npmjs.org/@emnapi%2fcore 82ms (cache hit)
+352 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore set size:121716 disposed:false
+353 http cache https://registry.npmjs.org/@emnapi%2fruntime 87ms (cache hit)
+354 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime set size:122916 disposed:false
+355 silly placeDep ROOT @emnapi/core@1.10.0 OK for: @unrs/resolver-binding-wasm32-wasi@1.12.2 want: 1.10.0
+356 silly placeDep node_modules/@unrs/resolver-binding-wasm32-wasi @emnapi/runtime@1.10.0 OK for: @unrs/resolver-binding-wasm32-wasi@1.12.2 want: 1.10.0
+357 silly placeDep ROOT @napi-rs/wasm-runtime@1.2.1 OK for: @unrs/resolver-binding-wasm32-wasi@1.12.2 want: ^1.1.4
+358 silly fetch manifest @emnapi/wasi-threads@1.2.1
+359 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fwasi-threads cache-miss
+360 silly fetch manifest @tybys/wasm-util@^0.10.3
+361 silly packumentCache full:https://registry.npmjs.org/@tybys%2fwasm-util cache-miss
+362 http cache https://registry.npmjs.org/@emnapi%2fwasi-threads 82ms (cache hit)
+363 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fwasi-threads set size:27058 disposed:false
+364 http cache https://registry.npmjs.org/@tybys%2fwasm-util 85ms (cache hit)
+365 silly packumentCache full:https://registry.npmjs.org/@tybys%2fwasm-util set size:60108 disposed:false
+366 silly placeDep ROOT @emnapi/wasi-threads@1.2.1 OK for: @emnapi/core@1.10.0 want: 1.2.1
+367 silly placeDep ROOT @tybys/wasm-util@0.10.3 OK for: @napi-rs/wasm-runtime@1.2.1 want: ^0.10.3
+368 silly reify mark retired [
+368 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\next'
+368 silly reify ]
+369 silly reify mark retired [
+369 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\acorn',
+369 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\acorn',
+369 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\acorn.cmd',
+369 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\acorn.ps1'
+369 silly reify ]
+370 silly reify mark retired [
+370 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\esbuild',
+370 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\esbuild',
+370 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\esbuild.cmd',
+370 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\esbuild.ps1'
+370 silly reify ]
+371 silly reify mark retired [
+371 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint',
+371 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\eslint',
+371 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\eslint.cmd',
+371 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\eslint.ps1'
+371 silly reify ]
+372 silly reify mark retired [
+372 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\semver',
+372 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\semver',
+372 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\semver.cmd',
+372 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\semver.ps1'
+372 silly reify ]
+373 silly reify mark retired [
+373 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\semver',
+373 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\semver',
+373 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\semver.cmd',
+373 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\semver.ps1'
+373 silly reify ]
+374 silly reify mark retired [
+374 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\giget',
+374 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\giget',
+374 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\giget.cmd',
+374 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\giget.ps1'
+374 silly reify ]
+375 silly reify mark retired [
+375 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\jiti',
+375 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\jiti',
+375 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\jiti.cmd',
+375 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\jiti.ps1'
+375 silly reify ]
+376 silly reify mark retired [
+376 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\js-yaml',
+376 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\js-yaml',
+376 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\js-yaml.cmd',
+376 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\js-yaml.ps1'
+376 silly reify ]
+377 silly reify mark retired [
+377 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\json5',
+377 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\json5',
+377 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\json5.cmd',
+377 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\json5.ps1'
+377 silly reify ]
+378 silly reify mark retired [
+378 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\loose-envify',
+378 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\loose-envify',
+378 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\loose-envify.cmd',
+378 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\loose-envify.ps1'
+378 silly reify ]
+379 silly reify mark retired [
+379 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\nanoid',
+379 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nanoid',
+379 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nanoid.cmd',
+379 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nanoid.ps1'
+379 silly reify ]
+380 silly reify mark retired [
+380 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\napi-postinstall',
+380 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\napi-postinstall',
+380 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\napi-postinstall.cmd',
+380 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\napi-postinstall.ps1'
+380 silly reify ]
+381 silly reify mark retired [
+381 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\semver',
+381 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\semver',
+381 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\semver.cmd',
+381 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\semver.ps1'
+381 silly reify ]
+382 silly reify mark retired [
+382 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\nypm',
+382 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nypm',
+382 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nypm.cmd',
+382 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nypm.ps1'
+382 silly reify ]
+383 silly reify mark retired [
+383 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\prisma',
+383 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\prisma',
+383 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\prisma.cmd',
+383 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\prisma.ps1'
+383 silly reify ]
+384 silly reify mark retired [
+384 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\resolve',
+384 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\resolve',
+384 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\resolve.cmd',
+384 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\resolve.ps1'
+384 silly reify ]
+385 silly reify mark retired [
+385 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\semver',
+385 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\semver',
+385 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\semver.cmd',
+385 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\semver.ps1'
+385 silly reify ]
+386 silly reify mark retired [
+386 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\tsx',
+386 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsx',
+386 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsx.cmd',
+386 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsx.ps1'
+386 silly reify ]
+387 silly reify mark retired [
+387 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\which',
+387 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\node-which',
+387 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\node-which.cmd',
+387 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\node-which.ps1'
+387 silly reify ]
+388 silly reify mark retired [
+388 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\typescript',
+388 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsc',
+388 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsc.cmd',
+388 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsc.ps1',
+388 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsserver',
+388 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsserver.cmd',
+388 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsserver.ps1'
+388 silly reify ]
+389 silly reify mark retired [
+389 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\@emnapi\\runtime'
+389 silly reify ]
+390 silly reify moves {
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\next': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.next-XktIHGOx',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\acorn': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.acorn-JFY0kVxj',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\acorn': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.acorn-ikMZimOF',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\acorn.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.acorn.cmd-FJOgo8yE',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\acorn.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.acorn.ps1-uj3CauB2',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\esbuild': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.esbuild-UV6BiZ0j',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\esbuild': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.esbuild-KK5EjDaL',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\esbuild.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.esbuild.cmd-PK7WNLSS',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\esbuild.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.esbuild.ps1-JngfYsPI',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.eslint-qqs1wiRQ',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\eslint': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.eslint-7PJxDfm6',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\eslint.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.eslint.cmd-RdGz1dIa',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\eslint.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.eslint.ps1-doMQW9jN',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\semver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.semver-vOGu9ej3',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\semver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\.semver-dm6TlBdm',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\semver.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\.semver.cmd-mBDnq300',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\semver.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-import\\node_modules\\.bin\\.semver.ps1-ET1MLYxr',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\semver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.semver-PO3AG01V',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\semver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\.semver-aMrk8MAM',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\semver.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\.semver.cmd-GmeqnYUd',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\semver.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\eslint-plugin-react\\node_modules\\.bin\\.semver.ps1-etcGKGSt',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\giget': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.giget-RsK7DaVn',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\giget': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.giget-qtWM7SEa',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\giget.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.giget.cmd-psfF0Ie6',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\giget.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.giget.ps1-uAmv79Qo',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\jiti': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.jiti-XXvpoq4N',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\jiti': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.jiti-CK7j4Wqo',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\jiti.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.jiti.cmd-yQ0Y2xq7',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\jiti.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.jiti.ps1-4Jc9yFCW',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\js-yaml': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.js-yaml-aLfRkfN3',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\js-yaml': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.js-yaml-yTZzViyY',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\js-yaml.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.js-yaml.cmd-IBhUjQQR',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\js-yaml.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.js-yaml.ps1-qWHjtaLF',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\json5': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.json5-ODfZwFIg',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\json5': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.json5-71VFEJvm',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\json5.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.json5.cmd-r5xjQ9oS',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\json5.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.json5.ps1-y1VXBoBw',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\loose-envify': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.loose-envify-5UHkPkfY',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\loose-envify': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.loose-envify-YoEy8d3S',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\loose-envify.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.loose-envify.cmd-DTlc9UID',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\loose-envify.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.loose-envify.ps1-djc5Bu4f',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\nanoid': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.nanoid-FVXmOqfV',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nanoid': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.nanoid-DoLUAqn8',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nanoid.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.nanoid.cmd-CWYejS0j',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nanoid.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.nanoid.ps1-Sq9KCBug',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\napi-postinstall': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.napi-postinstall-rrznraW9',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\napi-postinstall': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.napi-postinstall-uU2UezuS',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\napi-postinstall.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.napi-postinstall.cmd-5j8r19o9',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\napi-postinstall.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.napi-postinstall.ps1-XJ8szNfp',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\semver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.semver-z8ofYUrv',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\semver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\.semver-ZaxKpLok',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\semver.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\.semver.cmd-xVzFclAZ',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\semver.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\node-exports-info\\node_modules\\.bin\\.semver.ps1-phHfPWg7',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\nypm': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.nypm-NWtpC8Tj',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nypm': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.nypm-B8WTHc51',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nypm.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.nypm.cmd-GjQvaKr0',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\nypm.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.nypm.ps1-j7jOC8gf',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\prisma': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.prisma-k4LDZnDC',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\prisma': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.prisma-NNwcAT2K',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\prisma.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.prisma.cmd-PC5dscT2',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\prisma.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.prisma.ps1-borqHrTo',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\resolve': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.resolve-HB5Q93Fa',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\resolve': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.resolve-qz5vJRBG',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\resolve.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.resolve.cmd-T1ddMk6L',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\resolve.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.resolve.ps1-RcDr7GJd',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\semver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.semver-SuuFyyJh',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\semver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.semver-uJxKxgWI',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\semver.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.semver.cmd-nhEhnIPU',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\semver.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.semver.ps1-DO9o5cFF',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\tsx': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.tsx-JRF2GTCH',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsx': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsx-LfuH66IX',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsx.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsx.cmd-WftqTDWs',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsx.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsx.ps1-Q8vgVFYU',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\which': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.which-OAG7ObKD',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\node-which': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.node-which-kFCC40qe',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\node-which.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.node-which.cmd-Cw1yXAE9',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\node-which.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.node-which.ps1-676wenWz',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\typescript': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.typescript-wtGRLP2F',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsc': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsc-bFx1cAno',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsc.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsc.cmd-2y54Um0J',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsc.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsc.ps1-oY4wLwQe',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsserver': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsserver-64x6iUlo',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsserver.cmd': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsserver.cmd-Dby8ez9k',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\tsserver.ps1': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\.bin\\.tsserver.ps1-qQ498rI1',
+390 silly reify   'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\@emnapi\\runtime': 'C:\\Users\\NTC\\Documents\\Codex\\2026-07-30\\hi-mathan-thanks-for-your-time\\node_modules\\@emnapi\\.runtime-GOJu05Ed'
+390 silly reify }
+391 silly packumentCache corgi:https://registry.npmjs.org/typescript cache-miss
+392 silly packumentCache corgi:https://registry.npmjs.org/which cache-miss
+393 silly packumentCache corgi:https://registry.npmjs.org/tsx cache-miss
+394 silly packumentCache corgi:https://registry.npmjs.org/semver cache-miss
+395 silly packumentCache corgi:https://registry.npmjs.org/resolve cache-miss
+396 silly packumentCache corgi:https://registry.npmjs.org/nypm cache-miss
+397 silly packumentCache corgi:https://registry.npmjs.org/prisma cache-miss
+398 silly packumentCache corgi:https://registry.npmjs.org/napi-postinstall cache-miss
+399 silly packumentCache corgi:https://registry.npmjs.org/nanoid cache-miss
+400 silly packumentCache corgi:https://registry.npmjs.org/json5 cache-miss
+401 silly packumentCache corgi:https://registry.npmjs.org/loose-envify cache-miss
+402 silly packumentCache corgi:https://registry.npmjs.org/jiti cache-miss
+403 silly packumentCache corgi:https://registry.npmjs.org/js-yaml cache-miss
+404 silly packumentCache corgi:https://registry.npmjs.org/eslint cache-miss
+405 silly packumentCache corgi:https://registry.npmjs.org/giget cache-miss
+406 silly packumentCache corgi:https://registry.npmjs.org/esbuild cache-miss
+407 silly packumentCache corgi:https://registry.npmjs.org/acorn cache-miss
+408 http cache next@https://registry.npmjs.org/next/-/next-15.5.22.tgz 0ms (cache hit)
+409 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+410 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+411 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+412 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+413 silly packumentCache corgi:https://registry.npmjs.org/semver cache-miss
+414 silly packumentCache corgi:https://registry.npmjs.org/semver cache-miss
+415 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+416 silly packumentCache corgi:https://registry.npmjs.org/semver cache-miss
+417 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+418 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+419 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+420 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+421 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+422 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+423 http cache es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 0ms (cache hit)
+424 silly tarball no local data for next@https://registry.npmjs.org/next/-/next-15.5.22.tgz. Extracting by manifest.
+425 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+426 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+427 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+428 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+429 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+430 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+431 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+432 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+433 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+434 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+435 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+436 silly tarball no local data for es-abstract@https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz. Extracting by manifest.
+437 http cache https://registry.npmjs.org/eslint 578ms (cache hit)
+438 silly packumentCache corgi:https://registry.npmjs.org/eslint set size:1175599 disposed:false
+439 http cache https://registry.npmjs.org/eslint/-/eslint-9.39.5.tgz 532ms (cache hit)
+440 http fetch GET 200 https://registry.npmjs.org/which 1258ms (cache miss)
+441 silly packumentCache corgi:https://registry.npmjs.org/which set size:undefined disposed:false
+442 http cache https://registry.npmjs.org/which/-/which-2.0.2.tgz 221ms (cache hit)
+443 http fetch GET 200 https://registry.npmjs.org/loose-envify 1567ms (cache miss)
+444 silly packumentCache corgi:https://registry.npmjs.org/loose-envify set size:undefined disposed:false
+445 http fetch GET 200 https://registry.npmjs.org/tsx 1601ms (cache miss)
+446 silly packumentCache corgi:https://registry.npmjs.org/tsx set size:undefined disposed:false
+447 http fetch GET 200 https://registry.npmjs.org/json5 1597ms (cache miss)
+448 silly packumentCache corgi:https://registry.npmjs.org/json5 set size:undefined disposed:false
+449 http fetch GET 200 https://registry.npmjs.org/semver 1646ms (cache miss)
+450 silly packumentCache corgi:https://registry.npmjs.org/semver set size:undefined disposed:false
+451 http fetch GET 200 https://registry.npmjs.org/js-yaml 1641ms (cache miss)
+452 silly packumentCache corgi:https://registry.npmjs.org/js-yaml set size:undefined disposed:false
+453 http fetch GET 200 https://registry.npmjs.org/nypm 1728ms (cache miss)
+454 silly packumentCache corgi:https://registry.npmjs.org/nypm set size:undefined disposed:false
+455 http fetch GET 200 https://registry.npmjs.org/nanoid 1764ms (cache miss)
+456 silly packumentCache corgi:https://registry.npmjs.org/nanoid set size:undefined disposed:false
+457 http fetch GET 200 https://registry.npmjs.org/semver 1792ms (cache miss)
+458 silly packumentCache corgi:https://registry.npmjs.org/semver set size:undefined disposed:false
+459 http fetch GET 200 https://registry.npmjs.org/semver 1813ms (cache miss)
+460 silly packumentCache corgi:https://registry.npmjs.org/semver set size:undefined disposed:false
+461 http cache https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz 296ms (cache hit)
+462 http cache https://registry.npmjs.org/tsx/-/tsx-4.23.1.tgz 349ms (cache hit)
+463 http cache https://registry.npmjs.org/json5/-/json5-1.0.2.tgz 345ms (cache hit)
+464 http fetch GET 200 https://registry.npmjs.org/napi-postinstall 1974ms (cache miss)
+465 silly packumentCache corgi:https://registry.npmjs.org/napi-postinstall set size:undefined disposed:false
+466 http cache https://registry.npmjs.org/semver/-/semver-7.8.5.tgz 451ms (cache hit)
+467 http cache https://registry.npmjs.org/js-yaml/-/js-yaml-4.3.0.tgz 463ms (cache hit)
+468 http fetch GET 200 https://registry.npmjs.org/semver 2089ms (cache miss)
+469 silly packumentCache corgi:https://registry.npmjs.org/semver set size:undefined disposed:false
+470 http fetch GET 200 https://registry.npmjs.org/giget 2199ms (cache miss)
+471 silly packumentCache corgi:https://registry.npmjs.org/giget set size:undefined disposed:false
+472 http cache https://registry.npmjs.org/nypm/-/nypm-0.6.9.tgz 493ms (cache hit)
+473 http cache https://registry.npmjs.org/nanoid/-/nanoid-3.3.16.tgz 503ms (cache hit)
+474 http cache https://registry.npmjs.org/semver/-/semver-6.3.1.tgz 531ms (cache hit)
+475 http cache https://registry.npmjs.org/semver/-/semver-6.3.1.tgz 526ms (cache hit)
+476 http fetch GET 200 https://registry.npmjs.org/resolve 2465ms (cache miss)
+477 silly packumentCache corgi:https://registry.npmjs.org/resolve set size:undefined disposed:false
+478 http fetch GET 200 https://registry.npmjs.org/acorn 2482ms (cache miss)
+479 silly packumentCache corgi:https://registry.npmjs.org/acorn set size:undefined disposed:false
+480 http cache https://registry.npmjs.org/napi-postinstall/-/napi-postinstall-0.3.4.tgz 615ms (cache hit)
+481 http fetch GET 200 https://registry.npmjs.org/jiti 2673ms (cache miss)
+482 silly packumentCache corgi:https://registry.npmjs.org/jiti set size:undefined disposed:false
+483 http cache https://registry.npmjs.org/semver/-/semver-6.3.1.tgz 632ms (cache hit)
+484 http cache https://registry.npmjs.org/giget/-/giget-2.0.0.tgz 579ms (cache hit)
+485 http cache https://registry.npmjs.org/resolve/-/resolve-2.0.0-next.7.tgz 391ms (cache hit)
+486 http cache https://registry.npmjs.org/acorn/-/acorn-8.18.0.tgz 379ms (cache hit)
+487 http cache https://registry.npmjs.org/jiti/-/jiti-2.7.0.tgz 259ms (cache hit)
+488 http fetch GET 200 https://registry.npmjs.org/esbuild 2951ms (cache miss)
+489 silly packumentCache corgi:https://registry.npmjs.org/esbuild set size:undefined disposed:false
+490 http cache https://registry.npmjs.org/esbuild/-/esbuild-0.28.1.tgz 175ms (cache hit)
+491 http fetch GET 200 https://registry.npmjs.org/typescript 5344ms (cache miss)
+492 silly packumentCache corgi:https://registry.npmjs.org/typescript set size:undefined disposed:false
+493 http cache https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz 395ms (cache hit)
+494 http fetch GET 200 https://registry.npmjs.org/prisma 8432ms (cache miss)
+495 silly packumentCache corgi:https://registry.npmjs.org/prisma set size:undefined disposed:false
+496 http cache https://registry.npmjs.org/prisma/-/prisma-6.19.3.tgz 812ms (cache hit)
+497 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46500ms (cache miss)
+498 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46620ms (cache miss)
+499 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46654ms (cache miss)
+500 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46665ms (cache miss)
+501 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46685ms (cache miss)
+502 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46691ms (cache miss)
+503 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46723ms (cache miss)
+504 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46771ms (cache miss)
+505 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46775ms (cache miss)
+506 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46857ms (cache miss)
+507 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46902ms (cache miss)
+508 http fetch GET 200 https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.2.tgz 46915ms (cache miss)
+509 http fetch GET 200 https://registry.npmjs.org/next/-/next-15.5.22.tgz 88923ms (cache miss)
+510 info run prisma@6.19.3 preinstall node_modules/prisma node scripts/preinstall-entry.js
+511 info run prisma@6.19.3 preinstall { code: 0, signal: null }
+512 info run esbuild@0.28.1 postinstall node_modules/esbuild node install.js
+513 info run esbuild@0.28.1 postinstall { code: 0, signal: null }
+514 silly REMOVE node_modules/@emnapi/runtime
+515 silly CHANGE node_modules/typescript
+516 silly CHANGE node_modules/which
+517 silly CHANGE node_modules/tsx
+518 silly ADD node_modules/string.prototype.matchall/node_modules/es-abstract
+519 silly ADD node_modules/string.prototype.repeat/node_modules/es-abstract
+520 silly ADD node_modules/string.prototype.includes/node_modules/es-abstract
+521 silly CHANGE node_modules/semver
+522 silly CHANGE node_modules/resolve
+523 silly CHANGE node_modules/prisma
+524 silly CHANGE node_modules/nypm
+525 silly ADD node_modules/object.groupby/node_modules/es-abstract
+526 silly ADD node_modules/object.fromentries/node_modules/es-abstract
+527 silly CHANGE node_modules/node-exports-info/node_modules/semver
+528 silly CHANGE node_modules/napi-postinstall
+529 silly CHANGE node_modules/nanoid
+530 silly CHANGE node_modules/loose-envify
+531 silly CHANGE node_modules/json5
+532 silly CHANGE node_modules/js-yaml
+533 silly CHANGE node_modules/jiti
+534 silly CHANGE node_modules/giget
+535 silly CHANGE node_modules/eslint-plugin-react/node_modules/semver
+536 silly CHANGE node_modules/eslint-plugin-import/node_modules/semver
+537 silly ADD node_modules/es-iterator-helpers/node_modules/es-abstract
+538 silly CHANGE node_modules/eslint
+539 silly CHANGE node_modules/esbuild
+540 silly ADD node_modules/array.prototype.tosorted/node_modules/es-abstract
+541 silly ADD node_modules/array.prototype.flat/node_modules/es-abstract
+542 silly ADD node_modules/array.prototype.flatmap/node_modules/es-abstract
+543 silly ADD node_modules/array.prototype.findlast/node_modules/es-abstract
+544 silly ADD node_modules/array.prototype.findlastindex/node_modules/es-abstract
+545 silly ADD node_modules/array-includes/node_modules/es-abstract
+546 silly CHANGE node_modules/acorn
+547 silly CHANGE node_modules/next
+548 verbose cwd C:\Users\NTC\Documents\Codex\2026-07-30\hi-mathan-thanks-for-your-time
+549 verbose os Windows_NT 10.0.22621
+550 verbose node v24.13.1
+551 verbose npm  v11.8.0
+552 verbose exit 0
+553 info ok

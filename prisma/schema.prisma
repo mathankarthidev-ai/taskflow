@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MEMBER
+  LEAD
+  ADMIN
+}
+enum Team {
+  CREATIVE
+  MARKETING
+  DEV
+}
+enum Status {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+enum ActivityType {
+  TASK_CREATED
+  TASK_ROUTED
+  TASK_ASSIGNED
+  TASK_MOVED
+  COMMENT_ADDED
+  TASK_ARCHIVED
+  USER_UPDATED
+  ANNOUNCEMENT_POSTED
+}
+enum FinancialType {
+  REVENUE
+  EXPENSE
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  role          Role           @default(MEMBER)
+  team          Team?
+  isActive      Boolean        @default(true)
+  monthlySalary Int            @default(0)
+  createdAt     DateTime       @default(now())
+  assignedTasks Task[]         @relation("Assignee")
+  createdTasks  Task[]         @relation("Creator")
+  comments      Comment[]
+  activities    ActivityLog[]
+  notifications Notification[]
+}
+
+model Task {
+  id         String        @id @default(cuid())
+  title      String
+  description String?
+  team       Team
+  status     Status        @default(TODO)
+  priority   Priority      @default(MEDIUM)
+  isIncoming Boolean       @default(false)
+  dueDate    DateTime?
+  archivedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  creatorId  String
+  creator    User          @relation("Creator", fields: [creatorId], references: [id])
+  assigneeId String?
+  assignee   User?         @relation("Assignee", fields: [assigneeId], references: [id])
+  comments   Comment[]
+  activities ActivityLog[]
+  @@index([team, status])
+  @@index([assigneeId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+}
+
+model ActivityLog {
+  id        String       @id @default(cuid())
+  type      ActivityType
+  message   String
+  createdAt DateTime     @default(now())
+  actorId   String?
+  actor     User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  taskId    String?
+  task      Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, readAt])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+  authorId  String
+}
+
+model FinancialEntry {
+  id        String        @id @default(cuid())
+  type      FinancialType
+  category  String
+  amount    Int
+  note      String?
+  recordedAt DateTime     @default(now())
+  createdAt DateTime     @default(now())
+  @@index([recordedAt])
+}
