@@ -80,7 +80,7 @@ export default function TeamChatPage() {
   const [replyingTo, setReplyingTo] = useState<{ id: string; senderName: string; text: string } | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionStartIndex, setMentionStartIndex] = useState<number>(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Admin New Group Modal State
   const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
@@ -424,9 +424,13 @@ export default function TeamChatPage() {
     return Array.from(new Set(list));
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setMessageText(val);
+
+    // Auto-grow height smoothly up to max
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 144)}px`;
 
     const cursorPos = e.target.selectionStart || val.length;
     const textBeforeCursor = val.slice(0, cursorPos);
@@ -434,13 +438,27 @@ export default function TeamChatPage() {
 
     if (lastAtIdx !== -1) {
       const query = textBeforeCursor.slice(lastAtIdx + 1);
-      if (!query.includes(' ') && query.length <= 20) {
+      if (!query.includes(' ') && !query.includes('\n') && query.length <= 20) {
         setMentionQuery(query.toLowerCase());
         setMentionStartIndex(lastAtIdx);
         return;
       }
     }
     setMentionQuery(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Shift + Enter: allow native newline insertion
+        return;
+      }
+      // Enter without Shift: submit message
+      e.preventDefault();
+      if (!isSending && (messageText.trim() || attachedFile || linkInput.trim())) {
+        handleSendMessage();
+      }
+    }
   };
 
   const handleSelectMention = (targetUser: User) => {
@@ -602,8 +620,8 @@ export default function TeamChatPage() {
     toast.success(`Attached file "${file.name}" (< 5MB limit verified)`);
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMessage = (e?: React.FormEvent) => {
+    e?.preventDefault();
 
     // Check 1: Guard against rapid double click or multiple submit events
     if (isSendingRef.current) return;
@@ -627,6 +645,9 @@ export default function TeamChatPage() {
     setAttachedFile(null);
     setReplyingTo(null);
     setMentionQuery(null);
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
 
     const extractedMentions = extractMentionsFromText(textToSend);
     if (currentReply && !extractedMentions.includes(currentReply.senderName)) {
@@ -1459,8 +1480,8 @@ export default function TeamChatPage() {
           )}
 
           {/* Text Message Field & Actions */}
-          <div className="flex items-center gap-2">
-            <label className="cursor-pointer p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground transition-colors" title="Attach Document (< 5MB limit)">
+          <div className="flex items-end gap-2">
+            <label className="cursor-pointer p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground transition-colors shrink-0 mb-0.5" title="Attach Document (< 5MB limit)">
               <Paperclip className="h-4 w-4 text-emerald-500" />
               <input type="file" onChange={handleFileUpload} className="hidden" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.zip,.xlsx,.txt" />
             </label>
@@ -1468,7 +1489,7 @@ export default function TeamChatPage() {
             <button
               type="button"
               onClick={() => setShowLinkField(!showLinkField)}
-              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground transition-colors"
+              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground transition-colors shrink-0 mb-0.5"
               title="Share Link"
             >
               <LinkIcon className="h-4 w-4 text-brand-500" />
@@ -1482,25 +1503,26 @@ export default function TeamChatPage() {
                 setMentionStartIndex(messageText.length);
                 inputRef.current?.focus();
               }}
-              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-purple-500 transition-colors"
+              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-purple-500 transition-colors shrink-0 mb-0.5"
               title="Mention Team Member (@)"
             >
               <AtSign className="h-4 w-4 text-purple-500" />
             </button>
 
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
               value={messageText}
               onChange={handleInputChange}
-              placeholder={`Message ${activeChannel?.name}... (Type @ to mention)`}
-              className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3.5 py-2.5 text-xs font-medium focus-ring"
+              onKeyDown={handleKeyDown}
+              placeholder={`Message ${activeChannel?.name}... (Shift+Enter for new line, Enter to send)`}
+              className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3.5 py-2.5 text-xs font-medium focus-ring resize-none min-h-[42px] max-h-36 overflow-y-auto leading-relaxed"
             />
 
             <Button
               type="submit"
               disabled={isSending || (!messageText.trim() && !attachedFile && !linkInput.trim())}
-              className="ambizcon-gradient hover:opacity-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl gap-1.5 shadow-glow disabled:opacity-50"
+              className="ambizcon-gradient hover:opacity-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl gap-1.5 shadow-glow disabled:opacity-50 shrink-0 mb-0.5 h-[42px]"
             >
               <Send className="h-3.5 w-3.5" /> {isSending ? 'Sending...' : 'Send'}
             </Button>
