@@ -38,8 +38,10 @@ import {
   RotateCcw,
   Search,
   CalendarDays,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportToCSV } from '@/lib/utils';
 
 const ALL_WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SHORT_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -360,6 +362,27 @@ export default function SelfRemindersPage() {
     });
   };
 
+  const handleExportSelfRemindersCSV = () => {
+    if (!reminders || reminders.length === 0) {
+      toast.error('No self reminders available to export');
+      return;
+    }
+    const exportRows = reminders.map((r) => ({
+      'Title': r.title,
+      'Note / Description': r.note || '',
+      'Reminder Date': r.reminder_date || '',
+      'Day': r.day_name || '',
+      'Time': r.reminder_time || '',
+      'Repeat Frequency': r.repeat_type || 'Once',
+      'Custom Days': r.custom_days || '',
+      'Status': r.is_completed ? 'Completed' : 'Active',
+      'Created Date': r.created_at ? new Date(r.created_at).toLocaleDateString() : '—',
+    }));
+
+    exportToCSV(`BizyHub_Self_Reminders_${currentUser?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Personal'}`, exportRows);
+    toast.success(`Self Reminders (${exportRows.length} items) exported to CSV!`);
+  };
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header Banner */}
@@ -409,6 +432,18 @@ export default function SelfRemindersPage() {
               {completedCount}
             </span>
           </div>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleExportSelfRemindersCSV}
+            className="gap-1.5 font-bold text-xs rounded-2xl border-zinc-200 dark:border-zinc-800"
+            title="Download personal self reminders to CSV"
+          >
+            <Download className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            Export CSV
+          </Button>
         </div>
       </div>
 

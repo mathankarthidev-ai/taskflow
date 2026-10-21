@@ -57,8 +57,10 @@ import {
   X,
   Award,
   Sparkles,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportToCSV, formatDate } from '@/lib/utils';
 
 export default function TeamChatPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -866,6 +868,28 @@ export default function TeamChatPage() {
         u.team.toLowerCase().includes(userSearchTerm.toLowerCase()))
   );
 
+  const handleExportChat = () => {
+    if (!messages || messages.length === 0) {
+      toast.error('No messages in this conversation to export');
+      return;
+    }
+    const exportRows = messages.map((m) => ({
+      'Message ID': m.id,
+      'Sender Name': m.senderName,
+      'Sender Role': m.senderRole,
+      'Sender Team': m.senderTeam || 'General',
+      'Timestamp': m.createdAt ? new Date(m.createdAt).toLocaleString() : '—',
+      'Message Text': m.text || '',
+      'Attachment File': m.fileAttachment?.name || '',
+      'Shared Link': m.linkUrl || '',
+      'Reply Context': m.replyTo ? `Replying to ${m.replyTo.senderName}: "${m.replyTo.text}"` : '',
+    }));
+
+    const cleanChannelName = (activeChannel?.name || 'Conversation').replace(/[^a-zA-Z0-9]/g, '_');
+    exportToCSV(`BizyHub_Chat_${cleanChannelName}_Transcript`, exportRows);
+    toast.success(`Chat transcript (${exportRows.length} messages) exported to CSV!`);
+  };
+
   return (
     <div className="h-[calc(100vh-1.5rem)] flex flex-col gap-3 p-3 sm:p-4 max-w-7xl mx-auto">
       {/* Top Quick Navigation Bar with Back to Home Button */}
@@ -1141,6 +1165,18 @@ export default function TeamChatPage() {
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExportChat}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3 py-1.5 text-xs font-bold text-foreground transition-colors"
+              title="Download conversation transcript to CSV"
+            >
+              <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              Export Chat CSV
+            </Button>
+
             <Link
               href="/dashboard"
               className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3 py-1.5 text-xs font-bold text-foreground transition-colors"

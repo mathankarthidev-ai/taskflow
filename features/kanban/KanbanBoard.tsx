@@ -26,8 +26,9 @@ import {
   deleteTaskAction,
 } from '@/actions/taskActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
-import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield, List, Calendar, CheckCircle2, Eye } from 'lucide-react';
+import { Search, Filter, Plus, RotateCcw, KanbanSquare, Sparkles, Layers, Tag, UserCheck, Clock, Shield, List, Calendar, CheckCircle2, Eye, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportToCSV, formatDate } from '@/lib/utils';
 
 const KANBAN_COLUMNS: { title: string; status: TaskStatus; accent: string; bg: string }[] = [
   { title: 'To Do', status: 'Todo', accent: 'bg-zinc-500', bg: 'hover:border-zinc-400/50' },
@@ -551,6 +552,29 @@ function KanbanBoardContent() {
     }
   };
 
+  const handleExportTasksCSV = () => {
+    if (!filteredTasks || filteredTasks.length === 0) {
+      toast.error('No tasks available to export');
+      return;
+    }
+    const exportRows = filteredTasks.map((t) => ({
+      'Task ID': t._id,
+      'Title': t.title,
+      'Status': t.status,
+      'Priority': t.priority,
+      'Team': t.team,
+      'Assignee': t.assignedUser?.name || t.assignedTo || 'Unassigned',
+      'Reviewer': t.assignedReviewerName || 'None',
+      'Client': t.clientName || '—',
+      'Doctor': t.doctorName || '—',
+      'Due Date': formatDate(t.dueDate),
+      'Created Date': formatDate(t.createdAt),
+    }));
+
+    exportToCSV(`BizyHub_Kanban_Tasks_${selectedCompany.replace(/[^a-zA-Z0-9]/g, '_')}`, exportRows);
+    toast.success(`Tasks (${exportRows.length} items) exported to CSV!`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Bizzy Board Header Card */}
@@ -628,6 +652,18 @@ function KanbanBoardContent() {
               Add
             </Button>
           </form>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleExportTasksCSV}
+            className="gap-1.5 text-xs font-bold border-zinc-200 dark:border-zinc-800"
+            title="Download active tasks to CSV"
+          >
+            <Download className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            Export CSV
+          </Button>
 
           <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 ambizcon-gradient text-white shadow-glow">
             <Plus className="h-4 w-4" />

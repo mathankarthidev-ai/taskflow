@@ -18,8 +18,9 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Link from 'next/link';
-import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2, UserCheck, ShieldCheck, CheckCircle2, Plus, Sparkles, FolderPlus, Calendar as CalendarIcon } from 'lucide-react';
+import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2, UserCheck, ShieldCheck, CheckCircle2, Plus, Sparkles, FolderPlus, Calendar as CalendarIcon, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportToCSV } from '@/lib/utils';
 
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { isUserInCompany, resolveEffectiveCompany } from '@/lib/company-filter';
@@ -379,6 +380,26 @@ export function UserManagementTable() {
     return true;
   });
 
+  const handleExportRosterCSV = () => {
+    if (!companyScopedUsers || companyScopedUsers.length === 0) {
+      toast.error('No employee records available to export');
+      return;
+    }
+    const exportRows = companyScopedUsers.map((u) => ({
+      'Employee Name': u.name,
+      'Email': u.email,
+      'Role': u.role,
+      'Team': u.team,
+      'Company Branch': u.company || selectedCompany,
+      'Work Mode': u.workMode || 'Work From Office',
+      'Date of Birth / Birthday': formatDayMonthOnly(u.dob || u.birthday),
+      'Created Date': u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—',
+    }));
+
+    exportToCSV(`BizyHub_Employee_Roster_${selectedCompany.replace(/[^a-zA-Z0-9]/g, '_')}`, exportRows);
+    toast.success(`Employee Roster (${exportRows.length} members) exported to CSV!`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -425,6 +446,18 @@ export function UserManagementTable() {
               Finance & Payroll Ledger
             </Button>
           </Link>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleExportRosterCSV}
+            className="gap-1.5 text-xs border-zinc-200 dark:border-zinc-800 text-foreground font-bold hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            title="Download complete employee roster to CSV"
+          >
+            <Download className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            Export Roster CSV
+          </Button>
 
           <Button onClick={() => setIsAddTeamModalOpen(true)} size="sm" variant="outline" className="gap-1.5 text-xs border-brand-500/40 text-brand-600 dark:text-brand-400 font-bold">
             <FolderPlus className="h-4 w-4" />

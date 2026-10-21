@@ -34,7 +34,9 @@ import {
   Sparkles,
   Edit3,
   Lock,
+  Download,
 } from 'lucide-react';
+import { exportToCSV, formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
@@ -553,6 +555,30 @@ export default function RemindersPage() {
     );
   };
 
+  const handleExportRemindersCSV = () => {
+    if (!activeList || activeList.length === 0) {
+      toast.error('No active reminders available to export');
+      return;
+    }
+    const exportRows = activeList.map(({ task, reminder }) => ({
+      'Task ID': task._id,
+      'Title': task.title,
+      'Frequency': reminder.frequency || 'None',
+      'Scheduled Time': reminder.reminderTime || '—',
+      'Due Date': formatDate(task.dueDate),
+      'Status': task.status,
+      'Priority': task.priority,
+      'Team': task.team,
+      'Client': task.clientName || '—',
+      'Doctor': task.doctorName || '—',
+      'Assignee': task.assignedUser?.name || task.assignedTo || 'Unassigned',
+      'Created Date': formatDate(task.createdAt),
+    }));
+
+    exportToCSV(`BizyHub_Reminders_Schedule_${activeCompanyScope.replace(/[^a-zA-Z0-9]/g, '_')}`, exportRows);
+    toast.success(`Reminders (${exportRows.length} items) exported to CSV!`);
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Page Header */}
@@ -571,22 +597,36 @@ export default function RemindersPage() {
           </div>
         </div>
 
-        {isTeamLeadOrAdmin ? (
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
           <Button
-            onClick={() => handleOpenReminderModal()}
-            className="ambizcon-gradient text-white gap-2 font-bold shadow-glow text-xs sm:text-sm self-start sm:self-auto rounded-xl"
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportRemindersCSV}
+            className="gap-1.5 font-bold text-xs rounded-xl border-zinc-200 dark:border-zinc-800"
+            title="Download full reminders schedule to CSV"
           >
-            <Plus className="h-4 w-4" />
-            Create Reminder Task
+            <Download className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            Export Reminders CSV
           </Button>
-        ) : (
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold px-3 py-1.5 text-xs flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
-              View-Only Mode (TL &amp; Admin Created)
-            </Badge>
-          </div>
-        )}
+
+          {isTeamLeadOrAdmin ? (
+            <Button
+              onClick={() => handleOpenReminderModal()}
+              className="ambizcon-gradient text-white gap-2 font-bold shadow-glow text-xs sm:text-sm rounded-xl"
+            >
+              <Plus className="h-4 w-4" />
+              Create Reminder Task
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold px-3 py-1.5 text-xs flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+                View-Only Mode (TL &amp; Admin Created)
+              </Badge>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* DUE NOTIFICATIONS SCHEDULE: 5 Interactive Frequency Cards */}
