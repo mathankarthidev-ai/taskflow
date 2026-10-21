@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
-import { ChatChannel, ChatMessage, User } from '@/types';
+import { ChatChannel, ChatMessage, TeamName, User } from '@/types';
 import {
   getStoredChannels,
   getStoredMessages,
@@ -12,6 +12,8 @@ import {
   clearChannelMessages,
   clearAllStoredMessages,
   createDirectChannel,
+  createGroupChannel,
+  deleteGroupChannel,
   getChatBroadcastChannel,
   getNewChatMessageCount,
   extractDmParticipantIds,
@@ -50,6 +52,11 @@ import {
   Bell,
   ArrowLeft,
   Home,
+  Reply,
+  AtSign,
+  X,
+  Award,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -68,6 +75,20 @@ export default function TeamChatPage() {
   const [linkInput, setLinkInput] = useState('');
   const [showLinkField, setShowLinkField] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; url: string; size?: string; type?: string } | null>(null);
+
+  // Reply & Mention State
+  const [replyingTo, setReplyingTo] = useState<{ id: string; senderName: string; text: string } | null>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionStartIndex, setMentionStartIndex] = useState<number>(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Admin New Group Modal State
+  const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupScope, setNewGroupScope] = useState<'all' | 'team'>('all');
+  const [newGroupTeam, setNewGroupTeam] = useState<TeamName>('Creative');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
   // Submission lock & window instance ID to prevent double paste
   const [isSending, setIsSending] = useState(false);
@@ -271,10 +292,18 @@ export default function TeamChatPage() {
       refreshUnreadCounts();
     };
 
+    const handleChannelChange = () => {
+      const updated = getStoredChannels();
+      setChannels(updated);
+      refreshUnreadCounts();
+    };
+
     const bc = getChatBroadcastChannel();
     const handleBroadcast = (ev: MessageEvent) => {
       if (ev.data?.type === 'CHAT_MESSAGE_SENT' && ev.data?.message) {
         appendIncomingMessage(ev.data.channelId, ev.data.message, ev.data.originWindowId);
+      } else if (ev.data?.type === 'CHAT_CHANNEL_CREATED' || ev.data?.type === 'CHAT_CHANNEL_DELETED') {
+        handleChannelChange();
       }
     };
     if (bc) {
@@ -345,12 +374,16 @@ export default function TeamChatPage() {
 
     window.addEventListener('taskflow_chat_message_sent', handleRemoteMessage);
     window.addEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+    window.addEventListener('taskflow_chat_channel_created', handleChannelChange);
+    window.addEventListener('taskflow_chat_channel_deleted', handleChannelChange);
     window.addEventListener('taskflow_chat_synced', handleSyncedFromServer);
     window.addEventListener('taskflow_chat_unread_updated', refreshUnreadCounts);
     window.addEventListener('storage', handleSyncedFromServer);
     return () => {
       window.removeEventListener('taskflow_chat_message_sent', handleRemoteMessage);
       window.removeEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+      window.removeEventListener('taskflow_chat_channel_created', handleChannelChange);
+      window.removeEventListener('taskflow_chat_channel_deleted', handleChannelChange);
       window.removeEventListener('taskflow_chat_synced', handleSyncedFromServer);
       window.removeEventListener('taskflow_chat_unread_updated', refreshUnreadCounts);
       window.removeEventListener('storage', handleSyncedFromServer);
@@ -379,6 +412,168 @@ export default function TeamChatPage() {
     }
     return rawActiveChannel;
   })();
+
+  // Mention & Reply Helpers
+  const extractMentionsFromText = (text: string): string[] => {
+    const list: string[] = [];
+    for (const u of users) {
+      if (text.toLowerCase().includes(`@${u.name.toLowerCase()}`)) {
+        list.push(u.name);
+      }
+    }
+    return Array.from(new Set(list));
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setMessageText(val);
+
+    const cursorPos = e.target.selectionStart || val.length;
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const lastAtIdx = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIdx !== -1) {
+      const query = textBeforeCursor.slice(lastAtIdx + 1);
+      if (!query.includes(' ') && query.length <= 20) {
+        setMentionQuery(query.toLowerCase());
+        setMentionStartIndex(lastAtIdx);
+        return;
+      }
+    }
+    setMentionQuery(null);
+  };
+
+  const handleSelectMention = (targetUser: User) => {
+    if (mentionStartIndex === -1) {
+      setMessageText((prev) => `${prev}@${targetUser.name} `);
+    } else {
+      const before = messageText.slice(0, mentionStartIndex);
+      const cursorPos = inputRef.current?.selectionStart || messageText.length;
+      const after = messageText.slice(cursorPos);
+      setMessageText(`${before}@${targetUser.name} ${after}`);
+    }
+    setMentionQuery(null);
+    setMentionStartIndex(-1);
+    inputRef.current?.focus();
+  };
+
+  const handleStartReply = (msg: ChatMessage) => {
+    setReplyingTo({
+      id: msg.id,
+      senderName: msg.senderName,
+      text: msg.text || (msg.fileAttachment ? `Attached: ${msg.fileAttachment.name}` : 'Link'),
+    });
+    // If text does not already tag the sender, prefill with @SenderName
+    if (!messageText.includes(`@${msg.senderName}`)) {
+      setMessageText((prev) => (prev ? `@${msg.senderName} ${prev}` : `@${msg.senderName} `));
+    }
+    inputRef.current?.focus();
+  };
+
+  const scrollToMessage = (msgId?: string) => {
+    if (!msgId) return;
+    const el = document.getElementById(`chat-msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-brand-500', 'bg-brand-500/10');
+      setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-brand-500', 'bg-brand-500/10');
+      }, 2000);
+    } else {
+      toast.info('Referenced message is earlier in chat history');
+    }
+  };
+
+  const renderFormattedText = (text: string, isMe: boolean) => {
+    if (!text) return null;
+    const parts = text.split(/(@[A-Za-z0-9 _.-]+)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('@')) {
+        const candidate = part.slice(1).trim();
+        const isMatched = users.some(
+          (u) =>
+            u.name.toLowerCase() === candidate.toLowerCase() ||
+            candidate.toLowerCase().startsWith(u.name.toLowerCase())
+        ) || candidate.length > 0;
+
+        if (isMatched) {
+          return (
+            <span
+              key={i}
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-extrabold text-[11px] mx-0.5 shadow-sm ${
+                isMe
+                  ? 'bg-white/25 text-white border border-white/40'
+                  : 'bg-brand-500/15 text-brand-600 dark:text-brand-300 border border-brand-500/30'
+              }`}
+            >
+              <span className="opacity-80">@</span>
+              {candidate}
+            </span>
+          );
+        }
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
+  // Admin Group Creation Handler
+  const handleCreateGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) {
+      toast.error('Only Admins can create new chat groups');
+      return;
+    }
+    const name = newGroupName.trim();
+    if (!name) {
+      toast.error('Please enter a group name');
+      return;
+    }
+
+    setIsCreatingGroup(true);
+    try {
+      const res = createGroupChannel(
+        {
+          _id: currentUser._id,
+          name: currentUser.name,
+          role: currentUser.role,
+          team: currentUser.team,
+          avatar: currentUser.avatar,
+        },
+        name,
+        newGroupScope,
+        newGroupScope === 'team' ? newGroupTeam : undefined,
+        newGroupDescription.trim()
+      );
+
+      if (!res.success || !res.channel) {
+        toast.error(res.error || 'Failed to create group');
+        return;
+      }
+
+      setChannels(getStoredChannels());
+      setActiveChannelId(res.channel.id);
+      setIsNewGroupModalOpen(false);
+      setNewGroupName('');
+      setNewGroupDescription('');
+      toast.success(`Group "${res.channel.name}" created successfully!`);
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  };
+
+  const handleDeleteCustomGroup = () => {
+    if (!isAdmin) return;
+    if (window.confirm(`Are you sure you want to permanently delete group "${activeChannel?.name}"? All its messages will be wiped.`)) {
+      const ok = deleteGroupChannel(activeChannelId, currentUser.role);
+      if (ok) {
+        setChannels(getStoredChannels());
+        setActiveChannelId('channel_all');
+        toast.success('Group deleted successfully');
+      } else {
+        toast.error('Cannot delete default system groups');
+      }
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -416,6 +611,7 @@ export default function TeamChatPage() {
     const textToSend = messageText.trim();
     const fileToSend = attachedFile;
     const linkToSend = linkInput.trim();
+    const currentReply = replyingTo;
 
     if (!textToSend && !fileToSend && !linkToSend) {
       toast.error('Please enter a message, link, or attach a file');
@@ -429,6 +625,13 @@ export default function TeamChatPage() {
     setLinkInput('');
     setShowLinkField(false);
     setAttachedFile(null);
+    setReplyingTo(null);
+    setMentionQuery(null);
+
+    const extractedMentions = extractMentionsFromText(textToSend);
+    if (currentReply && !extractedMentions.includes(currentReply.senderName)) {
+      extractedMentions.push(currentReply.senderName);
+    }
 
     try {
       const created = sendChatMessage(
@@ -443,8 +646,68 @@ export default function TeamChatPage() {
         textToSend,
         fileToSend || undefined,
         linkToSend || undefined,
-        windowInstanceIdRef.current
+        windowInstanceIdRef.current,
+        currentReply || undefined,
+        extractedMentions
       );
+
+      // Check 100-message milestone:
+      const totalCount = messages.length + 1;
+      const is100Milestone = totalCount === 100 || (totalCount > 0 && totalCount % 100 === 0);
+      if (is100Milestone) {
+        toast.success(`🎉 100 Messages Milestone Reached in ${activeChannel?.name || 'Group Chat'}!`, {
+          description: `This channel reached ${totalCount} messages! Great teamwork.`,
+        });
+        playNotificationChime('chat');
+
+        useNotificationStore.getState().addNotification({
+          type: 'system',
+          category: 'Chat Milestone',
+          title: `🎉 100 Messages Milestone Reached in ${activeChannel?.name}!`,
+          text: `Channel "${activeChannel?.name}" has achieved the 100-message milestone (${totalCount} total messages)!`,
+          color: 'bg-amber-500',
+          link: '/chat',
+          channelId: activeChannelId,
+          targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+        });
+      }
+
+      // Targeted notification for Reply
+      if (currentReply && currentReply.senderName !== currentUser.name) {
+        useNotificationStore.getState().addNotification({
+          type: 'chat_message',
+          category: activeChannel?.name || 'Group Chat',
+          title: `💬 ${currentUser.name} replied to your message in ${activeChannel?.name || 'Group Chat'}`,
+          text: `"${textToSend || (fileToSend ? `Attached: ${fileToSend.name}` : 'Shared a link')}"`,
+          color: 'bg-brand-500',
+          link: '/chat',
+          channelId: activeChannelId,
+          messageId: created.id,
+          targetUserNames: [currentReply.senderName],
+          senderName: currentUser.name,
+          senderRole: currentUser.role,
+        });
+      }
+
+      // Targeted notification for Mentions
+      const nonSelfMentions = extractedMentions.filter(
+        (name) => name.toLowerCase() !== currentUser.name.toLowerCase() && (!currentReply || name !== currentReply.senderName)
+      );
+      if (nonSelfMentions.length > 0) {
+        useNotificationStore.getState().addNotification({
+          type: 'chat_message',
+          category: activeChannel?.name || 'Group Chat',
+          title: `📣 ${currentUser.name} mentioned you in ${activeChannel?.name || 'Group Chat'}`,
+          text: `"${textToSend || (fileToSend ? `Attached: ${fileToSend.name}` : 'Shared a link')}"`,
+          color: 'bg-purple-500',
+          link: '/chat',
+          channelId: activeChannelId,
+          messageId: created.id,
+          targetUserNames: nonSelfMentions,
+          senderName: currentUser.name,
+          senderRole: currentUser.role,
+        });
+      }
 
       // NOTE: Do NOT play sound or show broadcast toast to the sender!
       // Only receivers (Member, Team, or All-in-One) receive the notification & sound.
@@ -650,6 +913,16 @@ export default function TeamChatPage() {
             <h2 className="font-extrabold text-sm text-foreground tracking-tight">Team Messaging</h2>
           </div>
           <div className="flex items-center gap-1.5">
+            {isAdmin && (
+              <Button
+                size="sm"
+                onClick={() => setIsNewGroupModalOpen(true)}
+                className="text-[11px] font-bold py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl gap-1 shadow-sm"
+                title="Create New Group (Admin Only)"
+              >
+                <Plus className="h-3.5 w-3.5" /> Group
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={() => setIsNewDmModalOpen(true)}
@@ -683,6 +956,11 @@ export default function TeamChatPage() {
                     <div className="flex items-center gap-2 truncate">
                       <Globe className="h-4 w-4 shrink-0" />
                       <span className="truncate">{ch.name}</span>
+                      {ch.id.startsWith('channel_grp_') && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
+                          Group
+                        </span>
+                      )}
                     </div>
                     {newCount > 0 ? (
                       <Badge className="text-[9px] bg-rose-500 text-white font-extrabold animate-pulse border border-white/30 shrink-0">
@@ -720,6 +998,11 @@ export default function TeamChatPage() {
                     <div className="flex items-center gap-2 truncate">
                       <Users className="h-4 w-4 shrink-0" />
                       <span className="truncate">{ch.name}</span>
+                      {ch.id.startsWith('channel_grp_') && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
+                          Group
+                        </span>
+                      )}
                     </div>
                     {newCount > 0 ? (
                       <Badge className="text-[9px] bg-rose-500 text-white font-extrabold animate-pulse border border-white/30 shrink-0">
@@ -805,6 +1088,15 @@ export default function TeamChatPage() {
               <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 font-bold">
                 {activeChannel?.scope === 'all' ? 'Group (TL, Member, Admin)' : activeChannel?.scope === 'team' ? `${activeChannel.team} Team` : 'Direct DM'}
               </Badge>
+              {messages.length >= 100 ? (
+                <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40 font-extrabold flex items-center gap-1 shadow-sm">
+                  <Award className="h-3.5 w-3.5 text-amber-500" /> 100+ Msgs Milestone
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
+                  💬 {messages.length}/100 Msgs
+                </Badge>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -863,6 +1155,19 @@ export default function TeamChatPage() {
               <ArrowLeft className="h-3.5 w-3.5 text-brand-500" />
               Home
             </Link>
+            {isAdmin && activeChannelId.startsWith('channel_grp_') && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDeleteCustomGroup}
+                className="text-xs text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1.5"
+                title="Delete this custom group (Admin Only)"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete Group
+              </Button>
+            )}
             {isAdmin && messages.length > 0 && (
               <Button
                 type="button"
@@ -922,6 +1227,16 @@ export default function TeamChatPage() {
 
                 return (
                   <React.Fragment key={msg.id}>
+                    {idx === 99 && (
+                      <div className="flex items-center gap-3 my-4">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+                        <span className="inline-flex items-center gap-2 rounded-full bg-amber-500/15 border border-amber-500/40 px-4 py-1 text-xs font-black text-amber-700 dark:text-amber-300 shadow-sm animate-pulse">
+                          <Award className="h-4 w-4 text-amber-500" />
+                          🏆 100th Message Milestone in this Channel! 🎉
+                        </span>
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+                      </div>
+                    )}
                     {showNewDivider && (
                       <div className="flex items-center gap-3 my-2">
                         <div className="h-px flex-1 bg-rose-500/30" />
@@ -932,7 +1247,10 @@ export default function TeamChatPage() {
                         <div className="h-px flex-1 bg-rose-500/30" />
                       </div>
                     )}
-                    <div className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} group`}>
+                    <div
+                      id={`chat-msg-${msg.id}`}
+                      className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} group transition-all duration-300 rounded-2xl p-1.5`}
+                    >
                       <Avatar
                         name={msg.senderName}
                         src={msg.senderAvatar}
@@ -960,6 +1278,16 @@ export default function TeamChatPage() {
                           <span className="font-mono text-[10px]">
                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
+                          {/* Reply Action */}
+                          <button
+                            type="button"
+                            onClick={() => handleStartReply(msg)}
+                            className="opacity-40 group-hover:opacity-100 hover:text-brand-500 dark:hover:text-brand-400 transition-opacity p-0.5 ml-1 inline-flex items-center gap-0.5 text-[10px] font-bold"
+                            title={`Reply to ${msg.senderName}`}
+                          >
+                            <Reply className="h-3 w-3" />
+                            <span>Reply</span>
+                          </button>
                       {/* Admin Delete Action */}
                       {(isAdmin || isMe) && (
                         <button
@@ -981,7 +1309,30 @@ export default function TeamChatPage() {
                           : 'bg-zinc-100 dark:bg-zinc-800/90 text-foreground rounded-tl-none border border-zinc-200/60 dark:border-zinc-700/60'
                       }`}
                     >
-                      {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+                      {/* Quoted Reply Preview */}
+                      {msg.replyTo && (
+                        <div
+                          onClick={() => scrollToMessage(msg.replyTo?.id)}
+                          className={`p-2 rounded-xl text-[11px] border cursor-pointer hover:opacity-90 transition-all flex items-start gap-2 mb-1.5 ${
+                            isMe
+                              ? 'bg-brand-700/60 border-brand-400/40 text-brand-100'
+                              : 'bg-zinc-200/80 dark:bg-zinc-700/70 border-zinc-300 dark:border-zinc-600 text-foreground'
+                          }`}
+                          title="Click to jump to quoted message"
+                        >
+                          <Reply className="h-3.5 w-3.5 mt-0.5 shrink-0 text-brand-400" />
+                          <div className="truncate flex-1 text-left">
+                            <span className="font-extrabold text-[10px] text-brand-300 block">
+                              Replying to @{msg.replyTo.senderName}
+                            </span>
+                            <p className="truncate italic text-[11px] opacity-90">{msg.replyTo.text || 'Attachment/Link'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {msg.text && (
+                        <p className="whitespace-pre-wrap">{renderFormattedText(msg.text, isMe)}</p>
+                      )}
 
                       {/* File Link Attachment */}
                       {msg.fileAttachment && (
@@ -1048,7 +1399,70 @@ export default function TeamChatPage() {
         </div>
 
         {/* Message Input Controls Bar */}
-        <form onSubmit={handleSendMessage} className="p-3 border-t border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 space-y-2">
+        <form onSubmit={handleSendMessage} className="p-3 border-t border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 space-y-2 relative">
+          {/* Floating Reply Banner */}
+          {replyingTo && (
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-700 dark:text-brand-300 text-xs animate-in fade-in slide-in-from-bottom-2 shadow-sm">
+              <div className="flex items-center gap-2 truncate">
+                <Reply className="h-4 w-4 text-brand-500 shrink-0" />
+                <span className="font-extrabold shrink-0">Replying to @{replyingTo.senderName}:</span>
+                <span className="italic truncate opacity-85 max-w-md">&ldquo;{replyingTo.text}&rdquo;</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyingTo(null)}
+                className="text-xs font-bold text-muted-foreground hover:text-rose-500 ml-2 p-1 rounded-lg hover:bg-rose-500/10 transition"
+                title="Cancel reply"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Mention Candidates Popover */}
+          {mentionQuery !== null && (
+            <div className="absolute bottom-full left-3 mb-2 w-72 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-card shadow-2xl p-2 z-50 space-y-1 backdrop-blur-md">
+              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-zinc-200/50 dark:border-zinc-800/50">
+                <span className="flex items-center gap-1.5">
+                  <AtSign className="h-3 w-3 text-brand-500" /> Mention Team Member
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMentionQuery(null)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto space-y-0.5">
+                {users
+                  .filter(
+                    (u) =>
+                      u.name.toLowerCase().includes(mentionQuery) ||
+                      u.role.toLowerCase().includes(mentionQuery) ||
+                      u.team.toLowerCase().includes(mentionQuery)
+                  )
+                  .slice(0, 6)
+                  .map((u) => (
+                    <button
+                      key={u._id}
+                      type="button"
+                      onClick={() => handleSelectMention(u)}
+                      className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-brand-500/10 dark:hover:bg-brand-500/20 text-left transition-colors"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Avatar name={u.name} src={u.avatar} size="xs" />
+                        <span className="font-bold text-xs truncate text-foreground">{u.name}</span>
+                      </div>
+                      <Badge variant="outline" className="text-[9px] shrink-0">
+                        {u.role}
+                      </Badge>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {/* File Attachment Pill */}
           {attachedFile && (
             <div className="flex items-center justify-between text-xs p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
@@ -1097,11 +1511,26 @@ export default function TeamChatPage() {
               <LinkIcon className="h-4 w-4 text-brand-500" />
             </button>
 
+            <button
+              type="button"
+              onClick={() => {
+                setMessageText((prev) => (prev ? `${prev} @` : '@'));
+                setMentionQuery('');
+                setMentionStartIndex(messageText.length);
+                inputRef.current?.focus();
+              }}
+              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-purple-500 transition-colors"
+              title="Mention Team Member (@)"
+            >
+              <AtSign className="h-4 w-4 text-purple-500" />
+            </button>
+
             <input
+              ref={inputRef}
               type="text"
               value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder={`Message ${activeChannel?.name}...`}
+              onChange={handleInputChange}
+              placeholder={`Message ${activeChannel?.name}... (Type @ to mention)`}
               className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3.5 py-2.5 text-xs font-medium focus-ring"
             />
 
@@ -1116,6 +1545,110 @@ export default function TeamChatPage() {
         </form>
       </div>
       </div>
+
+      {/* Admin Create New Group Modal */}
+      {isAdmin && (
+        <Modal
+          isOpen={isNewGroupModalOpen}
+          onClose={() => setIsNewGroupModalOpen(false)}
+          title="Create New Group Chat (Admin Only)"
+          description="Create a company-wide or team-specific group conversation space."
+          maxWidth="md"
+        >
+          <form onSubmit={handleCreateGroup} className="space-y-4 pt-2 text-xs">
+            <div>
+              <label className="block text-xs font-bold text-foreground mb-1">Group Name *</label>
+              <input
+                type="text"
+                required
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="e.g. 🚀 Q4 Product Launch, 📱 Mobile App Sprint..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs focus-ring"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-foreground mb-1">Group Scope</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewGroupScope('all')}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    newGroupScope === 'all'
+                      ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300 font-bold'
+                      : 'border-zinc-200 dark:border-zinc-800 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  <Globe className="h-4 w-4 mb-1 text-brand-500" />
+                  <p className="text-xs font-bold">All Company</p>
+                  <p className="text-[10px] opacity-80">All team members &amp; roles</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewGroupScope('team')}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    newGroupScope === 'team'
+                      ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300 font-bold'
+                      : 'border-zinc-200 dark:border-zinc-800 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  <Users className="h-4 w-4 mb-1 text-emerald-500" />
+                  <p className="text-xs font-bold">Team Specific</p>
+                  <p className="text-[10px] opacity-80">Designated team members</p>
+                </button>
+              </div>
+            </div>
+
+            {newGroupScope === 'team' && (
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1">Select Team</label>
+                <select
+                  value={newGroupTeam}
+                  onChange={(e) => setNewGroupTeam(e.target.value as TeamName)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs focus-ring"
+                >
+                  <option value="Creative">Creative Team</option>
+                  <option value="Marketing">Marketing Team</option>
+                  <option value="Development">Development Team</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-foreground mb-1">Description (Optional)</label>
+              <textarea
+                rows={2}
+                value={newGroupDescription}
+                onChange={(e) => setNewGroupDescription(e.target.value)}
+                placeholder="What is this group for? E.g., Weekly sprints, client deliverables..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs focus-ring"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsNewGroupModalOpen(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isCreatingGroup || !newGroupName.trim()}
+                className="ambizcon-gradient text-white font-bold text-xs px-4 py-2 rounded-xl"
+              >
+                {isCreatingGroup ? 'Creating...' : 'Create Group'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* Direct DM User Selector Modal */}
       <Modal

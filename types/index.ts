@@ -450,6 +450,19 @@ export interface ChatMessage {
     type?: string;
   };
   linkUrl?: string;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    text: string;
+  };
+  mentions?: string[];
+  groupMeta?: {
+    name: string;
+    scope: 'all' | 'team';
+    team?: TeamName;
+    description?: string;
+    createdBy?: string;
+  };
   createdAt: string;
 }
 
@@ -460,6 +473,7 @@ export interface ChatChannel {
   team?: TeamName;
   participantIds?: string[]; // user IDs for direct messages
   description?: string;
+  createdBy?: string;
   unreadCount?: number;
   lastMessage?: string;
   lastMessageTime?: string;

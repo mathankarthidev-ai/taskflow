@@ -23,6 +23,17 @@ function getServerChatStore(): Record<string, ChatMessage[]> {
 }
 
 function mapRowToChatMessage(row: any): ChatMessage {
+  const fa = row.file_attachment;
+  const replyTo = row.reply_to || fa?._replyTo || fa?.replyTo || undefined;
+  const mentions = row.mentions || fa?._mentions || fa?.mentions || [];
+  const groupMeta = fa?._groupMeta || undefined;
+  const cleanAttachment = fa && !fa._isMeta && fa.name && fa.url ? {
+    name: fa.name,
+    url: fa.url,
+    size: fa.size,
+    type: fa.type,
+  } : undefined;
+
   return {
     id: String(row.id),
     channelId: row.channel_id,
@@ -32,8 +43,11 @@ function mapRowToChatMessage(row: any): ChatMessage {
     senderAvatar: row.sender_avatar || undefined,
     senderTeam: row.sender_team || undefined,
     text: row.text || '',
-    fileAttachment: row.file_attachment || undefined,
+    fileAttachment: cleanAttachment,
     linkUrl: row.link_url || undefined,
+    replyTo: replyTo || undefined,
+    mentions: mentions || [],
+    groupMeta: groupMeta || undefined,
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
   };
 }
@@ -124,6 +138,22 @@ export async function POST(request: Request) {
     }
 
     try {
+      const attachmentPayload = message.fileAttachment
+        ? {
+            ...message.fileAttachment,
+            _replyTo: message.replyTo || null,
+            _mentions: message.mentions || [],
+            _groupMeta: message.groupMeta || null,
+          }
+        : (message.replyTo || (message.mentions && message.mentions.length > 0) || message.groupMeta)
+        ? {
+            _isMeta: true,
+            _replyTo: message.replyTo || null,
+            _mentions: message.mentions || [],
+            _groupMeta: message.groupMeta || null,
+          }
+        : null;
+
       await supabase.from('chat_messages').upsert(
         {
           id: message.id,
@@ -134,7 +164,7 @@ export async function POST(request: Request) {
           sender_avatar: message.senderAvatar || null,
           sender_team: message.senderTeam || null,
           text: message.text || '',
-          file_attachment: message.fileAttachment || null,
+          file_attachment: attachmentPayload,
           link_url: message.linkUrl || null,
           created_at: message.createdAt || new Date().toISOString(),
         },

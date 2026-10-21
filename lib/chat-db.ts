@@ -680,6 +680,31 @@ export async function syncMessagesFromServer(): Promise<{
           }
         }
       }
+
+      // 4. Auto-discover custom group channels created by Admins
+      if ((channelId.startsWith('channel_grp_') || channelId.startsWith('grp_')) && retainedLocal.length > 0) {
+        const existsCh = currentChannels.some((c) => c && c.id === channelId);
+        if (!existsCh) {
+          const firstWithMeta = retainedLocal.find((m) => m?.groupMeta);
+          const meta = firstWithMeta?.groupMeta;
+          const lastMsg = retainedLocal[retainedLocal.length - 1];
+
+          currentChannels.push({
+            id: channelId,
+            name: meta?.name || `👥 Custom Group`,
+            scope: meta?.scope || 'all',
+            team: meta?.team,
+            description: meta?.description || 'Admin created group channel',
+            createdBy: meta?.createdBy || firstWithMeta?.senderId,
+            lastMessage: String(lastMsg?.text || '').slice(0, 40) || 'Group channel',
+            lastMessageTime: new Date(lastMsg?.createdAt || Date.now()).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          });
+          channelsChanged = true;
+        }
+      }
     });
 
     if (channelsChanged) {
@@ -711,7 +736,10 @@ export function sendChatMessage(
   text: string,
   fileAttachment?: { name: string; url: string; size?: string; type?: string },
   linkUrl?: string,
-  originWindowId?: string
+  originWindowId?: string,
+  replyTo?: { id: string; senderName: string; text: string },
+  mentions?: string[],
+  groupMeta?: { name: string; scope: 'all' | 'team'; team?: TeamName; description?: string; createdBy?: string }
 ): ChatMessage {
   const trimmedText = text.trim();
 
@@ -744,6 +772,9 @@ export function sendChatMessage(
         text: trimmedText,
         fileAttachment,
         linkUrl: linkUrl?.trim() || undefined,
+        replyTo: replyTo || undefined,
+        mentions: mentions || [],
+        groupMeta: groupMeta || undefined,
         createdAt: new Date().toISOString(),
       };
 
@@ -751,6 +782,25 @@ export function sendChatMessage(
       allMsgs[channelId] = updatedList;
       localStorage.setItem(MESSAGES_KEY, JSON.stringify(allMsgs));
       markChannelMessagesAsRead(channelId, sender._id);
+
+      // Milestone Notification: 100 messages reached in this channel
+      if (updatedList.length === 100 || (updatedList.length > 0 && updatedList.length % 100 === 0)) {
+        const channels = getStoredChannels();
+        const ch = channels.find((c) => c.id === channelId);
+        const chTitle = ch?.name || 'Group Chat';
+        try {
+          useNotificationStore.getState().addNotification({
+            type: 'system',
+            category: 'Chat Milestone',
+            title: `🎉 100 Messages Milestone Reached in ${chTitle}!`,
+            text: `Channel "${chTitle}" has achieved the 100-message milestone (${updatedList.length} total messages)! Great teamwork.`,
+            color: 'bg-amber-500',
+            link: '/chat',
+            channelId,
+            targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+          });
+        } catch (_) {}
+      }
 
       // Update Channel Last Message info
       const channels = getStoredChannels();
@@ -815,6 +865,9 @@ export function sendChatMessage(
     text: trimmedText,
     fileAttachment,
     linkUrl: linkUrl?.trim() || undefined,
+    replyTo: replyTo || undefined,
+    mentions: mentions || [],
+    groupMeta: groupMeta || undefined,
     createdAt: new Date().toISOString(),
   };
 }
@@ -944,4 +997,137 @@ export function createDirectChannel(
     localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
   }
   return newChannel;
+}
+
+export function createGroupChannel(
+  creator: { _id: string; name: string; role: UserRole; team?: TeamName; avatar?: string },
+  name: string,
+  scope: 'all' | 'team',
+  team?: TeamName,
+  description?: string
+): { success: boolean; channel?: ChatChannel; error?: string } {
+  // STRICT ADMIN CHECK: Only Super Admin and Admin can create new groups!
+  const isAdmin = creator.role === 'Super Admin' || creator.role === 'Admin';
+  if (!isAdmin) {
+    return { success: false, error: 'Access denied: Only Admins can create new chat groups.' };
+  }
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    return { success: false, error: 'Group name cannot be empty.' };
+  }
+
+  const channels = getStoredChannels();
+  if (channels.some((c) => c.name.toLowerCase() === trimmedName.toLowerCase())) {
+    return { success: false, error: `A group named "${trimmedName}" already exists.` };
+  }
+
+  const slug = trimmedName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 24);
+  const channelId = `channel_grp_${slug || Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+  const newChannel: ChatChannel = {
+    id: channelId,
+    name: trimmedName,
+    scope,
+    team: scope === 'team' ? team : undefined,
+    description: description?.trim() || `Group created by ${creator.name} (${creator.role})`,
+    createdBy: creator._id,
+    lastMessage: 'Group created',
+    lastMessageTime: 'Just now',
+  };
+
+  const updatedChannels = [...channels, newChannel];
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
+
+    const bc = getChatBroadcastChannel();
+    if (bc) {
+      try {
+        bc.postMessage({
+          type: 'CHAT_CHANNEL_CREATED',
+          channel: newChannel,
+        });
+      } catch (_) {}
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('taskflow_chat_channel_created', {
+        detail: { channel: newChannel },
+      })
+    );
+  }
+
+  // Send inaugural welcome message with groupMeta attached
+  sendChatMessage(
+    channelId,
+    {
+      _id: creator._id,
+      name: creator.name,
+      role: creator.role,
+      team: creator.team || ('Executive' as any),
+      avatar: creator.avatar,
+    },
+    `🎉 Welcome to "${trimmedName}"! This group was created by Admin ${creator.name}.`,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      name: trimmedName,
+      scope,
+      team: scope === 'team' ? team : undefined,
+      description: description?.trim(),
+      createdBy: creator._id,
+    }
+  );
+
+  return { success: true, channel: newChannel };
+}
+
+export function deleteGroupChannel(channelId: string, userRole?: UserRole): boolean {
+  if (typeof window === 'undefined') return false;
+  // Core default channels cannot be deleted
+  if (
+    channelId === 'channel_all' ||
+    channelId === 'channel_creative' ||
+    channelId === 'channel_marketing' ||
+    channelId === 'channel_development'
+  ) {
+    return false;
+  }
+  const isAdmin = userRole === 'Super Admin' || userRole === 'Admin';
+  if (!isAdmin) return false;
+
+  try {
+    const channels = getStoredChannels();
+    const updatedChannels = channels.filter((c) => c.id !== channelId);
+    localStorage.setItem(CHANNELS_KEY, JSON.stringify(updatedChannels));
+
+    clearChannelMessages(channelId);
+
+    const bc = getChatBroadcastChannel();
+    if (bc) {
+      try {
+        bc.postMessage({
+          type: 'CHAT_CHANNEL_DELETED',
+          channelId,
+        });
+      } catch (_) {}
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('taskflow_chat_channel_deleted', {
+        detail: { channelId },
+      })
+    );
+    return true;
+  } catch (err) {
+    console.error('Failed to delete group channel', err);
+    return false;
+  }
 }
