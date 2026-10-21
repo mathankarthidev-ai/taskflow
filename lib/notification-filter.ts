@@ -45,6 +45,17 @@ export function isNotificationVisibleForUser(
   // 1. Chat Messages
   if (n.type === 'chat_message') {
     if (n.senderName && n.senderName.trim().toLowerCase() === currentNameNorm) return false;
+
+    // Targeted mention or reply notification: notify target users (and admin)
+    if (Array.isArray(n.targetUserNames) && n.targetUserNames.length > 0) {
+      if (isAdminUser) return true;
+      return n.targetUserNames.some((un) => un?.trim().toLowerCase() === currentNameNorm);
+    }
+    if (Array.isArray(n.targetUserIds) && n.targetUserIds.length > 0) {
+      if (isAdminUser) return true;
+      return n.targetUserIds.includes(currentId);
+    }
+
     if (n.targetTeam && !isAdminUser && currentUser.team !== n.targetTeam) return false;
     if (n.channelId && n.channelId.startsWith('dm_') && !n.channelId.includes(currentId)) {
       return false;

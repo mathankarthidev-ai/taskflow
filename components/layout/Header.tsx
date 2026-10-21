@@ -62,6 +62,7 @@ import { fetchSelfReminders } from '@/lib/self-reminders-store';
 import {
   getChatBroadcastChannel,
   getNewChatMessageCount,
+  getStoredChannels,
   isUserReceiverForChatMessage,
   markChannelMessagesAsRead,
   syncMessagesFromServer,
@@ -243,15 +244,10 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         return;
       }
 
-      // If user is currently inside /chat, mark read immediately, remove popups & notifications, and do NOT show popup/toast
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/chat')) {
-        markChannelMessagesAsRead(undefined, currentUser._id);
-        useNotificationStore.getState().markChatChannelRead();
-        return;
-      }
-
+      const channels = getStoredChannels();
+      const matchedCh = channels.find((c) => c.id === channelId);
       const isAllInOne = channelId === 'channel_all';
-      const channelLabel = isAllInOne
+      const channelLabel = matchedCh?.name || (isAllInOne
         ? '🌐 All-in-One Company Group'
         : channelId === 'channel_creative'
         ? '🎨 Creative Team Group'
@@ -259,16 +255,17 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         ? '📈 Marketing Team Group'
         : channelId === 'channel_development'
         ? '💻 Development Team Group'
-        : 'Direct Chat';
+        : 'Direct Chat');
 
       const targetTeam =
-        channelId === 'channel_creative'
+        matchedCh?.team ||
+        (channelId === 'channel_creative'
           ? 'Creative'
           : channelId === 'channel_marketing'
           ? 'Marketing'
           : channelId === 'channel_development'
           ? 'Development'
-          : undefined;
+          : undefined);
 
       // Ensure notification exists in store for targeted receivers
       const existingNotifs = Array.isArray(useNotificationStore.getState().notifications)
@@ -327,55 +324,51 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
     // Check existing unread messages in All-in-One / Team / Direct Chat for RECEIVERS only (e.g., when switching persona)
     try {
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/chat')) {
-        markChannelMessagesAsRead(undefined, currentUser._id);
-        useNotificationStore.getState().markChatChannelRead();
-      } else {
-        const unreadInfo = getNewChatMessageCount(
-          currentUser.team,
-          currentUser.role,
-          currentUser._id,
-          currentUser.name
-        );
-        if (unreadInfo.total > 0 && unreadInfo.latestMessage) {
-          const msg = unreadInfo.latestMessage;
-          const msgChannelId = msg.channelId || 'channel_all';
-          if (isUserReceiverForChatMessage(msg, msgChannelId, currentUser)) {
-            const existingNotifs = Array.isArray(useNotificationStore.getState().notifications)
-              ? useNotificationStore.getState().notifications
-              : [];
-            const msgText = String(msg.text || '');
-            const hasNotif = existingNotifs.some(
-              (n) =>
-                n &&
-                (n.messageId === msg.id ||
-                  (n.type === 'chat_message' && msgText.length > 0 && String(n.text || '').includes(msgText)))
-            );
-            if (!hasNotif) {
-              useNotificationStore.getState().addNotification({
-                type: 'chat_message',
-                category: msgChannelId === 'channel_all' ? 'All-in-One Chat (All Teams)' : 'Team Chat',
-                title: `💬 ${msg.senderName} (${msg.senderRole}) sent a message`,
-                text: `${msg.senderName}: "${msg.text || ''}"`,
-                color: 'bg-teal-500',
-                link: '/chat',
-                channelId: msgChannelId,
-                messageId: msg.id,
-                senderName: msg.senderName,
-                senderRole: msg.senderRole,
-                targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
-              });
-            }
+      const unreadInfo = getNewChatMessageCount(
+        currentUser.team,
+        currentUser.role,
+        currentUser._id,
+        currentUser.name,
+        true
+      );
+      if (unreadInfo.total > 0 && unreadInfo.latestMessage) {
+        const msg = unreadInfo.latestMessage;
+        const msgChannelId = msg.channelId || 'channel_all';
+        if (isUserReceiverForChatMessage(msg, msgChannelId, currentUser)) {
+          const existingNotifs = Array.isArray(useNotificationStore.getState().notifications)
+            ? useNotificationStore.getState().notifications
+            : [];
+          const msgText = String(msg.text || '');
+          const hasNotif = existingNotifs.some(
+            (n) =>
+              n &&
+              (n.messageId === msg.id ||
+                (n.type === 'chat_message' && msgText.length > 0 && String(n.text || '').includes(msgText)))
+          );
+          if (!hasNotif) {
+            useNotificationStore.getState().addNotification({
+              type: 'chat_message',
+              category: msgChannelId === 'channel_all' ? 'All-in-One Chat (All Teams)' : 'Team Chat',
+              title: `💬 ${msg.senderName} (${msg.senderRole}) sent a message`,
+              text: `${msg.senderName}: "${msg.text || ''}"`,
+              color: 'bg-teal-500',
+              link: '/chat',
+              channelId: msgChannelId,
+              messageId: msg.id,
+              senderName: msg.senderName,
+              senderRole: msg.senderRole,
+              targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
+            });
+          }
 
-            // Play distinct chat sound once per receiver session for the latest unread message
-            const alertKey = `ambizcon_chat_chime_${currentUser._id}_${msg.id}`;
-            if (!sessionStorage.getItem(alertKey)) {
-              sessionStorage.setItem(alertKey, '1');
-              playNotificationChime('chat');
-              toast.info(`💬 ${unreadInfo.total} New Message(s) in Chat`, {
-                description: `${msg.senderName} (${msg.senderRole}): "${msg.text || ''}"`,
-              });
-            }
+          // Play distinct chat sound once per receiver session for the latest unread message
+          const alertKey = `ambizcon_chat_chime_${currentUser._id}_${msg.id}`;
+          if (!sessionStorage.getItem(alertKey)) {
+            sessionStorage.setItem(alertKey, '1');
+            playNotificationChime('chat');
+            toast.info(`💬 ${unreadInfo.total} New Message(s) in Chat`, {
+              description: `${msg.senderName} (${msg.senderRole}): "${msg.text || ''}"`,
+            });
           }
         }
       }

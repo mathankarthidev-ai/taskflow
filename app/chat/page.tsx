@@ -651,27 +651,6 @@ export default function TeamChatPage() {
         extractedMentions
       );
 
-      // Check 100-message milestone:
-      const totalCount = messages.length + 1;
-      const is100Milestone = totalCount === 100 || (totalCount > 0 && totalCount % 100 === 0);
-      if (is100Milestone) {
-        toast.success(`🎉 100 Messages Milestone Reached in ${activeChannel?.name || 'Group Chat'}!`, {
-          description: `This channel reached ${totalCount} messages! Great teamwork.`,
-        });
-        playNotificationChime('chat');
-
-        useNotificationStore.getState().addNotification({
-          type: 'system',
-          category: 'Chat Milestone',
-          title: `🎉 100 Messages Milestone Reached in ${activeChannel?.name}!`,
-          text: `Channel "${activeChannel?.name}" has achieved the 100-message milestone (${totalCount} total messages)!`,
-          color: 'bg-amber-500',
-          link: '/chat',
-          channelId: activeChannelId,
-          targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
-        });
-      }
-
       // Targeted notification for Reply
       if (currentReply && currentReply.senderName !== currentUser.name) {
         useNotificationStore.getState().addNotification({
@@ -1088,15 +1067,9 @@ export default function TeamChatPage() {
               <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 font-bold">
                 {activeChannel?.scope === 'all' ? 'Group (TL, Member, Admin)' : activeChannel?.scope === 'team' ? `${activeChannel.team} Team` : 'Direct DM'}
               </Badge>
-              {messages.length >= 100 ? (
-                <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40 font-extrabold flex items-center gap-1 shadow-sm">
-                  <Award className="h-3.5 w-3.5 text-amber-500" /> 100+ Msgs Milestone
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
-                  💬 {messages.length}/100 Msgs
-                </Badge>
-              )}
+              <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
+                💬 {messages.length} Msgs
+              </Badge>
               <button
                 type="button"
                 onClick={() => {
@@ -1227,16 +1200,6 @@ export default function TeamChatPage() {
 
                 return (
                   <React.Fragment key={msg.id}>
-                    {idx === 99 && (
-                      <div className="flex items-center gap-3 my-4">
-                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-                        <span className="inline-flex items-center gap-2 rounded-full bg-amber-500/15 border border-amber-500/40 px-4 py-1 text-xs font-black text-amber-700 dark:text-amber-300 shadow-sm animate-pulse">
-                          <Award className="h-4 w-4 text-amber-500" />
-                          🏆 100th Message Milestone in this Channel! 🎉
-                        </span>
-                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-                      </div>
-                    )}
                     {showNewDivider && (
                       <div className="flex items-center gap-3 my-2">
                         <div className="h-px flex-1 bg-rose-500/30" />

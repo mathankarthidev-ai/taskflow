@@ -783,25 +783,6 @@ export function sendChatMessage(
       localStorage.setItem(MESSAGES_KEY, JSON.stringify(allMsgs));
       markChannelMessagesAsRead(channelId, sender._id);
 
-      // Milestone Notification: 100 messages reached in this channel
-      if (updatedList.length === 100 || (updatedList.length > 0 && updatedList.length % 100 === 0)) {
-        const channels = getStoredChannels();
-        const ch = channels.find((c) => c.id === channelId);
-        const chTitle = ch?.name || 'Group Chat';
-        try {
-          useNotificationStore.getState().addNotification({
-            type: 'system',
-            category: 'Chat Milestone',
-            title: `🎉 100 Messages Milestone Reached in ${chTitle}!`,
-            text: `Channel "${chTitle}" has achieved the 100-message milestone (${updatedList.length} total messages)! Great teamwork.`,
-            color: 'bg-amber-500',
-            link: '/chat',
-            channelId,
-            targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member'],
-          });
-        } catch (_) {}
-      }
-
       // Update Channel Last Message info
       const channels = getStoredChannels();
       const updatedChannels = channels.map((c) =>

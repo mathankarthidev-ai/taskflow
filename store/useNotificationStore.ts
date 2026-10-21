@@ -70,21 +70,6 @@ export const useNotificationStore = create<NotificationState>()(
       popupAlerts: [],
       addNotification: (notif) =>
         set((state) => {
-          const isInsideChatPage =
-            typeof window !== 'undefined' && window.location.pathname.startsWith('/chat');
-
-          // If user is already inside /chat, do NOT create chat notifications or right-side chat popups
-          if (notif.type === 'chat_message' && isInsideChatPage) {
-            return {
-              notifications: (Array.isArray(state.notifications) ? state.notifications : []).filter(
-                (n) => n && n.type !== 'chat_message'
-              ),
-              popupAlerts: (Array.isArray(state.popupAlerts) ? state.popupAlerts : []).filter(
-                (p) => p && p.type !== 'chat_message'
-              ),
-            };
-          }
-
           const newEntry: AppNotification = {
             ...notif,
             id: notif.id || `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -97,13 +82,13 @@ export const useNotificationStore = create<NotificationState>()(
           const existsInNotifs = currentNotifs.some((n) => n && n.id === newEntry.id);
           const existsInPopups = currentPopups.some((p) => p && p.id === newEntry.id);
 
-          // Automatically play distinct notification sound for non-chat notifications
-          // (chat sound is played by the chat receiver listener so senders don't hear their own outgoing msg)
-          if (!existsInNotifs && newEntry.type !== 'chat_message' && typeof window !== 'undefined') {
+          // Automatically play distinct notification sound for visible receivers
+          if (!existsInNotifs && typeof window !== 'undefined') {
             const currentAuthUser = useAuthStore.getState().currentUser;
             const isVisible = isNotificationVisibleForUser(newEntry, currentAuthUser);
             if (isVisible) {
-              const soundType = resolveNotificationSoundType(newEntry);
+              const soundType =
+                newEntry.type === 'chat_message' ? 'chat' : resolveNotificationSoundType(newEntry);
               playNotificationChime(soundType);
             }
           }
