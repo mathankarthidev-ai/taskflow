@@ -11,7 +11,7 @@ export default function GlobalAppError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('TaskFlow Workspace Error Boundary caught:', error);
+    console.error('Bizy Hub Workspace Error Boundary caught:', error);
   }, [error]);
 
   const handleSafeRecover = () => {

@@ -1,7 +1,7 @@
 import { DashboardOverview } from '@/features/dashboard/DashboardOverview';
 
 export const metadata = {
-  title: 'Dashboard | TaskFlow SaaS',
+  title: 'Dashboard | Bizy Hub',
   description: 'Internal workspace task management dashboard overview.',
 };
 

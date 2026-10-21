@@ -6,8 +6,8 @@ import { AppProviders } from '@/providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'TaskFlow | Production Task Management SaaS',
-  description: 'Enterprise internal task management platform built with Next.js 15, React 19, TypeScript, and Supabase PostgreSQL.',
+  title: 'Bizy Hub | Production Task & Operations SaaS',
+  description: 'Bizy Hub — Enterprise internal operations & task management platform built with Next.js 15, React 19, TypeScript, and Supabase PostgreSQL.',
 };
 
 export default function RootLayout({

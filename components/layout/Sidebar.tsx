@@ -221,19 +221,19 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             {isAustralia ? (
               <>
                 <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
-                  AMBIZCON
+                  Bizy Hub
                 </span>
                 <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                  Brisbane HQ • Global
+                  Ambizcon • Brisbane HQ
                 </span>
               </>
             ) : (
               <>
                 <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
-                  AMBIZCON<span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1">Health</span>
+                  Bizy Hub<span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1">Health</span>
                 </span>
                 <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                  Beyond Marketing • Healthcare
+                  Ambizcon Health • India
                 </span>
               </>
             )}
@@ -273,7 +273,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             <span className="text-xs font-semibold truncate leading-none text-foreground">
               {currentUser.team} Team
             </span>
-            <span className="text-[10px] text-muted-foreground mt-1 truncate">TaskFlow Enterprise</span>
+            <span className="text-[10px] text-muted-foreground mt-1 truncate">Bizy Hub Enterprise</span>
           </div>
         </div>
       </div>

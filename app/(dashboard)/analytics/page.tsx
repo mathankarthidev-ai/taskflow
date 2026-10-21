@@ -1,7 +1,7 @@
 import { AnalyticsCharts } from '@/features/analytics/AnalyticsCharts';
 
 export const metadata = {
-  title: 'Analytics & Metrics | TaskFlow SaaS',
+  title: 'Analytics & Metrics | Bizy Hub',
   description: 'Interactive team output trends and Recharts analytics visualizations.',
 };
 

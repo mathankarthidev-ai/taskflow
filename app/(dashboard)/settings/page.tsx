@@ -217,7 +217,7 @@ export default function SettingsPage() {
             Language & Region
           </CardTitle>
           <CardDescription className="text-xs">
-            Select your preferred display language for the TaskFlow UI.
+            Select your preferred display language for the Bizy Hub UI.
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0 pb-0">

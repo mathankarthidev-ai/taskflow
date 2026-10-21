@@ -862,7 +862,7 @@ export default function TeamChatPage() {
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-brand-500" />
             <span className="text-xs sm:text-sm font-extrabold text-foreground tracking-tight">
-              Ambizcon All-in-One &amp; Team Chat Workspace
+              Bizy Hub All-in-One &amp; Team Chat Workspace
             </span>
           </div>
         </div>

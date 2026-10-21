@@ -1,6 +1,6 @@
 /**
  * Full End-to-End System Health & Feature Verification Script
- * Tests every major option and module across the TaskFlow platform.
+ * Tests every major option and module across the Bizy Hub platform.
  */
 
 import { isNotificationVisibleForUser } from '../lib/notification-filter';
@@ -36,7 +36,7 @@ function assert(condition: boolean, msg: string) {
 }
 
 console.log('\n===============================================================');
-console.log('🧪 TASKFLOW ALL-OPTIONS COMPREHENSIVE AUDIT & TEST RUN');
+console.log('🧪 BIZY HUB ALL-OPTIONS COMPREHENSIVE AUDIT & TEST RUN');
 console.log('===============================================================\n');
 
 // 1. Authentication & Seed Data

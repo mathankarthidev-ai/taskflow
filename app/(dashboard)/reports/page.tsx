@@ -1,7 +1,7 @@
 import { ReportsView } from '@/features/reports/ReportsView';
 
 export const metadata = {
-  title: 'Reports & Exports | TaskFlow SaaS',
+  title: 'Reports & Exports | Bizy Hub',
   description: 'Performance reports center with CSV and Excel export utilities.',
 };
 

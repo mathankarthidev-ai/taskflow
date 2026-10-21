@@ -1,7 +1,7 @@
 import { UserManagementTable } from '@/features/users/UserManagementTable';
 
 export const metadata = {
-  title: 'User Management | TaskFlow SaaS',
+  title: 'User Management | Bizy Hub',
   description: 'Super Admin user management panel and role management.',
 };
 

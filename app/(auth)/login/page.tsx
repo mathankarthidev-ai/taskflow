@@ -268,8 +268,8 @@ export default function LoginPage() {
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-foreground">Ambizcon Corporate Portal</h3>
-                <p className="text-[11px] text-muted-foreground">Authorized Employee Authentication</p>
+                <h3 className="text-sm font-bold text-foreground">Bizy Hub Portal</h3>
+                <p className="text-[11px] text-muted-foreground">Ambizcon Authorized Authentication</p>
               </div>
             </div>
             <Badge variant="outline" className={`text-xs font-mono transition-colors ${

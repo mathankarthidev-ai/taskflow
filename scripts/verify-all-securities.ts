@@ -28,7 +28,7 @@ function assertTrue(condition: boolean, message: string) {
 }
 
 console.log('\n===============================================================');
-console.log('🛡️  TASKFLOW SECURITY & REGRESSION VERIFICATION SUITE');
+console.log('🛡️  BIZY HUB SECURITY & REGRESSION VERIFICATION SUITE');
 console.log('===============================================================\n');
 
 // 1. File Upload Security

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  // Mock authenticated user retrieval (simulates existing TaskFlow auth session)
+  // Authenticated user retrieval (simulates existing Bizy Hub auth session)
   return NextResponse.json({
     id: 'user_anirudh_01',
     name: 'Anirudh K.',

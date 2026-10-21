@@ -31,7 +31,7 @@ export function KeyboardShortcutsModal() {
       isOpen={isOpen}
       onClose={() => setIsOpen(false)}
       title="Keyboard Shortcuts Cheatsheet"
-      description="Supercharge your productivity with TaskFlow hotkeys."
+      description="Supercharge your productivity with Bizy Hub hotkeys."
       maxWidth="md"
     >
       <div className="space-y-3 pt-2">

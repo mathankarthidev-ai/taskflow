@@ -198,7 +198,7 @@ export function ReportsView() {
       'Created Date': formatDate(t.createdAt),
     }));
 
-    exportToCSV(`TaskFlow_${reportType.toUpperCase()}_${completedPeriod.toUpperCase()}_Report`, exportRows);
+    exportToCSV(`BizyHub_${reportType.toUpperCase()}_${completedPeriod.toUpperCase()}_Report`, exportRows);
     toast.success(`${reportType.toUpperCase()} (${completedPeriod.toUpperCase()}) Report exported to CSV!`);
   };
 
@@ -212,7 +212,7 @@ export function ReportsView() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-foreground">TaskFlow Reports Center</h1>
+              <h1 className="text-xl font-bold tracking-tight text-foreground">Bizy Hub Reports Center</h1>
               <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[11px] font-bold">
                 {filteredTasks.length} Records
               </Badge>

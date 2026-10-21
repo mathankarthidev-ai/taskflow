@@ -74,7 +74,7 @@ export function AnalyticsCharts() {
             <BarChart3 className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-foreground">TaskFlow Analytics & Insights</h2>
+            <h2 className="text-base font-bold text-foreground">Bizy Hub Analytics & Insights</h2>
             <p className="text-xs text-muted-foreground">Real-time team productivity metrics and completion trends.</p>
           </div>
         </div>
