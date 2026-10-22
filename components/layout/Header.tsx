@@ -764,7 +764,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         </button>
 
         {/* Company Branch Switcher: Super Admin Only */}
-        {isSuperAdmin ? (
+        {isSuperAdmin && (
           <div className="relative header-dropdown-menu">
             <button
               onClick={() => toggleMenu('company')}
@@ -864,42 +864,6 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 </button>
               </div>
             )}
-          </div>
-        ) : (
-          <div
-            className={`flex h-10 items-center gap-2 rounded-xl border px-2.5 sm:px-3 text-xs font-bold shadow-xs shrink-0 ${
-              isAustralia
-                ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-            }`}
-            title={`Registered Branch: ${isAustralia ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health (Chennai HQ)'}`}
-          >
-            {isAustralia ? (
-              <div className="h-5 w-5 rounded-md bg-white p-0.5 border border-sky-500/40 flex items-center justify-center shrink-0">
-                <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
-              </div>
-            ) : (
-              <img
-                src="/ambizcon-logo.png"
-                alt="IND"
-                className="h-5 w-5 rounded-md object-cover border border-emerald-500/30 shrink-0"
-              />
-            )}
-            <span className="hidden md:inline-flex items-center gap-1.5 font-bold">
-              {isAustralia ? '🇦🇺 Ambizcon (Brisbane)' : '🇮🇳 Ambizcon Health (Chennai)'}
-            </span>
-            <span className="md:hidden font-bold">
-              {isAustralia ? '🇦🇺 AUS' : '🇮🇳 IND'}
-            </span>
-            <span
-              className={`hidden lg:inline-flex px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
-                isAustralia
-                  ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                  : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-              }`}
-            >
-              Registered
-            </span>
           </div>
         )}
       </div>
