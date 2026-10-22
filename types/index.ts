@@ -61,12 +61,18 @@ export interface Team {
   membersCount?: number;
 }
 
+export interface TaskLink {
+  title?: string;
+  url: string;
+}
+
 export interface Comment {
   _id: string;
   taskId: string;
   userId: string;
   user?: User;
   message: string;
+  links?: TaskLink[];
   isInternal?: boolean; // Client-visible vs internal team note
   createdAt: string;
   updatedAt?: string;
@@ -182,6 +188,8 @@ export interface ReminderSettings {
   targetTeam?: string; // e.g. "Development", "Marketing", "Creative"
   targetUserIds?: string[]; // Array of selected user IDs when custom_members is chosen
   summaryText?: string;
+  link?: string;
+  links?: TaskLink[];
 }
 
 export interface Task {
@@ -229,6 +237,7 @@ export interface Task {
   reminderSettings?: ReminderSettings;
   labels: string[];
   attachments?: TaskAttachment[];
+  links?: TaskLink[];
   commentsCount?: number;
   comments?: Comment[];
   history?: TaskHistoryItem[];

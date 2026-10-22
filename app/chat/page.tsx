@@ -519,11 +519,12 @@ export default function TeamChatPage() {
     return parts.map((part, i) => {
       if (part.startsWith('@')) {
         const candidate = part.slice(1).trim();
-        const isMatched = users.some(
-          (u) =>
-            u.name.toLowerCase() === candidate.toLowerCase() ||
-            candidate.toLowerCase().startsWith(u.name.toLowerCase())
-        ) || candidate.length > 0;
+        const isMatched =
+          users.some(
+            (u) =>
+              u.name.toLowerCase() === candidate.toLowerCase() ||
+              candidate.toLowerCase().startsWith(u.name.toLowerCase())
+          ) || candidate.length > 0;
 
         if (isMatched) {
           return (
@@ -541,7 +542,61 @@ export default function TeamChatPage() {
           );
         }
       }
-      return <span key={i}>{part}</span>;
+
+      // Process URLs & Markdown links within the non-mention part
+      const urlRegex = /(https?:\/\/[^\s]+|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))/g;
+      const elements: React.ReactNode[] = [];
+      let lastIdx = 0;
+      let match;
+      while ((match = urlRegex.exec(part)) !== null) {
+        if (match.index > lastIdx) {
+          elements.push(part.substring(lastIdx, match.index));
+        }
+        if (match[2] && match[3]) {
+          elements.push(
+            <a
+              key={`${i}_${match.index}`}
+              href={match[3]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center gap-1 font-semibold underline text-[11px] px-1.5 py-0.5 rounded-md align-middle ${
+                isMe
+                  ? 'bg-white/20 text-white hover:bg-white/30'
+                  : 'bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-500/20'
+              }`}
+            >
+              <Globe className="h-2.5 w-2.5 inline shrink-0" />
+              <span>{match[2]}</span>
+              <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+            </a>
+          );
+        } else {
+          const rawUrl = match[0];
+          elements.push(
+            <a
+              key={`${i}_${match.index}`}
+              href={rawUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center gap-1 font-semibold underline text-[11px] px-1.5 py-0.5 rounded-md max-w-[220px] truncate align-middle ${
+                isMe
+                  ? 'bg-white/20 text-white hover:bg-white/30'
+                  : 'bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-500/20'
+              }`}
+              title={rawUrl}
+            >
+              <Globe className="h-2.5 w-2.5 inline shrink-0" />
+              <span className="truncate">{rawUrl.replace(/^https?:\/\//i, '')}</span>
+              <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+            </a>
+          );
+        }
+        lastIdx = match.index + match[0].length;
+      }
+      if (lastIdx < part.length) {
+        elements.push(part.substring(lastIdx));
+      }
+      return <React.Fragment key={i}>{elements}</React.Fragment>;
     });
   };
 

@@ -25,6 +25,7 @@ export async function createTaskAction(data: {
   specialist?: string;
   reminderSettings?: any;
   attachments?: { name: string; url: string; type: string }[];
+  links?: { title?: string; url: string }[];
 }) {
   const task = await createTask(data);
   revalidatePath('/dashboard');

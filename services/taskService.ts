@@ -54,7 +54,16 @@ function mapTaskToRow(task: Task) {
     recurring_frequency: task.recurringFrequency || null,
     reminder_settings: task.reminderSettings || null,
     labels: task.labels || [],
-    attachments: task.attachments || [],
+    attachments: [
+      ...(Array.isArray(task.attachments) ? task.attachments.filter((a: any) => a?.type !== 'link') : []),
+      ...(Array.isArray(task.links)
+        ? task.links.map((l) => ({
+            name: l.title || l.url,
+            url: l.url,
+            type: 'link',
+          }))
+        : []),
+    ],
     comments_count: task.commentsCount ?? 0,
     history: task.history || [],
     created_at: task.createdAt || new Date().toISOString(),
@@ -113,7 +122,14 @@ function mapRowToTask(row: any, allUsers: User[]): Task {
     recurringFrequency: row.recurring_frequency || undefined,
     reminderSettings: row.reminder_settings || undefined,
     labels: Array.isArray(row.labels) ? row.labels : [],
-    attachments: Array.isArray(row.attachments) ? row.attachments : [],
+    attachments: Array.isArray(row.attachments) ? row.attachments.filter((a: any) => a?.type !== 'link') : [],
+    links: Array.isArray(row.links)
+      ? row.links
+      : Array.isArray(row.attachments)
+      ? row.attachments
+          .filter((a: any) => a?.type === 'link')
+          .map((a: any) => ({ title: a.name || a.url, url: a.url }))
+      : [],
     commentsCount: Number(row.comments_count || 0),
     history: Array.isArray(row.history) ? row.history : [],
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),

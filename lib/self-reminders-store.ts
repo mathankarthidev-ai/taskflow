@@ -21,6 +21,8 @@ export interface SelfReminder {
   reminder_time: string; // e.g. "09:30 AM" or "14:00"
   repeat_type: SelfReminderRepeat;
   custom_days?: string; // e.g. "Mon, Wed, Fri"
+  link?: string; // Attached reference, doc or meeting link
+  links?: { title?: string; url: string }[];
   is_completed: boolean;
   is_active: boolean;
   created_at?: string;

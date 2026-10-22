@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { TaskStatus, Comment, User } from '@/types';
 import {
   updateTaskStatusAction,
+  updateTaskAction,
   assignTaskAction,
   deleteTaskAction,
   logTaskTimeAction,
@@ -18,8 +19,8 @@ import {
 import { fetchCommentsAction, addCommentAction, deleteCommentAction } from '@/actions/commentActions';
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
-import { getPriorityBadgeColor, getStatusBadgeColor, formatDate, formatTimeAgo } from '@/lib/utils';
-import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3, Zap, Footprints, ArrowRight } from 'lucide-react';
+import { getPriorityBadgeColor, getStatusBadgeColor, formatDate, formatTimeAgo, normalizeUrl } from '@/lib/utils';
+import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3, Zap, Footprints, ArrowRight, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { SEED_CLIENTS_FULL } from '@/lib/seed-data';
@@ -29,6 +30,57 @@ import { TaskEditModal } from '@/components/tasks/TaskEditModal';
 import { saveWorkLogItem, formatMinutesToHHMM } from '@/lib/work-logs-store';
 import { useNotificationStore } from '@/store/useNotificationStore';
 
+function renderFormattedCommentText(text: string) {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s]+|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))/g;
+  const elements: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let match;
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      elements.push(text.substring(lastIdx, match.index));
+    }
+    if (match[2] && match[3]) {
+      // Markdown formatted link [Title](url)
+      elements.push(
+        <a
+          key={match.index}
+          href={match[3]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 font-semibold text-brand-600 dark:text-brand-400 underline hover:text-brand-700 bg-brand-500/10 px-2 py-0.5 rounded-md text-[11px] my-0.5 align-middle"
+        >
+          <Globe className="h-3 w-3 inline shrink-0" />
+          <span>{match[2]}</span>
+          <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+        </a>
+      );
+    } else {
+      // Plain URL
+      const rawUrl = match[0];
+      elements.push(
+        <a
+          key={match.index}
+          href={rawUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 font-semibold text-brand-600 dark:text-brand-400 underline hover:text-brand-700 bg-brand-500/10 px-2 py-0.5 rounded-md text-[11px] my-0.5 max-w-[260px] truncate align-middle"
+        >
+          <Globe className="h-3 w-3 inline shrink-0" />
+          <span className="truncate">{rawUrl.replace(/^https?:\/\//i, '')}</span>
+          <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+        </a>
+      );
+    }
+    lastIdx = match.index + match[0].length;
+  }
+  if (lastIdx < text.length) {
+    elements.push(text.substring(lastIdx));
+  }
+  return elements;
+}
+
 export function TaskDetailModal() {
   const { selectedTask, isDetailModalOpen, setDetailModalOpen, setSelectedTask, setTasks, tasks } = useTaskStore();
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -37,6 +89,17 @@ export function TaskDetailModal() {
   const [newComment, setNewComment] = useState('');
   const [isInternalComment, setIsInternalComment] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
+
+  // Comment / Reply Links State
+  const [commentLinks, setCommentLinks] = useState<{ title: string; url: string }[]>([]);
+  const [showCommentLinkForm, setShowCommentLinkForm] = useState(false);
+  const [newCommentLinkTitle, setNewCommentLinkTitle] = useState('');
+  const [newCommentLinkUrl, setNewCommentLinkUrl] = useState('');
+
+  // Task Level Direct Resource Link State
+  const [showTaskLinkForm, setShowTaskLinkForm] = useState(false);
+  const [taskLinkTitle, setTaskLinkTitle] = useState('');
+  const [taskLinkUrl, setTaskLinkUrl] = useState('');
   const [workspaceUsers, setWorkspaceUsers] = useState<User[]>([]);
   const [isReviewerModalOpen, setIsReviewerModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -309,24 +372,98 @@ export function TaskDetailModal() {
     toast.success('Task deleted');
   };
 
+  const handleAddCommentLink = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!newCommentLinkUrl.trim()) {
+      toast.error('Please enter a link URL');
+      return;
+    }
+    const cleanUrl = normalizeUrl(newCommentLinkUrl);
+    const title = newCommentLinkTitle.trim() || cleanUrl.replace(/^https?:\/\//i, '').split('/')[0] || 'Link';
+    setCommentLinks((prev) => [...prev, { title, url: cleanUrl }]);
+    setNewCommentLinkTitle('');
+    setNewCommentLinkUrl('');
+    toast.success(`Attached link: "${title}"`);
+  };
+
+  const handleRemoveCommentLink = (idx: number) => {
+    setCommentLinks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveTaskDirectLink = async (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedTask || !currentUser) return;
+    if (!taskLinkUrl.trim()) {
+      toast.error('Please enter a valid link URL');
+      return;
+    }
+    const cleanUrl = normalizeUrl(taskLinkUrl);
+    const title = taskLinkTitle.trim() || cleanUrl.replace(/^https?:\/\//i, '').split('/')[0] || 'Resource Link';
+    const newLink = { title, url: cleanUrl };
+    const existingLinks = selectedTask.links || [];
+    const updatedLinks = [...existingLinks, newLink];
+
+    try {
+      await updateTaskAction(
+        selectedTask._id,
+        {
+          links: updatedLinks,
+          attachments: [
+            ...(selectedTask.attachments || []).filter((a) => a.type !== 'link'),
+            ...updatedLinks.map((l) => ({ name: l.title || 'Link', url: l.url, type: 'link' })),
+          ],
+        },
+        currentUser._id,
+        currentUser.role,
+        currentUser.name
+      );
+
+      const updatedTaskObj = {
+        ...selectedTask,
+        links: updatedLinks,
+        attachments: [
+          ...(selectedTask.attachments || []).filter((a) => a.type !== 'link'),
+          ...updatedLinks.map((l) => ({ name: l.title || 'Link', url: l.url, type: 'link' })),
+        ],
+      };
+      setSelectedTask(updatedTaskObj);
+      setTasks(tasks.map((t) => (t._id === selectedTask._id ? updatedTaskObj : t)));
+      setTaskLinkTitle('');
+      setTaskLinkUrl('');
+      setShowTaskLinkForm(false);
+      toast.success(`Link "${title}" added to Task resources!`);
+    } catch {
+      toast.error('Failed to add link to task');
+    }
+  };
+
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!newComment.trim() && commentLinks.length === 0) return;
 
     setIsAddingComment(true);
     try {
-      const comment = await addCommentAction(selectedTask._id, currentUser._id, newComment);
+      let finalMessage = newComment.trim();
+      if (commentLinks.length > 0) {
+        const linkList = commentLinks.map((l) => `[${l.title}](${l.url})`).join(' • ');
+        finalMessage = finalMessage ? `${finalMessage}\n\n🔗 ${linkList}` : `🔗 ${linkList}`;
+      }
+
+      const comment = await addCommentAction(selectedTask._id, currentUser._id, finalMessage);
+      comment.links = commentLinks;
       setComments([...comments, comment]);
       setNewComment('');
+      setCommentLinks([]);
+      setShowCommentLinkForm(false);
       useNotificationStore.getState().addNotification({
         type: 'comment',
         category: 'Comment / Note',
         title: '💬 New Task Comment',
-        text: `${currentUser.name} commented on "${selectedTask.title}": "${newComment.trim().slice(0, 60)}"`,
+        text: `${currentUser.name} commented on "${selectedTask.title}": "${finalMessage.trim().slice(0, 60)}"`,
         color: 'bg-purple-500',
         taskId: selectedTask._id,
       });
-      toast.success('Comment added');
+      toast.success('Comment & links posted');
     } catch (e) {
       toast.error('Failed to add comment');
     } finally {
@@ -809,10 +946,118 @@ export function TaskDetailModal() {
               )}
             </div>
 
+            {/* Resource & Reference Links Section */}
+            <div className="space-y-2 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Link2 className="h-3.5 w-3.5 text-brand-500" />
+                  LINKS &amp; RESOURCES
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setShowTaskLinkForm(!showTaskLinkForm)}
+                  className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {showTaskLinkForm ? 'Cancel' : 'Add Link'}
+                </button>
+              </div>
+
+              {showTaskLinkForm && (
+                <div className="p-3 rounded-2xl border border-brand-500/30 bg-brand-500/[0.04] space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={taskLinkTitle}
+                      onChange={(e) => setTaskLinkTitle(e.target.value)}
+                      placeholder="Title (e.g. Figma, Google Sheet, PR)"
+                      className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+                    />
+                    <input
+                      type="url"
+                      value={taskLinkUrl}
+                      onChange={(e) => setTaskLinkUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring font-mono"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSaveTaskDirectLink();
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowTaskLinkForm(false)}
+                      className="text-xs h-7"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveTaskDirectLink}
+                      className="ambizcon-gradient text-white text-xs h-7 shadow-glow gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Save Link to Task
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Display existing task links */}
+              {(selectedTask.links && selectedTask.links.length > 0) ||
+              (selectedTask.attachments && selectedTask.attachments.some((a) => a.type === 'link')) ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {[
+                    ...(selectedTask.links || []),
+                    ...(selectedTask.attachments || [])
+                      .filter((a) => a.type === 'link' && !(selectedTask.links || []).some((l) => l.url === a.url))
+                      .map((a) => ({ title: a.name || a.url, url: a.url })),
+                  ].map((l, i) => (
+                    <a
+                      key={i}
+                      href={l.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 hover:bg-brand-500/10 hover:border-brand-500/30 transition-all group"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Globe className="h-3.5 w-3.5 text-brand-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-foreground truncate group-hover:text-brand-600 transition-colors">
+                            {l.title || 'Resource Link'}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground truncate font-mono">
+                            {l.url.replace(/^https?:\/\//i, '')}
+                          </p>
+                        </div>
+                      </div>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-brand-600 shrink-0 ml-1.5" />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                !showTaskLinkForm && (
+                  <p className="text-[11px] text-muted-foreground italic py-1">
+                    No resource links attached. Click "+ Add Link" to attach Figma, Docs, or Staging URLs.
+                  </p>
+                )
+              )}
+            </div>
+
             {/* Discussion Comments Section */}
             <div className="space-y-3 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-4">
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                DISCUSSION
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span>DISCUSSION / REPLY CHAT</span>
+                <span className="text-[10px] lowercase font-normal text-muted-foreground">
+                  {comments.length} message{comments.length === 1 ? '' : 's'}
+                </span>
               </h4>
 
               {/* Comment Input */}
@@ -820,40 +1065,138 @@ export function TaskDetailModal() {
                 <textarea
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Write a comment..."
+                  placeholder="Write a reply or task comment..."
                   rows={3}
                   className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-3 text-xs focus-ring"
                 />
+
+                {/* Show Attached Comment Links */}
+                {commentLinks.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1 self-center mr-1">
+                      <Link2 className="h-3 w-3 text-brand-500" />
+                      Links:
+                    </span>
+                    {commentLinks.map((cl, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-brand-500/10 border border-brand-500/30 text-brand-700 dark:text-brand-300 text-[11px] font-medium"
+                      >
+                        <Globe className="h-2.5 w-2.5 text-brand-500" />
+                        <span className="max-w-[150px] truncate">{cl.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCommentLink(idx)}
+                          className="hover:text-rose-500 ml-0.5"
+                          title="Remove link"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add Link to Reply Input Modal / Popover */}
+                {showCommentLinkForm && (
+                  <div className="p-2.5 rounded-xl border border-brand-500/30 bg-background space-y-2 shadow-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={newCommentLinkTitle}
+                        onChange={(e) => setNewCommentLinkTitle(e.target.value)}
+                        placeholder="Link Label (e.g. Design Draft, PR)"
+                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1 text-xs focus-ring"
+                      />
+                      <input
+                        type="url"
+                        value={newCommentLinkUrl}
+                        onChange={(e) => setNewCommentLinkUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1 text-xs focus-ring font-mono"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddCommentLink();
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowCommentLinkForm(false)}
+                        className="text-[11px] h-6 px-2.5"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddCommentLink}
+                        className="ambizcon-gradient text-white text-[11px] h-6 px-2.5 gap-1 shadow-glow"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Attach to Reply
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between pt-1">
-                  <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={isInternalComment}
-                      onChange={(e) => setIsInternalComment(e.target.checked)}
-                      className="h-4 w-4 rounded accent-brand-600"
-                    />
-                    Internal team note
-                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={isInternalComment}
+                        onChange={(e) => setIsInternalComment(e.target.checked)}
+                        className="h-4 w-4 rounded accent-brand-600"
+                      />
+                      Internal note
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCommentLinkForm(!showCommentLinkForm)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer"
+                      title="Attach link to reply"
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                      <span>{showCommentLinkForm ? 'Hide Link' : 'Add Link'}</span>
+                    </button>
+                  </div>
+
                   <Button
                     type="submit"
-                    disabled={isAddingComment || !newComment.trim()}
+                    disabled={isAddingComment || (!newComment.trim() && commentLinks.length === 0)}
                     className="ambizcon-gradient hover:opacity-90 text-white font-bold text-xs px-5 py-2 rounded-xl shadow-glow"
                   >
-                    Post
+                    Post Reply
                   </Button>
                 </div>
               </form>
 
               {/* Comments List */}
               {comments.length > 0 && (
-                <div className="space-y-2 pt-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 pt-2 max-h-56 overflow-y-auto">
                   {comments.map((c) => (
-                    <div key={c._id} className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-zinc-800/60">
+                    <div key={c._id} className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-zinc-800/60 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-foreground">{c.user?.name || 'User'}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-foreground text-xs">{c.user?.name || 'User'}</span>
+                          {c.isInternal && (
+                            <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-amber-500/10 text-amber-600 border-amber-500/30">
+                              Internal
+                            </Badge>
+                          )}
+                        </div>
                         <span className="text-[10px] text-muted-foreground">{formatTimeAgo(c.createdAt)}</span>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{c.message}</p>
+                      <div className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                        {renderFormattedCommentText(c.message)}
+                      </div>
                     </div>
                   ))}
                 </div>

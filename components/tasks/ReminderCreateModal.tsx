@@ -28,7 +28,11 @@ import {
   Tag,
   Check,
   Sparkles, Info,
+  Link2,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
+import { normalizeUrl } from '@/lib/utils';
 
 interface ReminderCreateModalProps {
   isOpen: boolean;
@@ -129,6 +133,10 @@ export function ReminderCreateModal({
   // End recurrence
   const [repeatEndsOption, setRepeatEndsOption] = useState<'never' | 'until_date'>('never');
   const [repeatUntilDate, setRepeatUntilDate] = useState<string>('');
+
+  // Link Attachment State
+  const [reminderLink, setReminderLink] = useState<string>('');
+  const [reminderLinkTitle, setReminderLinkTitle] = useState<string>('');
 
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState(getStoredClients());
@@ -249,6 +257,9 @@ export function ReminderCreateModal({
     try {
       const summaryText = `${frequency} reminder for ${clientName} (${team}) at ${reminderTime}.`;
 
+      const cleanLinkUrl = reminderLink.trim() ? normalizeUrl(reminderLink) : '';
+      const cleanLinkTitle = reminderLinkTitle.trim() || 'Meeting / Reference Link';
+
       const reminderSettings: ReminderSettings = {
         enabled: true,
         frequency,
@@ -268,6 +279,8 @@ export function ReminderCreateModal({
         targetTeam: team,
         targetUserIds: assignedTo ? [assignedTo] : [],
         summaryText,
+        link: cleanLinkUrl || undefined,
+        links: cleanLinkUrl ? [{ title: cleanLinkTitle, url: cleanLinkUrl }] : undefined,
       };
 
       const labels = ['Reminder', frequency, team];
@@ -287,6 +300,10 @@ export function ReminderCreateModal({
         labels,
         clientName,
         reminderSettings,
+        attachments: cleanLinkUrl
+          ? [{ name: cleanLinkTitle, url: cleanLinkUrl, type: 'link' }]
+          : [],
+        links: cleanLinkUrl ? [{ title: cleanLinkTitle, url: cleanLinkUrl }] : [],
       });
 
       setTasks([newTask, ...(tasks || [])]);
@@ -708,6 +725,33 @@ export function ReminderCreateModal({
             rows={3}
             className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-mono focus-ring"
           />
+        </div>
+
+        {/* 7. Meeting & Reference Link Attachment */}
+        <div className="p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 space-y-2">
+          <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <Link2 className="h-3.5 w-3.5 text-brand-500" />
+            Attach Meeting / Resource Link (Optional)
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              type="text"
+              value={reminderLinkTitle}
+              onChange={(e) => setReminderLinkTitle(e.target.value)}
+              placeholder="Link Title (e.g. Google Meet, Zoom, Brief Doc)"
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+            />
+            <input
+              type="url"
+              value={reminderLink}
+              onChange={(e) => setReminderLink(e.target.value)}
+              placeholder="https://meet.google.com/... or Doc URL"
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring font-mono"
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Recipients can click to directly join the meeting or open the attached resource document.
+          </p>
         </div>
 
         {/* Live Preview Pill */}

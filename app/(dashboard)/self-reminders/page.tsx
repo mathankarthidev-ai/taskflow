@@ -41,9 +41,12 @@ import {
   CalendarDays,
   Download,
   ChevronRight,
+  Link2,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { exportToCSV } from '@/lib/utils';
+import { exportToCSV, normalizeUrl } from '@/lib/utils';
 
 const ALL_WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SHORT_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -57,6 +60,7 @@ export default function SelfRemindersPage() {
   const todayIso = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
+  const [link, setLink] = useState('');
   const [reminderDate, setReminderDate] = useState(todayIso);
   const [dayName, setDayName] = useState(() => getDayOfWeekFromDate(todayIso));
   const [reminderTime, setReminderTime] = useState('09:30');
@@ -72,6 +76,7 @@ export default function SelfRemindersPage() {
   const [editingItem, setEditingItem] = useState<SelfReminder | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editNote, setEditNote] = useState('');
+  const [editLink, setEditLink] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editDay, setEditDay] = useState('Monday');
   const [editTime, setEditTime] = useState('09:30');
@@ -243,6 +248,7 @@ export default function SelfRemindersPage() {
       user_name: currentUser.name,
       title: title.trim(),
       note: note.trim(),
+      link: link.trim() ? normalizeUrl(link) : undefined,
       reminder_date: reminderDate || todayIso,
       day_name: effectiveDay,
       reminder_time: formatTime12Hour(reminderTime),
@@ -264,6 +270,7 @@ export default function SelfRemindersPage() {
 
     setTitle('');
     setNote('');
+    setLink('');
     setIsSaving(false);
     toast.success('Self Reminder saved!', {
       description: `Scheduled for ${effectiveDay} at ${formatTime12Hour(reminderTime)} (${repeatType})`,
@@ -305,6 +312,7 @@ export default function SelfRemindersPage() {
     setEditingItem(item);
     setEditTitle(item.title);
     setEditNote(item.note || '');
+    setEditLink(item.link || '');
     setEditDate(item.reminder_date);
     setEditDay(item.day_name);
     setEditTime(to24HourTime(item.reminder_time));
@@ -332,6 +340,7 @@ export default function SelfRemindersPage() {
     await updateSelfReminder(editingItem.id, currentUser.email, {
       title: editTitle.trim(),
       note: editNote.trim(),
+      link: editLink.trim() ? normalizeUrl(editLink) : undefined,
       reminder_date: editDate,
       day_name: effectiveDay,
       reminder_time: formatTime12Hour(editTime),
@@ -494,8 +503,8 @@ export default function SelfRemindersPage() {
         </div>
 
         <form onSubmit={handleAddReminder} className="space-y-4">
-          {/* Row 1: Reminder Title & Optional Note */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Row 1: Reminder Title, Optional Note & Meeting/Resource Link */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-xs font-bold text-foreground">
                 What do you want to be reminded about? *
@@ -520,6 +529,20 @@ export default function SelfRemindersPage() {
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="e.g. Share updated invoice PDF on WhatsApp / Email"
                 className="mt-1.5 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3.5 py-2.5 text-sm focus-ring"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-brand-500" />
+                Meeting / Resource Link (Optional)
+              </label>
+              <input
+                type="url"
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
+                placeholder="https://meet.google.com/... or Doc URL"
+                className="mt-1.5 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3.5 py-2.5 text-sm focus-ring font-mono"
               />
             </div>
           </div>
@@ -798,6 +821,25 @@ export default function SelfRemindersPage() {
                       <p className="text-xs text-muted-foreground">{item.note}</p>
                     )}
 
+                    {/* Attached Link */}
+                    {item.link && (
+                      <div className="pt-0.5">
+                        <a
+                          href={item.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors max-w-full truncate"
+                          title={item.link}
+                        >
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                          <span className="truncate">
+                            {item.link.replace(/^https?:\/\//i, '')}
+                          </span>
+                        </a>
+                      </div>
+                    )}
+
                     {/* Date, Day, Time, and How Repetitive Pills */}
                     <div className="flex flex-wrap items-center gap-2 pt-1">
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800/80 text-[11px] font-mono font-bold text-foreground">
@@ -903,6 +945,20 @@ export default function SelfRemindersPage() {
                 onChange={(e) => setEditNote(e.target.value)}
                 className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
               />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground">Attach Resource / Meeting Link (Optional)</label>
+              <div className="relative mt-1">
+                <Globe className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="url"
+                  value={editLink}
+                  onChange={(e) => setEditLink(e.target.value)}
+                  placeholder="https://meet.google.com/... or docs.google.com/..."
+                  className="w-full pl-9 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+                />
+              </div>
             </div>
 
             {/* 1. Date & Day (Combined 2-in-1 Div) */}

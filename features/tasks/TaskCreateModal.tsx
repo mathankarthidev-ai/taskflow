@@ -12,7 +12,8 @@ import { fetchAllUsersAction } from '@/actions/userActions';
 import { toast } from 'sonner';
 
 import { getStoredClients, addClient } from '@/lib/client-db';
-import { Paperclip, Plus, Building2, UploadCloud, AlertCircle, Trash2, Sparkles, CheckSquare } from 'lucide-react';
+import { Paperclip, Plus, Building2, UploadCloud, AlertCircle, Trash2, Sparkles, CheckSquare, Link2, ExternalLink, Globe } from 'lucide-react';
+import { normalizeUrl } from '@/lib/utils';
 
 import { SEED_TASK_TYPES, SEED_PROJECTS } from '@/lib/seed-data';
 import { useCompanyStore } from '@/store/useCompanyStore';
@@ -88,6 +89,12 @@ export function TaskCreateModal() {
 
   // Attachment State
   const [attachments, setAttachments] = useState<{ name: string; url: string; type: string; size: string; bytes: number }[]>([]);
+
+  // Resource & Reference Links State
+  const [taskLinks, setTaskLinks] = useState<{ title: string; url: string }[]>([]);
+  const [newLinkTitle, setNewLinkTitle] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [showLinkInput, setShowLinkInput] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -230,6 +237,24 @@ export function TaskCreateModal() {
     }
   };
 
+  const handleAddNewLink = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!newLinkUrl.trim()) {
+      toast.error('Please enter a valid link URL');
+      return;
+    }
+    const cleanUrl = normalizeUrl(newLinkUrl);
+    const title = newLinkTitle.trim() || cleanUrl.replace(/^https?:\/\//i, '').split('/')[0] || 'Resource Link';
+    setTaskLinks((prev) => [...prev, { title, url: cleanUrl }]);
+    setNewLinkTitle('');
+    setNewLinkUrl('');
+    toast.success(`Attached link: "${title}"`);
+  };
+
+  const handleRemoveLink = (idx: number) => {
+    setTaskLinks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleCreateNewClient = () => {
     if (!newClientInput.trim() || !currentUser) return;
     const created = addClient(newClientInput.trim(), currentUser.name, currentUser.role);
@@ -278,7 +303,11 @@ export function TaskCreateModal() {
         incoming: isIncoming,
         dueDate: new Date(dueDate).toISOString(),
         labels,
-        attachments: attachments.map((a) => ({ name: a.name, url: a.url, type: a.type, size: a.size })),
+        attachments: [
+          ...attachments.map((a) => ({ name: a.name, url: a.url, type: a.type, size: a.size })),
+          ...taskLinks.map((l) => ({ name: l.title, url: l.url, type: 'link' })),
+        ],
+        links: taskLinks,
         clientName: selectedClient,
         doctorName: doctorName.trim() || undefined,
         specialist: specialist || undefined,
@@ -286,6 +315,7 @@ export function TaskCreateModal() {
 
       const fullTask = {
         ...createdTask,
+        links: taskLinks,
         clientName: selectedClient,
         doctorName: doctorName.trim() || undefined,
         specialist: specialist || undefined,
@@ -338,6 +368,10 @@ export function TaskCreateModal() {
       setTitle('');
       setDescription('');
       setAttachments([]);
+      setTaskLinks([]);
+      setNewLinkTitle('');
+      setNewLinkUrl('');
+      setShowLinkInput(false);
     } catch (err) {
       toast.error('Failed to create task');
     } finally {
@@ -903,6 +937,107 @@ export function TaskCreateModal() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* Resource & Reference Links */}
+        <div className="space-y-2 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Link2 className="h-4 w-4 text-brand-500" />
+              Resource &amp; Reference Links
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowLinkInput(!showLinkInput)}
+              className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {showLinkInput ? 'Hide' : 'Add Link'}
+            </button>
+          </div>
+
+          {showLinkInput && (
+            <div className="p-2.5 rounded-xl border border-brand-500/20 bg-background space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={newLinkTitle}
+                  onChange={(e) => setNewLinkTitle(e.target.value)}
+                  placeholder="Link Title (e.g. Figma, Google Doc, Staging)"
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
+                />
+                <input
+                  type="url"
+                  value={newLinkUrl}
+                  onChange={(e) => setNewLinkUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring font-mono"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddNewLink();
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowLinkInput(false)}
+                  className="text-xs h-7"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAddNewLink}
+                  className="ambizcon-gradient text-white text-xs h-7 gap-1 shadow-glow"
+                >
+                  <Plus className="h-3 w-3" />
+                  Attach Link
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {taskLinks.length > 0 ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {taskLinks.map((linkItem, idx) => (
+                <div
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-700 dark:text-brand-300 text-xs font-semibold"
+                >
+                  <Globe className="h-3 w-3 text-brand-500 shrink-0" />
+                  <a
+                    href={linkItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline flex items-center gap-1 max-w-[200px] truncate"
+                  >
+                    <span>{linkItem.title}</span>
+                    <ExternalLink className="h-2.5 w-2.5 opacity-70 shrink-0" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLink(idx)}
+                    className="ml-1 text-muted-foreground hover:text-rose-500 transition-colors p-0.5 rounded cursor-pointer"
+                    title="Remove Link"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            !showLinkInput && (
+              <p className="text-[11px] text-muted-foreground">
+                No external links attached. Click "+ Add Link" to attach Figma, Docs, or Staging URLs.
+              </p>
+            )
           )}
         </div>
 

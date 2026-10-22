@@ -40,6 +40,7 @@ import {
   Edit3,
   Lock,
   Download,
+  ExternalLink,
 } from 'lucide-react';
 import { exportToCSV, formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
@@ -378,6 +379,10 @@ export default function RemindersPage() {
   const renderTaskLineItem = ({ task, reminder }: TaskWithReminder, tagPrefix?: string) => {
     const canEdit = canEditTaskOrReminder(task, currentUser);
     const creatorName = getTaskCreatorName(task);
+    const reminderLink =
+      reminder.link ||
+      task.links?.[0]?.url ||
+      task.attachments?.find((a) => a.type === 'link')?.url;
 
     return (
       <div
@@ -431,6 +436,21 @@ export default function RemindersPage() {
                   <Avatar src={task.assignedUser.avatar} name={task.assignedUser.name} className="h-4 w-4" />
                   {task.assignedUser.name}
                 </span>
+              )}
+              {reminderLink && (
+                <a
+                  href={reminderLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors max-w-[200px] truncate"
+                  title={reminderLink}
+                >
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                  <span className="truncate">
+                    {reminderLink.replace(/^https?:\/\//i, '')}
+                  </span>
+                </a>
               )}
             </div>
           </div>
@@ -1039,6 +1059,19 @@ export default function RemindersPage() {
                                 <span className="truncate max-w-[90px] font-semibold text-foreground">
                                   {item.task.clientName}
                                 </span>
+                              )}
+                              {(item.reminder?.link || item.task.links?.[0]?.url) && (
+                                <a
+                                  href={item.reminder?.link || item.task.links?.[0]?.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                                  title={item.reminder?.link || item.task.links?.[0]?.url}
+                                >
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                  Link
+                                </a>
                               )}
                             </div>
                             <span className="text-[10px] font-bold text-brand-500 group-hover:translate-x-0.5 transition-transform flex items-center">
