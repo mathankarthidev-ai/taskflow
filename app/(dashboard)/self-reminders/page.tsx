@@ -286,23 +286,6 @@ export default function SelfRemindersPage() {
     await loadData();
   };
 
-  const handleTestSound = (item: SelfReminder) => {
-    try {
-      playAlertSound();
-    } catch (e) {}
-    useNotificationStore.getState().addNotification({
-      id: `notif_self_test_${item.id}_${Date.now()}`,
-      type: 'due_date_reminder',
-      category: 'Self Reminder Alert',
-      title: `🔔 Reminder Alert: ${item.title}`,
-      text: `${item.note ? `${item.note} — ` : ''}${item.day_name} • ${item.reminder_time} (${item.repeat_type})`,
-      color: 'bg-amber-500',
-      link: '/self-reminders',
-    });
-    toast.success(`🔔 Alert Preview: ${item.title}`, {
-      description: `Date: ${item.reminder_date} • Day: ${item.day_name} • Time: ${item.reminder_time} • Repeat: ${item.repeat_type}`,
-    });
-  };
 
   const handleOpenEdit = (item: SelfReminder) => {
     setEditingItem(item);
@@ -793,17 +776,6 @@ export default function SelfRemindersPage() {
 
                 {/* Right: Action Buttons */}
                 <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTestSound(item)}
-                    className="gap-1 text-xs h-8 px-2.5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
-                    title="Test Alert Sound & Notification"
-                  >
-                    <Volume2 className="h-3.5 w-3.5" />
-                    Test Alert
-                  </Button>
 
                   <Button
                     type="button"

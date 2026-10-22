@@ -2,6 +2,7 @@ import { User, UserRole, TeamName, CompanyBranch, WorkMode } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { mockStore } from '@/lib/mock-store';
 import { resolveEffectiveCompany } from '@/lib/company-filter';
+import { getEmployeeNumber } from '@/lib/utils';
 
 const EMAIL_ALIASES: Record<string, string> = {
   'krithikashri@ambizcon.com': 'kiruthikashri@ambizcon.com',
@@ -20,6 +21,7 @@ function mapRowToUser(row: any): User {
 
   return {
     _id: String(row.id),
+    employeeNumber: row.employee_number || getEmployeeNumber({ ...row, _id: String(row.id) }),
     name: row.name,
     email: row.email,
     role: row.role,
@@ -184,6 +186,7 @@ export async function createUser(input: {
 
   const newUser: User = {
     _id: newId,
+    employeeNumber: getEmployeeNumber({ name: input.name, email: input.email, _id: newId }, mockStore.users.length),
     name: input.name,
     email: input.email.toLowerCase().trim(),
     role: input.role,
@@ -202,6 +205,7 @@ export async function createUser(input: {
       .upsert(
         {
           id: newId,
+          employee_number: newUser.employeeNumber,
           name: newUser.name,
           email: newUser.email,
           role: newUser.role,

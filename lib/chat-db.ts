@@ -588,46 +588,51 @@ export function getStoredMessages(channelId: string): ChatMessage[] {
   }
 }
 
+let syncInFlight: Promise<{ newMessages: { channelId: string; message: ChatMessage }[] }> | null = null;
+
 export async function syncMessagesFromServer(): Promise<{
   newMessages: { channelId: string; message: ChatMessage }[];
 }> {
   if (typeof window === 'undefined') return { newMessages: [] };
-  try {
-    const res = await fetch('/api/chat', { cache: 'no-store' });
-    if (!res.ok) return { newMessages: [] };
-    const data = await res.json();
-    if (!data.success || !data.messagesByChannel) return { newMessages: [] };
+  if (syncInFlight) return syncInFlight;
 
-    const raw = localStorage.getItem(MESSAGES_KEY);
-    const localMsgs: Record<string, ChatMessage[]> = raw ? JSON.parse(raw) : { ...INITIAL_MESSAGES };
-    const newlyDiscovered: { channelId: string; message: ChatMessage }[] = [];
-    let hasChanges = false;
-    const nowMs = Date.now();
+  syncInFlight = (async () => {
+    try {
+      const res = await fetch('/api/chat', { cache: 'no-store' });
+      if (!res.ok) return { newMessages: [] };
+      const data = await res.json();
+      if (!data.success || !data.messagesByChannel) return { newMessages: [] };
 
-    const serverMap = data.messagesByChannel as Record<string, ChatMessage[]>;
-    const allChannelIds = new Set([
-      ...Object.keys(INITIAL_MESSAGES),
-      ...Object.keys(localMsgs),
-      ...Object.keys(serverMap),
-    ]);
+      const raw = localStorage.getItem(MESSAGES_KEY);
+      const localMsgs: Record<string, ChatMessage[]> = raw ? JSON.parse(raw) : { ...INITIAL_MESSAGES };
+      const newlyDiscovered: { channelId: string; message: ChatMessage }[] = [];
+      let hasChanges = false;
+      const nowMs = Date.now();
 
-    const currentChannels = getStoredChannels();
-    let channelsChanged = false;
+      const serverMap = data.messagesByChannel as Record<string, ChatMessage[]>;
+      const allChannelIds = new Set([
+        ...Object.keys(INITIAL_MESSAGES),
+        ...Object.keys(localMsgs),
+        ...Object.keys(serverMap),
+      ]);
 
-    allChannelIds.forEach((channelId) => {
-      const serverList: ChatMessage[] = Array.isArray(serverMap[channelId]) ? serverMap[channelId] : [];
-      const currentList: ChatMessage[] = Array.isArray(localMsgs[channelId]) ? localMsgs[channelId] : [];
+      const currentChannels = getStoredChannels();
+      let channelsChanged = false;
 
-      const existingIds = new Set(currentList.filter(Boolean).map((m) => m.id));
-      const serverIds = new Set(serverList.filter(Boolean).map((m) => m.id));
+      allChannelIds.forEach((channelId) => {
+        const serverList: ChatMessage[] = Array.isArray(serverMap[channelId]) ? serverMap[channelId] : [];
+        const currentList: ChatMessage[] = Array.isArray(localMsgs[channelId]) ? localMsgs[channelId] : [];
 
-      // 1. Keep local messages that exist on server OR were sent within the last 8 seconds (in-flight POST)
-      const retainedLocal = currentList.filter((m) => {
-        if (!m || !m.id) return false;
-        if (serverIds.has(m.id)) return true;
-        const ageMs = nowMs - new Date(m.createdAt || 0).getTime();
-        return ageMs < 8000;
-      });
+        const existingIds = new Set(currentList.filter(Boolean).map((m) => m.id));
+        const serverIds = new Set(serverList.filter(Boolean).map((m) => m.id));
+
+        // 1. Keep local messages that exist on server OR were sent within the last 60 seconds (in-flight POST protection)
+        const retainedLocal = currentList.filter((m) => {
+          if (!m || !m.id) return false;
+          if (serverIds.has(m.id)) return true;
+          const ageMs = nowMs - new Date(m.createdAt || 0).getTime();
+          return ageMs < 60000;
+        });
 
       if (retainedLocal.length !== currentList.length) {
         hasChanges = true;
@@ -713,9 +718,6 @@ export async function syncMessagesFromServer(): Promise<{
 
     if (hasChanges || newlyDiscovered.length > 0) {
       localStorage.setItem(MESSAGES_KEY, JSON.stringify(localMsgs));
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/chat')) {
-        markChannelMessagesAsRead();
-      }
       window.dispatchEvent(
         new CustomEvent('taskflow_chat_synced', {
           detail: { newMessages: newlyDiscovered },
@@ -727,7 +729,11 @@ export async function syncMessagesFromServer(): Promise<{
     return { newMessages: newlyDiscovered };
   } catch (_) {
     return { newMessages: [] };
+  } finally {
+    syncInFlight = null;
   }
+})();
+  return syncInFlight;
 }
 
 export function sendChatMessage(

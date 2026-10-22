@@ -27,6 +27,7 @@ export interface ExperienceRecord {
 
 export interface User {
   _id: string;
+  employeeNumber?: string; // e.g. "APN 001", "APN 002"
   name: string;
   email: string;
   role: UserRole;

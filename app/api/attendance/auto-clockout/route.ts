@@ -45,11 +45,19 @@ async function handleAutoClockOut() {
         const clockOutAestStr = '08:00 pm AEST (Auto-Closed)';
 
         const punchInMs = punchDate.getTime();
-        const eightPMMs = punchInMs + 8 * 3600 * 1000;
-        const workedSeconds = Math.max(3600, Math.floor((eightPMMs - punchInMs) / 1000));
+        // Calculate 8:00 PM (20:00:00) on the actual punch date in the appropriate timezone
+        const [pYear, pMonth, pDay] = punchDayStr.split('-').map(Number);
+        // Asia/Kolkata is UTC+5:30 -> 20:00 IST is 14:30:00 UTC
+        // Australia/Brisbane is UTC+10:00 -> 20:00 AEST is 10:00:00 UTC
+        const eightPMUtc = isAus
+          ? Date.UTC(pYear, pMonth - 1, pDay, 10, 0, 0)
+          : Date.UTC(pYear, pMonth - 1, pDay, 14, 30, 0);
+
+        const durationMs = Math.max(0, eightPMUtc - punchInMs);
+        const workedSeconds = Math.max(60, Math.floor(durationMs / 1000));
         const hours = Math.floor(workedSeconds / 3600);
         const mins = Math.floor((workedSeconds % 3600) / 60);
-        const workedHoursStr = `${hours}h ${mins}m (Auto-Closed @ 8 PM)`;
+        const workedHoursStr = `${hours}h ${String(mins).padStart(2, '0')}m (Auto-Closed @ 8 PM)`;
 
         await supabase
           .from('attendance')

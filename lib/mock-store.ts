@@ -1,5 +1,6 @@
 import { User, Team, Task, Comment, NotificationItem, LeaveRequest, ReimbursementClaim, ClientItem, TaskTypeTemplate, Project, TimeEntry } from '@/types';
 import { SEED_USERS, SEED_TEAMS, SEED_TASK_TYPES, SEED_CLIENTS_FULL, SEED_PROJECTS } from './seed-data';
+import { getEmployeeNumber } from './utils';
 
 // Internal global in-memory state (Clean Slate: No dummy tasks, leaves, or claims)
 export class DataStore {
@@ -23,10 +24,11 @@ export class DataStore {
   public init(): void {
     if (this.initialized) return;
 
-    // Initialize Users with IDs & skills
+    // Initialize Users with IDs, skills & auto-generated Employee ID (APN 001, APN 002...)
     this.users = SEED_USERS.map((u, i) => ({
       ...u,
       _id: `usr_${i + 1}`,
+      employeeNumber: getEmployeeNumber(u, i),
       skills:
         u.team === 'Development'
           ? ['WordPress', 'PHP', 'React', 'WooCommerce', 'MySQL', 'APIs']

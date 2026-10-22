@@ -21,6 +21,7 @@ export const SEED_TEAMS: { name: TeamName; code: string; description: string }[]
 export const SEED_USERS: Omit<
   {
     name: string;
+    employeeNumber?: string;
     email: string;
     role: UserRole;
     team: TeamName;

@@ -43,8 +43,6 @@ export function DynamicQrKioskModal({
   const [expiresAt, setExpiresAt] = useState<number>(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [selectedUserEmail, setSelectedUserEmail] = useState(SEED_USERS[0]?.email || '');
-  const [isScanning, setIsScanning] = useState(false);
   const [recentPunches, setRecentPunches] = useState<any[]>([]);
 
   // Generate new 10-second security token
@@ -96,56 +94,6 @@ export function DynamicQrKioskModal({
     }
   };
 
-  // Simulate employee scanning the dynamic QR code
-  const handleSimulateScan = async () => {
-    const targetUser = SEED_USERS.find((u) => u.email === selectedUserEmail) || SEED_USERS[0];
-    if (!targetUser || isScanning) return;
-
-    setIsScanning(true);
-    try {
-      const res = await fetch('/api/attendance/qr/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tokenId: token,
-          userId: targetUser.email,
-          userName: targetUser.name,
-          userTeam: targetUser.team,
-          branch,
-          expiresAt,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.message || 'QR Scan failed');
-        return;
-      }
-
-      playPunchBeep();
-      const newPunch = {
-        id: `P-${Date.now().toString().slice(-4)}`,
-        name: targetUser.name,
-        team: targetUser.team,
-        type: data.action === 'PUNCH_OUT' ? 'Clock Out' : 'Clock In',
-        time: data.punch?.time || (isAus ? formatTimeAEST() : formatTimeIST()),
-        location: isAus ? 'Queen Street, Brisbane CBD' : 'Anna Nagar, Chennai',
-      };
-
-      setRecentPunches([newPunch, ...recentPunches.slice(0, 4)]);
-      toast.success(data.message, {
-        description: `Verified at ${newPunch.time} via QR Kiosk`,
-      });
-
-      if (onPunchSuccess) {
-        onPunchSuccess(newPunch);
-      }
-    } catch (err) {
-      toast.error('Network error during QR punch');
-    } finally {
-      setIsScanning(false);
-    }
-  };
 
   // QR SVG Data URL generator based on dynamic token payload (Direct URL for both native camera & in-app scanner)
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://taskflow-saas-app-five.vercel.app';
@@ -295,48 +243,19 @@ export function DynamicQrKioskModal({
             </div>
           </div>
 
-          {/* Test Scan Simulator & Live Punch Feed */}
+          {/* Instructions & Live Punch Feed */}
           <div className="md:col-span-5 space-y-4">
-            {/* Quick Scan Simulator */}
-            <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  Employee Scan Simulator
-                </span>
-                <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40">
-                  Instant Test
-                </Badge>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Simulate an employee scanning the kiosk QR code from their mobile device:
-              </p>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">
-                  Select Employee
-                </label>
-                <select
-                  value={selectedUserEmail}
-                  onChange={(e) => setSelectedUserEmail(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-semibold focus-ring"
-                >
-                  {SEED_USERS.filter((u) => (isAus ? u.company?.includes('Australia') || u.name === 'Anirudh' : !u.company?.includes('Australia') || u.name === 'Anirudh')).map((u) => (
-                    <option key={u.email} value={u.email}>
-                      {u.name} — {u.team} ({u.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <Button
-                onClick={handleSimulateScan}
-                disabled={isScanning}
-                className="w-full ambizcon-gradient text-white font-bold text-xs gap-2 shadow-glow py-2"
-              >
-                <Smartphone className="h-3.5 w-3.5" />
-                {isScanning ? 'Verifying QR Token...' : 'Scan Dynamic QR & Punch'}
-              </Button>
+            {/* Quick Scan Instructions */}
+            <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 space-y-2.5">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Smartphone className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                How to Punch Using This Kiosk
+              </span>
+              <ol className="text-[11px] text-muted-foreground space-y-1.5 list-decimal list-inside">
+                <li>Open <strong className="text-foreground">Bizy Hub</strong> on your mobile device.</li>
+                <li>Tap <strong className="text-foreground">QR Punch</strong> on the attendance dashboard.</li>
+                <li>Point your camera at the dynamic QR code on the left.</li>
+              </ol>
             </div>
 
             {/* Live Punch Activity Feed */}

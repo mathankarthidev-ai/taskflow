@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import Link from 'next/link';
 import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2, UserCheck, ShieldCheck, CheckCircle2, Plus, Sparkles, FolderPlus, Calendar as CalendarIcon, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import { exportToCSV } from '@/lib/utils';
+import { exportToCSV, getEmployeeNumber } from '@/lib/utils';
 
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { isUserInCompany, resolveEffectiveCompany } from '@/lib/company-filter';
@@ -385,7 +385,8 @@ export function UserManagementTable() {
       toast.error('No employee records available to export');
       return;
     }
-    const exportRows = companyScopedUsers.map((u) => ({
+    const exportRows = companyScopedUsers.map((u, idx) => ({
+      'Employee ID': u.employeeNumber || getEmployeeNumber(u, idx),
       'Employee Name': u.name,
       'Email': u.email,
       'Role': u.role,
@@ -652,6 +653,7 @@ export function UserManagementTable() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/50 text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
+                  <th className="px-4 py-3">Emp ID</th>
                   <th className="px-4 py-3">Member</th>
                   <th className="px-4 py-3">Company Branch</th>
                   <th className="px-4 py-3">Authorized Email</th>
@@ -691,6 +693,11 @@ export function UserManagementTable() {
 
                   return (
                   <tr key={u._id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-mono font-extrabold text-[11px] tracking-wider shadow-2xs">
+                        {u.employeeNumber || getEmployeeNumber(u)}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar src={u.avatar} name={u.name} userId={u._id} email={u.email} size="sm" />

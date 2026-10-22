@@ -143,3 +143,60 @@ export function sanitizeClockOutTime(
   const cleaned = str.replace(/\s*\([^)]*\)/g, '').trim();
   return cleaned || str;
 }
+
+const SEED_EMPLOYEE_ID_MAP: Record<string, string> = {
+  'anirudh@ambizcon.com': 'APN 001',
+  'mathan@ambizcon.com': 'APN 002',
+  'aravind@ambizcon.com': 'APN 003',
+  'kenneth@ambizcon.com': 'APN 004',
+  'deva@ambizcon.com': 'APN 005',
+  'thanikaivel@ambizcon.com': 'APN 006',
+  'naraine@ambizcon.com': 'APN 007',
+  'mathanmk@ambizcon.com': 'APN 008',
+  'mathi.p@ambizcon.com': 'APN 009',
+  'kiruthikashri@ambizcon.com': 'APN 010',
+  'siddesh@ambizcon.com': 'APN 011',
+  'sathish@ambizcon.com': 'APN 012',
+  'kavish@ambizcon.com': 'APN 013',
+  'kasthuri@ambizcon.com': 'APN 014',
+  'ahamed@ambizcon.com': 'APN 015',
+  'abdul@ambizcon.com': 'APN 016',
+  'adriana@ambizcon.com': 'APN 017',
+};
+
+/**
+ * Returns the standardized auto-generated employee number formatted as "APN 001", "APN 002", etc.
+ */
+export function getEmployeeNumber(
+  user?: { employeeNumber?: string; email?: string; name?: string; _id?: string } | null,
+  fallbackIndex?: number
+): string {
+  if (user?.employeeNumber && user.employeeNumber.trim()) {
+    return user.employeeNumber.trim();
+  }
+  const emailKey = (user?.email || '').toLowerCase().trim();
+  if (emailKey && SEED_EMPLOYEE_ID_MAP[emailKey]) {
+    return SEED_EMPLOYEE_ID_MAP[emailKey];
+  }
+  const nameKey = (user?.name || '').toLowerCase().trim();
+  for (const [em, code] of Object.entries(SEED_EMPLOYEE_ID_MAP)) {
+    const prefix = em.split('@')[0].replace('.', '');
+    if (nameKey.replace(/\s+/g, '').toLowerCase().includes(prefix)) {
+      return code;
+    }
+  }
+  if (user?._id) {
+    const match = user._id.match(/\d+/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      if (num > 0) {
+        return `APN ${String(num).padStart(3, '0')}`;
+      }
+    }
+  }
+  if (typeof fallbackIndex === 'number' && fallbackIndex >= 0) {
+    return `APN ${String(fallbackIndex + 1).padStart(3, '0')}`;
+  }
+  return 'APN 001';
+}
+

@@ -355,7 +355,16 @@ export default function TeamChatPage() {
         markChannelMessagesAsRead(activeChannelId, currentUser._id);
         useNotificationStore.getState().markChatChannelRead(activeChannelId);
       }
-      setMessages(loadMergedMessagesForChannel(activeChannelId, currentChs));
+      const nextMsgs = loadMergedMessagesForChannel(activeChannelId, currentChs);
+      setMessages((prev) => {
+        if (
+          prev.length !== nextMsgs.length ||
+          (nextMsgs.length > 0 && prev[prev.length - 1]?.id !== nextMsgs[nextMsgs.length - 1]?.id)
+        ) {
+          return nextMsgs;
+        }
+        return prev;
+      });
       setChannels(currentChs);
       refreshUnreadCounts();
     };
@@ -1115,50 +1124,7 @@ export default function TeamChatPage() {
               <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
                 💬 {messages.length} Msgs
               </Badge>
-              <button
-                type="button"
-                onClick={() => {
-                  playNotificationChime('chat');
-                  toast.success('🔊 Chat Message Sound Tested! (Double Pop + Ping)');
-                }}
-                className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold ml-1 px-2 py-0.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors cursor-pointer"
-                title="Test distinct Chat notification sound"
-              >
-                <Volume2 className="h-3 w-3 animate-pulse" /> 💬 Chat Sound
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  playNotificationChime('reminder');
-                  toast.success('⏰ Due Reminder Sound Tested! (3-Note Bell Alarm)');
-                }}
-                className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors cursor-pointer"
-                title="Test distinct Reminder notification sound"
-              >
-                ⏰ Reminder Sound
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  playNotificationChime('self_reminder');
-                  toast.success('🔔 Self Reminder Sound Tested! (4-Note Warm Melody)');
-                }}
-                className="inline-flex items-center gap-1 text-[10px] text-purple-600 dark:text-purple-400 font-bold px-2 py-0.5 rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 transition-colors cursor-pointer"
-                title="Test distinct Self Reminder notification sound"
-              >
-                🔔 Self Reminder Sound
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  playNotificationChime('task_assigned');
-                  toast.success('📌 Task Assigned Sound Tested! (2-Chord Brass Fanfare)');
-                }}
-                className="inline-flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 font-bold px-2 py-0.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 transition-colors cursor-pointer"
-                title="Test distinct Task Assigned notification sound"
-              >
-                📌 Task Assigned Sound
-              </button>
+
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">{activeChannel?.description || 'Collaborate with text updates, share files, and link resources.'}</p>
           </div>

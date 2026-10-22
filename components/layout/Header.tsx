@@ -1267,54 +1267,6 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 </div>
               </div>
 
-              {/* Distinct Notification Sound Recognizer Bar */}
-              <div className="pt-2.5 pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-                  🔊 Distinct Alert Sounds (Click to Recognize):
-                </p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playNotificationChime('chat');
-                      toast.success('💬 Chat Sound: Double Pop + Ping');
-                    }}
-                    className="rounded-lg border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 px-2 py-1 text-[10px] font-extrabold text-teal-600 dark:text-teal-400 text-left transition-colors"
-                  >
-                    💬 Chat Msg Sound
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playNotificationChime('reminder');
-                      toast.success('⏰ Reminder Sound: 3-Note Bell Alarm');
-                    }}
-                    className="rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 text-[10px] font-extrabold text-amber-600 dark:text-amber-400 text-left transition-colors"
-                  >
-                    ⏰ Reminder Sound
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playNotificationChime('self_reminder');
-                      toast.success('🔔 Self Reminder: 4-Note Warm Melody');
-                    }}
-                    className="rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 text-[10px] font-extrabold text-purple-600 dark:text-purple-400 text-left transition-colors"
-                  >
-                    🔔 Self Reminder
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playNotificationChime('task_assigned');
-                      toast.success('📌 Task Assigned: 2-Chord Brass Fanfare');
-                    }}
-                    className="rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 text-[10px] font-extrabold text-blue-600 dark:text-blue-400 text-left transition-colors"
-                  >
-                    📌 Task Assigned
-                  </button>
-                </div>
-              </div>
 
               <div className="space-y-2.5 pt-3 max-h-72 overflow-y-auto pr-1">
                 {notificationsList.map((notif) => {

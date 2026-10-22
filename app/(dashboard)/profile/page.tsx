@@ -27,10 +27,13 @@ import {
   Sparkles,
   Camera,
   Upload,
+  Hash,
+  BadgeCheck,
 } from 'lucide-react';
 import { EducationRecord, ExperienceRecord } from '@/types';
 import { toast } from 'sonner';
 import { formatDayMonthOnly } from '@/features/users/UserManagementTable';
+import { getEmployeeNumber } from '@/lib/utils';
 
 import { updateUserProfileSectionAction } from '@/actions/userActions';
 import { useCompanyStore } from '@/store/useCompanyStore';
@@ -296,6 +299,9 @@ export default function ProfilePage() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold tracking-tight text-foreground">{currentUser.name}</h1>
+              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-mono font-extrabold text-xs px-2.5 py-0.5">
+                Emp ID: {getEmployeeNumber(currentUser)}
+              </Badge>
               <Badge variant="default" className="text-xs ambizcon-gradient text-white font-bold">
                 {currentUser.role}
               </Badge>
@@ -382,7 +388,17 @@ export default function ProfilePage() {
           Workspace Credentials
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+            <BadgeCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <div>
+              <span className="text-[10px] text-muted-foreground block font-semibold uppercase">Employee ID</span>
+              <span className="font-mono text-emerald-700 dark:text-emerald-300 font-extrabold text-sm tracking-wide">
+                {getEmployeeNumber(currentUser)}
+              </span>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 p-3">
             <Mail className="h-4 w-4 text-emerald-500" />
             <div>
