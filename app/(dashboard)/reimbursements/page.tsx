@@ -1240,7 +1240,7 @@ export default function ReimbursementsPage() {
         {/* Main Controls Row */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Search Box */}
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
@@ -1437,7 +1437,7 @@ export default function ReimbursementsPage() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     {/* Employee & Claim Detail */}
-                    <div className="flex items-start gap-3.5 min-w-[280px] flex-1">
+                    <div className="flex items-start gap-3.5 min-w-0 sm:min-w-[240px] flex-1">
                       <Avatar src={claim.userAvatar} name={claim.userName} size="md" />
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">

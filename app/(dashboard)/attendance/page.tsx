@@ -2181,7 +2181,7 @@ export default function AttendancePage() {
                   {/* Member Scan Office QR Button */}
                   <Button
                     onClick={() => setIsMemberScannerOpen(true)}
-                    className="h-10 px-4 font-extrabold gap-2 text-xs shadow-glow ambizcon-gradient text-white border border-white/20 transition-all hover:scale-105 active:scale-95"
+                    className="w-full sm:w-auto h-11 sm:h-10 px-4 font-extrabold gap-2 text-xs shadow-glow ambizcon-gradient text-white border border-white/20 transition-all hover:scale-105 active:scale-95"
                   >
                     <Camera className="h-4 w-4" />
                     <span>📷 Scan Office QR</span>
@@ -2189,7 +2189,7 @@ export default function AttendancePage() {
 
                   <Button
                     onClick={() => setIsClockModalOpen(true)}
-                    className={`h-10 px-5 font-bold gap-2 text-xs shadow-md ${
+                    className={`w-full sm:w-auto h-11 sm:h-10 px-5 font-bold gap-2 text-xs shadow-md ${
                       isClockedIn ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     }`}
                   >
@@ -2686,7 +2686,7 @@ export default function AttendancePage() {
                     <div className="p-3.5 rounded-2xl bg-zinc-100/80 dark:bg-zinc-900/70 border border-zinc-200/80 dark:border-zinc-800/80 shadow-sm space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         {/* Left: Dropdown Selector & Calendar Picker */}
-                        <div className="flex items-center gap-2.5 flex-wrap flex-1 min-w-[280px]">
+                        <div className="flex items-center gap-2.5 flex-wrap flex-1 min-w-0 sm:min-w-[240px]">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
                             <CalendarIcon className="h-4 w-4 text-emerald-500 shrink-0" />
                             <span className="text-[11px] uppercase tracking-wider text-muted-foreground whitespace-nowrap">
@@ -2694,7 +2694,7 @@ export default function AttendancePage() {
                             </span>
                           </div>
 
-                          <div className="relative flex-1 min-w-[220px] max-w-md">
+                          <div className="relative flex-1 min-w-0 sm:min-w-[200px] max-w-md">
                             <select
                               value={
                                 auditFilterType === 'all'
@@ -3679,7 +3679,7 @@ export default function AttendancePage() {
                         key={req.id}
                         className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40"
                       >
-                        <div className="flex items-center gap-3.5 min-w-[260px]">
+                        <div className="flex items-center gap-3.5 min-w-0 sm:min-w-[240px] flex-1">
                           <Avatar
                             name={req.empName || reqUser?.name || 'Employee'}
                             userId={req.empId || reqUser?._id}

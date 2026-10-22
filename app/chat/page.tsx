@@ -71,6 +71,7 @@ export default function TeamChatPage() {
   const [unreadByChannel, setUnreadByChannel] = useState<Record<string, number>>({});
   const [totalUnreadChat, setTotalUnreadChat] = useState<number>(0);
   const [newMsgIdsInActiveView, setNewMsgIdsInActiveView] = useState<string[]>([]);
+  const [showMobileChatView, setShowMobileChatView] = useState(false);
 
   // Form State
   const [messageText, setMessageText] = useState('');
@@ -955,7 +956,7 @@ export default function TeamChatPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-1.5rem)] flex flex-col gap-3 p-3 sm:p-4 max-w-7xl mx-auto">
+    <div className="h-[calc(100dvh-1.5rem)] flex flex-col gap-3 p-3 sm:p-4 max-w-7xl mx-auto">
       {/* Top Quick Navigation Bar with Back to Home Button */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card px-4 py-2.5 shadow-sm shrink-0">
         <div className="flex items-center gap-3">
@@ -993,7 +994,7 @@ export default function TeamChatPage() {
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4">
       {/* Left Sidebar - Groups & Channels */}
-      <div className="w-full md:w-80 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card flex flex-col shrink-0 overflow-hidden shadow-sm">
+      <div className={`w-full md:w-80 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card flex-col shrink-0 overflow-hidden shadow-sm ${showMobileChatView ? 'hidden md:flex' : 'flex'}`}>
         {/* Sidebar Header */}
         <div className="p-3.5 border-b border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1034,7 +1035,10 @@ export default function TeamChatPage() {
                 return (
                   <button
                     key={ch.id}
-                    onClick={() => setActiveChannelId(ch.id)}
+                    onClick={() => {
+                      setActiveChannelId(ch.id);
+                      setShowMobileChatView(true);
+                    }}
                     className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
                       activeChannelId === ch.id
                         ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
@@ -1076,7 +1080,10 @@ export default function TeamChatPage() {
                 return (
                   <button
                     key={ch.id}
-                    onClick={() => setActiveChannelId(ch.id)}
+                    onClick={() => {
+                      setActiveChannelId(ch.id);
+                      setShowMobileChatView(true);
+                    }}
                     className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
                       activeChannelId === ch.id
                         ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
@@ -1126,7 +1133,10 @@ export default function TeamChatPage() {
                   return (
                     <button
                       key={ch.id}
-                      onClick={() => setActiveChannelId(ch.id)}
+                      onClick={() => {
+                        setActiveChannelId(ch.id);
+                        setShowMobileChatView(true);
+                      }}
                       className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between ${
                         isActiveDm
                           ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
@@ -1167,11 +1177,20 @@ export default function TeamChatPage() {
       </div>
 
       {/* Main Chat Conversation Workspace */}
-      <div className="flex-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card flex flex-col overflow-hidden shadow-sm">
+      <div className={`flex-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card flex-col overflow-hidden shadow-sm ${showMobileChatView ? 'flex' : 'hidden md:flex'}`}>
         {/* Chat Header */}
-        <div className="p-4 border-b border-zinc-200/60 dark:border-zinc-800/60 flex flex-wrap items-center justify-between gap-2 bg-zinc-50/50 dark:bg-zinc-900/40">
+        <div className="p-3.5 sm:p-4 border-b border-zinc-200/60 dark:border-zinc-800/60 flex flex-wrap items-center justify-between gap-2 bg-zinc-50/50 dark:bg-zinc-900/40">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShowMobileChatView(false)}
+                className="md:hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-xs font-bold text-foreground transition-colors shrink-0 shadow-2xs"
+                title="Back to all channels"
+              >
+                <ArrowLeft className="h-3.5 w-3.5 text-brand-500" />
+                <span>Channels</span>
+              </button>
               <h1 className="font-extrabold text-base text-foreground tracking-tight">{activeChannel?.name}</h1>
               <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 font-bold">
                 {activeChannel?.scope === 'all' ? 'Group (TL, Member, Admin)' : activeChannel?.scope === 'team' ? `${activeChannel.team} Team` : 'Direct DM'}
@@ -1579,9 +1598,9 @@ export default function TeamChatPage() {
             <Button
               type="submit"
               disabled={isSending || (!messageText.trim() && !attachedFile && !linkInput.trim())}
-              className="ambizcon-gradient hover:opacity-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl gap-1.5 shadow-glow disabled:opacity-50 shrink-0 mb-0.5 h-[42px]"
+              className="ambizcon-gradient hover:opacity-95 text-white font-bold text-xs px-3 sm:px-4 py-2.5 rounded-xl gap-1.5 shadow-glow disabled:opacity-50 shrink-0 mb-0.5 h-[42px]"
             >
-              <Send className="h-3.5 w-3.5" /> {isSending ? 'Sending...' : 'Send'}
+              <Send className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{isSending ? 'Sending...' : 'Send'}</span>
             </Button>
           </div>
         </form>

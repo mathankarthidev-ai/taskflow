@@ -435,13 +435,13 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
           </div>
 
           {/* Column Headers: Hour slots | Work done */}
-          <div className="grid grid-cols-[130px_1fr] sm:grid-cols-[145px_1fr] gap-3 pb-2 text-xs font-semibold text-muted-foreground">
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[145px_1fr] gap-3 pb-2 text-xs font-semibold text-muted-foreground">
             <span>Hour slots</span>
             <span>Work done</span>
           </div>
 
           {/* Hourly Grid Container */}
-          <div className="grid grid-cols-[130px_1fr] sm:grid-cols-[145px_1fr] gap-3 relative">
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[145px_1fr] gap-3 relative">
             {/* Left Column: Hour Slots (Standard 8 + Extra Hours if active) */}
             <div className="space-y-2">
               {activeSlots.map((slot) => (

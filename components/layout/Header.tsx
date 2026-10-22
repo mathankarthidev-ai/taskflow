@@ -1203,7 +1203,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             title="Scan Office Kiosk QR Code to Clock In / Out"
           >
             <Camera className="h-4 w-4 animate-pulse shrink-0" />
-            <span className="inline">📷 Scan Office QR</span>
+            <span className="hidden sm:inline">📷 Scan Office QR</span>
+            <span className="sm:hidden text-[10px]">📷 QR</span>
           </Button>
         </div>
       )}

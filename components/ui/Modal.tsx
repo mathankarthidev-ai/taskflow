@@ -73,7 +73,7 @@ export function Modal({
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className={cn(
-              'relative z-[100000] w-full my-auto rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 sm:p-6 shadow-2xl overflow-hidden glass-panel',
+              'relative z-[100000] w-full my-auto rounded-2xl sm:rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 sm:p-6 shadow-2xl overflow-hidden glass-panel',
               widthClass
             )}
           >
@@ -90,7 +90,7 @@ export function Modal({
               </button>
             </div>
 
-            <div className="max-h-[80vh] overflow-y-auto pr-1">{children}</div>
+            <div className="max-h-[calc(100dvh-120px)] sm:max-h-[80vh] overflow-y-auto pr-1">{children}</div>
           </motion.div>
         </div>
       )}

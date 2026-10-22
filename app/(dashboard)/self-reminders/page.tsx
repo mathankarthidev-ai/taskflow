@@ -721,7 +721,7 @@ export default function SelfRemindersPage() {
 
       {/* FILTER BAR & SEARCH */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80">
+        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80">
           {(
             [
               { key: 'All', label: `All (${reminders.length})` },
@@ -749,7 +749,7 @@ export default function SelfRemindersPage() {
           ))}
         </div>
 
-        <div className="relative min-w-[220px]">
+        <div className="relative flex-1 sm:flex-initial min-w-0 sm:min-w-[220px]">
           <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-400" />
           <input
             type="text"

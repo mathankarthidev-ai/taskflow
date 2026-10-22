@@ -182,7 +182,7 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0 pb-0">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { id: 'light', label: 'Light Mode', icon: Sun },
               { id: 'dark', label: 'Dark Mode', icon: Moon },
