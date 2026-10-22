@@ -873,7 +873,7 @@ function KanbanBoardContent() {
                             draggable
                             onDragStart={(e) => handleDragStart(e, task._id)}
                           >
-                            <TaskCard task={task} onDelete={handleDeleteTask} />
+                            <TaskCard task={task} users={users} onDelete={handleDeleteTask} />
                           </div>
                         );
                       })}

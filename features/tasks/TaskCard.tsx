@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Task } from '@/types';
+import { Task, User } from '@/types';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getPriorityBadgeColor, formatDate } from '@/lib/utils';
@@ -23,19 +23,42 @@ import {
   ArrowRight,
   CheckCircle2,
   RotateCcw,
+  Users,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
 import { TaskEditModal } from '@/components/tasks/TaskEditModal';
 import { toast } from 'sonner';
 
+function getTeamBadgeColor(team?: string): string {
+  switch (team) {
+    case 'Development':
+      return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25';
+    case 'Marketing':
+      return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25';
+    case 'Creative':
+      return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25';
+    case 'Sales':
+      return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25';
+    case 'HR':
+      return 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25';
+    case 'Operations':
+      return 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25';
+    case 'Billing':
+      return 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25';
+    default:
+      return 'bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/25';
+  }
+}
+
 interface TaskCardProps {
   task: Task;
+  users?: User[];
   onStatusChange?: (taskId: string, newStatus: Task['status']) => void;
   onDelete?: (taskId: string, title?: string) => void;
 }
 
-export function TaskCard({ task, onDelete }: TaskCardProps) {
+export function TaskCard({ task, users, onDelete }: TaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const setSelectedTask = useTaskStore((s) => s.setSelectedTask);
@@ -46,6 +69,11 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
 
   const canEdit = canEditTaskOrReminder(task, currentUser);
   const creatorName = getTaskCreatorName(task);
+
+  const assignedUser =
+    task.assignedUser ||
+    (task.assignedTo ? users?.find((u) => u._id === task.assignedTo || (u as any).id === task.assignedTo) : undefined);
+  const assignedName = assignedUser?.name || task.assignedUser?.name || (task.assignedTo ? 'Assigned' : 'Unassigned');
 
   const isOverdue =
     task.status !== 'Done' && task.dueDate
@@ -137,17 +165,56 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
         </div>
       </div>
 
+      {/* Member ("Mem") & Team Banner - Always Visible */}
+      <div className="mt-2.5 flex items-center justify-between gap-2 p-1.5 px-2.5 rounded-xl bg-zinc-100/80 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-700/60">
+        {/* Member Assigned / Working */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-1" title={`Assigned Member: ${assignedName}`}>
+          <Avatar
+            src={assignedUser?.avatar}
+            name={assignedName}
+            userId={assignedUser?._id || task.assignedTo}
+            email={assignedUser?.email}
+            size="xs"
+            className="h-5 w-5 shrink-0 ring-1 ring-brand-500/30"
+          />
+          <div className="flex items-center gap-1 min-w-0 truncate">
+            <span className="text-[10px] text-muted-foreground font-semibold shrink-0">Mem:</span>
+            <span className="text-[11px] font-bold text-foreground truncate">
+              {assignedName}
+            </span>
+            {task.status === 'In Progress' ? (
+              <span className="shrink-0 text-[8.5px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/15 px-1 py-0.2 rounded border border-blue-500/30 animate-pulse">
+                Working
+              </span>
+            ) : task.status === 'Review' ? (
+              <span className="shrink-0 text-[8.5px] font-extrabold text-purple-600 dark:text-purple-400 bg-purple-500/15 px-1 py-0.2 rounded border border-purple-500/30">
+                Review
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Team Name */}
+        <div className="shrink-0 flex items-center gap-1" title={`Team: ${task.team || 'General'}`}>
+          <span className="text-[10px] text-muted-foreground font-semibold">Team:</span>
+          <span
+            className={`text-[10px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${getTeamBadgeColor(
+              task.team
+            )}`}
+          >
+            {task.team || 'General'}
+          </span>
+        </div>
+      </div>
+
       {/* Mini Metadata Summary (Always Visible) */}
-      <div className="mt-2.5 flex items-center justify-between text-xs pt-1 border-t border-zinc-100 dark:border-zinc-800/60">
+      <div className="mt-2 flex items-center justify-between text-xs pt-1 border-t border-zinc-100 dark:border-zinc-800/60">
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge className={`${getPriorityBadgeColor(task.priority)} text-[9px] py-0 px-1.5 font-bold`}>
             {task.priority}
           </Badge>
-          <span className="text-[9px] font-mono font-bold text-muted-foreground uppercase bg-zinc-100 dark:bg-zinc-800/60 px-1.5 py-0.2 rounded">
-            {task.team}
-          </span>
           {task.clientName && (
-            <span className="text-[9px] font-semibold text-brand-500 truncate max-w-[90px]" title={task.clientName}>
+            <span className="text-[9px] font-semibold text-brand-500 truncate max-w-[110px]" title={task.clientName}>
               🏢 {task.clientName}
             </span>
           )}
@@ -174,13 +241,6 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
             {isOverdue ? <AlertCircle className="h-2.5 w-2.5" /> : <Calendar className="h-2.5 w-2.5" />}
             <span>{formatDate(task.dueDate)}</span>
           </div>
-          <Avatar
-            src={task.assignedUser?.avatar}
-            name={task.assignedUser?.name || 'Unassigned'}
-            userId={task.assignedUser?._id || task.assignedTo}
-            email={task.assignedUser?.email}
-            size="sm"
-          />
         </div>
       </div>
 
@@ -258,6 +318,12 @@ export function TaskCard({ task, onDelete }: TaskCardProps) {
 
               {/* Chips */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px]">
+                <span className="rounded-md border border-brand-500/30 bg-brand-500/10 px-2 py-0.5 font-bold text-brand-600 dark:text-brand-400">
+                  👤 Mem: {assignedName}
+                </span>
+                <span className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-background px-2 py-0.5 font-bold text-foreground">
+                  👥 Team: {task.team || 'General'}
+                </span>
                 {task.doctorName && (
                   <span className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-background px-2 py-0.5 font-medium text-foreground">
                     👨‍⚕️ {task.doctorName}
