@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
 import { useTaskStore } from '@/store/useTaskStore';
 import { fetchTasksAction, updateTaskStatusAction } from '@/actions/taskActions';
 import { Task } from '@/types';
 import { getTimeBasedGreeting, getRandomQuote } from '@/lib/quotes';
+import { DEFAULT_PORTRAIT_AVATARS } from '@/lib/avatar-store';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -41,6 +43,7 @@ export function DashboardOverview() {
     ? selectedCompany === 'Ambizcon'
     : currentUser?.company === 'Ambizcon';
   const activeCompanyScope = isAustralia ? 'Ambizcon' : 'Ambizcon Health - India';
+  const router = useRouter();
   const { setSelectedTask, setDetailModalOpen, setCreateModalOpen } = useTaskStore();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -54,8 +57,11 @@ export function DashboardOverview() {
     status: string;
     workedHours: string;
   } | null>(null);
+  const [digitalClock24, setDigitalClock24] = useState('');
+  const [currentDateFormatted, setCurrentDateFormatted] = useState('');
   const [chennaiTime, setChennaiTime] = useState('');
   const [brisbaneTime, setBrisbaneTime] = useState('');
+  const [clockingInProgress, setClockingInProgress] = useState(false);
 
   useEffect(() => {
     async function loadData(showSpinner = true) {
@@ -75,56 +81,130 @@ export function DashboardOverview() {
     return () => window.removeEventListener('ambizcon_workspace_refresh', handleWorkspaceRefresh);
   }, []);
 
+  const loadCurrentShift = async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(
+        `/api/attendance/current?email=${encodeURIComponent(currentUser.email)}&name=${encodeURIComponent(
+          currentUser.name
+        )}&userId=${encodeURIComponent(currentUser._id)}`
+      );
+      const data = await res.json();
+      if (data.success && data.attendance) {
+        setCurrentShift({
+          isWorking: data.isWorking,
+          clockIn: data.clockIn || '—',
+          clockOut: data.clockOut || '—',
+          status: data.status,
+          workedHours: data.workedHours || '0h 00m',
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to load dashboard shift status:', e);
+    }
+  };
+
   useEffect(() => {
     if (!currentUser) return;
-    const user = currentUser;
-    async function loadCurrentShift() {
-      try {
-        const res = await fetch(
-          `/api/attendance/current?email=${encodeURIComponent(user.email)}&name=${encodeURIComponent(
-            user.name
-          )}&userId=${encodeURIComponent(user._id)}`
-        );
-        const data = await res.json();
-        if (data.success && data.attendance) {
-          setCurrentShift({
-            isWorking: data.isWorking,
-            clockIn: data.clockIn || '—',
-            clockOut: data.clockOut || '—',
-            status: data.status,
-            workedHours: data.workedHours || '0h 00m',
-          });
-        }
-      } catch (e) {
-        console.warn('Failed to load dashboard shift status:', e);
-      }
-    }
     loadCurrentShift();
 
-    const timer = setInterval(() => {
+    const updateAllClocks = () => {
       const now = new Date();
+      const targetTimezone = isAustralia ? 'Australia/Brisbane' : 'Asia/Kolkata';
+
+      // 24-hour main digital clock: e.g. "14:58:49"
+      setDigitalClock24(
+        now.toLocaleTimeString('en-GB', {
+          timeZone: targetTimezone,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        })
+      );
+
+      // Current Date below big clock: e.g. "Thursday 22 Oct"
+      setCurrentDateFormatted(
+        now.toLocaleDateString('en-GB', {
+          timeZone: targetTimezone,
+          weekday: 'long',
+          day: 'numeric',
+          month: 'short',
+        })
+      );
+
+      // Chennai IST 12-hour: e.g. "02:58:49 pm"
       setChennaiTime(
-        now.toLocaleTimeString('en-IN', {
+        now.toLocaleTimeString('en-US', {
           timeZone: 'Asia/Kolkata',
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
           hour12: true,
-        }) + ' IST'
+        }).toLowerCase()
       );
+
+      // Brisbane AEST 12-hour: e.g. "07:28:49 pm"
       setBrisbaneTime(
-        now.toLocaleTimeString('en-IN', {
+        now.toLocaleTimeString('en-US', {
           timeZone: 'Australia/Brisbane',
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
           hour12: true,
-        }) + ' AEST'
+        }).toLowerCase()
       );
-    }, 1000);
+    };
 
-    return () => clearInterval(timer);
-  }, [currentUser]);
+    updateAllClocks();
+    const timer = setInterval(updateAllClocks, 1000);
+
+    const handleAttendanceRefresh = () => {
+      loadCurrentShift();
+    };
+    window.addEventListener('ambizcon_attendance_updated', handleAttendanceRefresh);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('ambizcon_attendance_updated', handleAttendanceRefresh);
+    };
+  }, [currentUser, isAustralia]);
+
+  const handleClockToggle = async () => {
+    if (!currentUser) return;
+    if (currentShift?.isWorking) {
+      router.push('/attendance');
+      return;
+    }
+
+    setClockingInProgress(true);
+    try {
+      const res = await fetch('/api/attendance/clock-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser._id,
+          userName: currentUser.name,
+          userEmail: currentUser.email,
+          userTeam: currentUser.team,
+          company: activeCompanyScope,
+          workMode: 'Work From Office',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Clocked In successfully! Shift active.`);
+        await loadCurrentShift();
+        window.dispatchEvent(new CustomEvent('ambizcon_attendance_updated'));
+      } else {
+        router.push('/attendance');
+      }
+    } catch {
+      router.push('/attendance');
+    } finally {
+      setClockingInProgress(false);
+    }
+  };
 
   if (!currentUser) return null;
 
@@ -158,146 +238,204 @@ export function DashboardOverview() {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5);
 
+  // Dynamic Portrait for Left Hero Visual (Black & White with smooth right fade)
+  let portraitUrl = currentUser.avatar;
+  if (!portraitUrl || portraitUrl.includes('dicebear') || portraitUrl.includes('api.dicebear.com')) {
+    const fallbackPortrait = DEFAULT_PORTRAIT_AVATARS[currentUser.email.toLowerCase()];
+    if (fallbackPortrait) {
+      portraitUrl = fallbackPortrait;
+    }
+  }
+  if (portraitUrl && portraitUrl.includes('images.unsplash.com') && portraitUrl.includes('w=200')) {
+    portraitUrl = portraitUrl.replace('w=200', 'w=800');
+  }
+
+  // Time-based greeting phrase (Good Morning / Good Afternoon / Good Evening)
+  const getGreetingPhrase = () => {
+    const hr = now.getHours();
+    if (hr >= 5 && hr < 12) return 'Good Morning';
+    if (hr >= 12 && hr < 17) return 'Good Afternoon';
+    if (hr >= 17 && hr < 22) return 'Good Evening';
+    return 'Welcome';
+  };
+
   return (
     <div className="space-y-6">
-      {/* Time-Based Greeting Banner with Random Motivational Quote */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border ambizcon-hero-banner p-6 glass-panel">
-        <div className="flex items-center gap-4">
-          <Avatar
-            src={currentUser.avatar}
-            name={currentUser.name}
-            userId={currentUser._id}
-            email={currentUser.email}
-            size="xl"
-          />
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold tracking-tight text-foreground">
-                {timeGreeting.greeting} Welcome back, {currentUser.name}!
-              </h1>
-              <Badge variant="outline" className={`text-xs font-bold ${
-                isAustralia
-                  ? 'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10'
-                  : 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
-              }`}>
-                {currentUser.role} • {currentUser.team}
-              </Badge>
-              {/* Registered Branch Logo Badge */}
+      {/* Unified Hero Widget (Visual Portrait, Greeting, Dual Action & Clocks, Bottom Shift Bar) */}
+      <div className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-950/95 shadow-sm overflow-hidden backdrop-blur-md">
+        {/* Top Zone: Portrait, Greeting & Badges, Right Live Time & Action Buttons */}
+        <div className="flex flex-col md:flex-row items-stretch justify-between relative min-h-[220px]">
+          {/* Left: Grayscale Portrait with Fade Mask */}
+          <div className="relative w-full md:w-56 lg:w-64 shrink-0 h-48 md:h-auto overflow-hidden self-stretch">
+            {portraitUrl ? (
+              <img
+                src={portraitUrl}
+                alt={currentUser.name}
+                className="h-full w-full object-cover object-top grayscale contrast-110"
+                style={{
+                  maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)',
+                  WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)',
+                }}
+              />
+            ) : (
               <div
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-bold shadow-xs ${
-                  isAustralia
-                    ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                }`}
-                title={`Registered Branch: ${isAustralia ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health (Chennai HQ)'}`}
+                className="h-full w-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-4xl font-bold text-zinc-400"
+                style={{
+                  maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)',
+                  WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)',
+                }}
               >
-                {isAustralia ? (
-                  <div className="h-4 w-4 rounded bg-white p-0.5 border border-sky-500/40 flex items-center justify-center shrink-0">
-                    <img src="/ambizcon-australia-icon.png" alt="AUS" className="h-full w-full object-contain" />
-                  </div>
-                ) : (
-                  <img
-                    src="/ambizcon-logo.png"
-                    alt="IND"
-                    className="h-4 w-4 rounded object-cover border border-emerald-500/30 shrink-0"
-                  />
-                )}
-                <span>{isAustralia ? '🇦🇺 Ambizcon (Brisbane HQ)' : '🇮🇳 Ambizcon Health (Chennai HQ)'}</span>
+                {currentUser.name.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            {/* Mobile bottom fade */}
+            <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-zinc-950 via-transparent to-transparent md:hidden pointer-events-none" />
+          </div>
+
+          {/* Center: Greeting, Badges, Quote */}
+          <div className="flex-1 p-6 flex flex-col justify-center gap-3">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground leading-snug">
+                <span className="text-[#0d9488] dark:text-[#2dd4bf] font-black">
+                  {getGreetingPhrase()}!
+                </span>{' '}
+                Welcome back,
+                <br className="hidden sm:inline" />
+                <span className="font-extrabold"> {currentUser.name}!</span>
+              </h1>
+            </div>
+
+            {/* Badges Row */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
+                {currentUser.role} • {currentUser.team}
+              </span>
+              <span className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
+                {isAustralia ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health (Chennai HQ)'}
+              </span>
+            </div>
+
+            {/* Quote Pill */}
+            <div>
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/35 bg-amber-500/10 px-3.5 py-1 text-xs text-amber-700 dark:text-amber-300 font-medium shadow-2xs">
+                <Sparkles className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span>"{quote || 'Stay inspired and keep creating.'}"</span>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">
-              You have <span className="font-bold text-foreground">{myAssignedTasks.length} assigned tasks</span> pending on your workspace board today.
-            </p>
-            {/* Random Motivational Quote */}
-            <div className="mt-2.5 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3.5 py-1 text-xs text-amber-600 dark:text-amber-300 font-semibold backdrop-blur-md">
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              <span>"{quote || 'Make today amazing.'}"</span>
+          </div>
+
+          {/* Right: Divider + Live Time Clock & Action Buttons */}
+          <div className="w-full md:w-64 lg:w-72 shrink-0 border-t md:border-t-0 md:border-l border-zinc-200/80 dark:border-zinc-800/80 p-6 flex flex-col items-center justify-center text-center gap-3">
+            <div>
+              <div className="text-3xl font-extrabold tracking-tight text-foreground font-sans">
+                {digitalClock24 || '14:58:49'}
+              </div>
+              <div className="text-xs text-muted-foreground font-medium mt-0.5">
+                {currentDateFormatted || 'Thursday 22 Oct'}
+              </div>
+            </div>
+
+            <div className="w-full space-y-2.5 mt-1">
+              <button
+                type="button"
+                onClick={handleClockToggle}
+                disabled={clockingInProgress}
+                className={`w-full font-bold text-sm py-2 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
+                  currentShift?.isWorking
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-[#15803d] hover:bg-[#166534] text-white'
+                }`}
+              >
+                <Clock className="h-4 w-4" />
+                <span>
+                  {clockingInProgress
+                    ? 'Updating...'
+                    : currentShift?.isWorking
+                    ? 'Clock Out'
+                    : 'Clock In'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className="w-full font-bold text-sm py-2 px-4 rounded-xl bg-gradient-to-r from-[#0f766e] to-[#047857] hover:brightness-110 text-white shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Create Task</span>
+              </button>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setCreateModalOpen(true)} size="sm" className="gap-1.5 ambizcon-gradient text-white shadow-glow">
-            <Plus className="h-4 w-4" />
-            Create Task
-          </Button>
-        </div>
-      </div>
-
-      {/* Real-time Shift & Attendance Status Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card/60 backdrop-blur-md shadow-sm">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 relative">
-              {currentShift?.isWorking && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              )}
-              <span
-                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                  currentShift?.isWorking
-                    ? 'bg-emerald-500'
+        {/* Bottom Dark Bar (Shift Status, Clock-in Time & Dual World Clocks) */}
+        <div className="bg-[#0b131d] border-t border-zinc-800/80 p-3 sm:p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* SHIFT STATUS */}
+            <div className="bg-[#15212d] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
+                SHIFT STATUS
+              </span>
+              <div className="flex items-center gap-2 mt-2">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    currentShift?.isWorking
+                      ? 'bg-emerald-400 animate-pulse'
+                      : currentShift?.status === 'completed'
+                      ? 'bg-zinc-400'
+                      : 'bg-zinc-400'
+                  }`}
+                />
+                <span className="text-xs font-bold text-zinc-200">
+                  {currentShift?.isWorking
+                    ? 'Shift Active'
                     : currentShift?.status === 'completed'
-                    ? 'bg-zinc-400'
-                    : 'bg-amber-500'
-                }`}
-              />
-            </span>
-            <span className="text-xs font-bold text-foreground">
-              {currentShift?.isWorking
-                ? 'Live Shift Active'
-                : currentShift?.status === 'completed'
-                ? 'Shift Completed Today'
-                : 'Not Clocked In Today'}
-            </span>
-          </div>
+                    ? 'Shift Completed'
+                    : 'Shift not started'}
+                </span>
+              </div>
+            </div>
 
-          <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-            <span>•</span>
-            {currentShift?.isWorking ? (
-              <span>
-                Clocked In at{' '}
-                <strong className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                  {currentShift.clockIn}
-                </strong>
+            {/* CLOCKED IN AT */}
+            <div className="bg-[#15212d] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
+                {isAustralia ? 'CLOCKED IN AT (AUSTRALIA TIME)' : 'CLOCKED IN AT (INDIA TIME)'}
               </span>
-            ) : currentShift?.status === 'completed' ? (
-              <span>
-                Shift: In <strong className="font-mono text-foreground">{currentShift.clockIn}</strong> • Out{' '}
-                <strong className="font-mono text-foreground">{currentShift.clockOut}</strong> ({currentShift.workedHours})
-              </span>
-            ) : (
-              <span>
-                {isAustralia
-                  ? 'Office Shift: 8:30 AM – 5:00 PM AEST (Brisbane HQ, Australia)'
-                  : 'Office Shift: 8:30 AM – 5:00 PM IST (Anna Nagar, Chennai)'}
-              </span>
-            )}
-          </div>
-        </div>
+              <div className="mt-2">
+                <span className="inline-block px-2.5 py-1 rounded-lg bg-[#202f40] text-zinc-300 font-mono text-xs font-semibold">
+                  {currentShift?.isWorking
+                    ? currentShift.clockIn
+                    : currentShift?.status === 'completed'
+                    ? `In: ${currentShift.clockIn}`
+                    : 'Not clocked in'}
+                </span>
+              </div>
+            </div>
 
-        {/* Dual Live World Clocks & Quick Action */}
-        <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-          <div className="hidden sm:flex items-center gap-3">
-            <span>
-              CHENNAI <strong className="text-foreground">{chennaiTime || 'Loading...'}</strong>
-            </span>
-            <span>•</span>
-            <span>
-              BRISBANE <strong className="text-emerald-600 dark:text-emerald-400">{brisbaneTime || 'Loading...'}</strong>
-            </span>
+            {/* CHENNAI, INDIA • IST */}
+            <div className="bg-[#15212d] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
+                CHENNAI, INDIA • IST
+              </span>
+              <div className="mt-2">
+                <span className="inline-block px-3 py-1 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-[0_0_12px_rgba(20,184,166,0.35)] font-mono text-xs font-bold">
+                  {chennaiTime || '02:58:49 pm'}
+                </span>
+              </div>
+            </div>
+
+            {/* BRISBANE, AUSTRALIA • AEST */}
+            <div className="bg-[#15212d] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
+                BRISBANE, AUSTRALIA • AEST
+              </span>
+              <div className="mt-2">
+                <span className="inline-block px-3 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.35)] font-mono text-xs font-bold">
+                  {brisbaneTime || '07:28:49 pm'}
+                </span>
+              </div>
+            </div>
           </div>
-          <Link href="/attendance">
-            <Button
-              size="sm"
-              variant={currentShift?.isWorking ? 'outline' : 'default'}
-              className={`h-8 text-xs font-bold gap-1.5 ${
-                !currentShift?.isWorking ? 'ambizcon-gradient text-white shadow-glow' : ''
-              }`}
-            >
-              <Clock className="h-3.5 w-3.5" />
-              {currentShift?.isWorking ? 'View Attendance' : 'Clock In Now'}
-            </Button>
-          </Link>
         </div>
       </div>
 
