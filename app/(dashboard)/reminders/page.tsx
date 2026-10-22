@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Task, ReminderSettings } from '@/types';
@@ -8,6 +9,10 @@ import { fetchTasksAction } from '@/actions/taskActions';
 import { TaskDetailModal } from '@/features/tasks/TaskDetailModal';
 import { ReminderCreateModal } from '@/components/tasks/ReminderCreateModal';
 import { getPriorityBadgeColor, getStatusBadgeColor } from '@/lib/utils';
+import {
+  fetchSelfReminders,
+  getCachedActiveSelfReminderCount,
+} from '@/lib/self-reminders-store';
 import {
   Bell,
   BellRing,
@@ -71,6 +76,27 @@ export default function RemindersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [dismissedReminders, setDismissedReminders] = useState<Record<string, boolean>>({});
   const [editingReminderTask, setEditingReminderTask] = useState<Task | null>(null);
+  const [selfReminderCount, setSelfReminderCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const refreshCount = () => {
+      setSelfReminderCount(getCachedActiveSelfReminderCount(currentUser.email));
+      fetchSelfReminders(currentUser._id, currentUser.email, currentUser.name)
+        .then((list) => {
+          if (Array.isArray(list)) {
+            setSelfReminderCount(list.filter((r) => !r.is_completed && r.is_active).length);
+          }
+        })
+        .catch(() => {});
+    };
+
+    refreshCount();
+    window.addEventListener('ambizcon_self_reminders_updated', refreshCount);
+    return () => {
+      window.removeEventListener('ambizcon_self_reminders_updated', refreshCount);
+    };
+  }, [currentUser?.email, currentUser?._id, currentUser?.name]);
 
   // Active Frequency View: Default is Daily Reminders as requested
   const [activeFrequency, setActiveFrequency] = useState<FrequencyTab>('Daily');
@@ -581,6 +607,44 @@ export default function RemindersPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      {/* Top Navigation Switcher: Reminders vs Self Reminders */}
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 dark:border-zinc-800/80 pb-3 flex-wrap">
+        <div className="inline-flex items-center p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 gap-1.5 shadow-xs">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-white dark:bg-zinc-800 text-foreground shadow-sm border border-zinc-200/80 dark:border-zinc-700"
+          >
+            <BellRing className="h-3.5 w-3.5 text-brand-500" />
+            <span>Scheduled &amp; Team Reminders</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-brand-500/15 text-brand-600 dark:text-brand-300 font-mono font-bold">
+              {activeList.length}
+            </span>
+          </button>
+
+          <Link
+            href="/self-reminders"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 transition-all cursor-pointer"
+            title="Switch to Personal Self Reminders Page"
+          >
+            <Clock className="h-3.5 w-3.5 text-purple-500" />
+            <span>Personal Self Reminders</span>
+            {selfReminderCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-300 font-mono font-bold">
+                {selfReminderCount} Active
+              </span>
+            )}
+          </Link>
+        </div>
+
+        <Link
+          href="/self-reminders"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+        >
+          <span>Open My Self Reminders</span>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
         <div className="flex items-center gap-3">
@@ -598,6 +662,25 @@ export default function RemindersPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          {/* Quick Jump to Self Reminders Page Button */}
+          <Link href="/self-reminders">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 font-bold text-xs rounded-xl border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 shadow-xs"
+              title="Open Personal Self Reminders Page"
+            >
+              <Clock className="h-4 w-4 text-purple-500" />
+              <span>Self Reminders</span>
+              {selfReminderCount > 0 && (
+                <span className="h-4 min-w-4 px-1 rounded-full bg-purple-500 text-white font-mono text-[9px] font-extrabold flex items-center justify-center">
+                  {selfReminderCount}
+                </span>
+              )}
+            </Button>
+          </Link>
+
           <Button
             type="button"
             variant="outline"
@@ -628,6 +711,44 @@ export default function RemindersPage() {
           )}
         </div>
       </div>
+
+      {/* Top Banner Card: Clickable Self Reminder Quick Link */}
+      <Link
+        href="/self-reminders"
+        className="group block rounded-2xl border-2 border-purple-500/30 dark:border-purple-500/20 bg-gradient-to-r from-purple-500/10 via-brand-500/5 to-pink-500/10 p-3.5 sm:p-4 transition-all hover:border-purple-500/60 hover:shadow-md cursor-pointer"
+        title="Click to open Personal Self Reminders"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/30 group-hover:scale-105 transition-transform shadow-xs">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs sm:text-sm font-black text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                  ⏰ Personal Self Reminders
+                </h3>
+                <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[9px] sm:text-[10px] font-bold">
+                  Personal &amp; Sound Alarm
+                </Badge>
+                {selfReminderCount > 0 && (
+                  <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[9px] sm:text-[10px] font-mono font-bold">
+                    {selfReminderCount} Active
+                  </Badge>
+                )}
+              </div>
+              <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
+                Need personal alerts? Click here to manage your private daily routines, custom day reminders, and sound alarms.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400 shrink-0 group-hover:translate-x-1 transition-transform">
+            <span className="hidden sm:inline">Go to Self Reminders</span>
+            <span className="sm:hidden">Open</span>
+            <ChevronRight className="h-4 w-4" />
+          </div>
+        </div>
+      </Link>
 
       {/* DUE NOTIFICATIONS SCHEDULE: 5 Interactive Frequency Cards */}
       <div className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-5 sm:p-6 space-y-4 shadow-sm glass-panel">

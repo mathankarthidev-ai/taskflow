@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import {
@@ -39,6 +40,7 @@ import {
   Search,
   CalendarDays,
   Download,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportToCSV } from '@/lib/utils';
@@ -380,6 +382,41 @@ export default function SelfRemindersPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Top Navigation Switcher: Reminders vs Self Reminders */}
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 dark:border-zinc-800/80 pb-3 flex-wrap">
+        <div className="inline-flex items-center p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 gap-1.5 shadow-xs">
+          <Link
+            href="/reminders"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 transition-all cursor-pointer"
+            title="Switch to Team &amp; Scheduled Reminders Page"
+          >
+            <BellRing className="h-3.5 w-3.5 text-brand-500" />
+            <span>Scheduled &amp; Team Reminders</span>
+          </Link>
+
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-white dark:bg-zinc-800 text-foreground shadow-sm border border-zinc-200/80 dark:border-zinc-700"
+          >
+            <Clock className="h-3.5 w-3.5 text-purple-500" />
+            <span>Personal Self Reminders</span>
+            {activeCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-300 font-mono font-bold">
+                {activeCount} Active
+              </span>
+            )}
+          </button>
+        </div>
+
+        <Link
+          href="/reminders"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer"
+        >
+          <span>View Team Reminders</span>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
       {/* Header Banner */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-6 shadow-sm">
         <div className="flex items-center gap-4">
