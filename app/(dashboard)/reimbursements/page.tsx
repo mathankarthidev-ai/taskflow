@@ -26,7 +26,9 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
-  DollarSign,
+  IndianRupee,
+  ReceiptIndianRupee,
+  BadgeIndianRupee,
   ArrowRight,
   Shield,
   CreditCard,
@@ -1155,15 +1157,17 @@ export default function ReimbursementsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 relative overflow-hidden">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <ReceiptIndianRupee className="h-3.5 w-3.5 text-brand-500" />
               Total Organization Claims
             </span>
             <span className="rounded-full bg-brand-500/10 border border-brand-500/30 px-2 py-0.5 text-[9px] font-bold text-brand-600 dark:text-brand-300">
               {activeTimeRangeBadgeText}
             </span>
           </div>
-          <div className="text-2xl font-extrabold text-foreground mt-1">
-            ₹{totalOrgClaimedAmount.toLocaleString('en-IN')}
+          <div className="flex items-center text-2xl font-extrabold text-foreground mt-1">
+            <IndianRupee className="h-5 w-5 mr-0.5 text-brand-600 dark:text-brand-400" />
+            <span>{totalOrgClaimedAmount.toLocaleString('en-IN')}</span>
           </div>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
             {totalOrgClaimsCount} Total Submissions in {TIME_RANGE_DISPLAY_LABELS[dateRangeOption]}
@@ -1172,15 +1176,17 @@ export default function ReimbursementsPage() {
 
         <Card className="p-4 border border-emerald-500/30 bg-emerald-500/[0.02] relative overflow-hidden">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <BadgeIndianRupee className="h-3.5 w-3.5 text-emerald-500" />
               Approved &amp; Settled
             </span>
             <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300">
               {activeTimeRangeBadgeText}
             </span>
           </div>
-          <div className="text-2xl font-extrabold text-emerald-500 mt-1">
-            ₹{totalOrgApprovedAmount.toLocaleString('en-IN')}
+          <div className="flex items-center text-2xl font-extrabold text-emerald-500 mt-1">
+            <IndianRupee className="h-5 w-5 mr-0.5 text-emerald-500" />
+            <span>{totalOrgApprovedAmount.toLocaleString('en-IN')}</span>
           </div>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
             {totalOrgApprovedCount} Approved by Admin • ₹{totalOrgPaidAmount.toLocaleString('en-IN')} ({totalOrgPaidCount}) Paid Out
@@ -1189,15 +1195,17 @@ export default function ReimbursementsPage() {
 
         <Card className="p-4 border border-amber-500/30 bg-amber-500/[0.02] relative overflow-hidden">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5 text-amber-500" />
               Pending Admin Signoff
             </span>
             <span className="rounded-full bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-300">
               {activeTimeRangeBadgeText}
             </span>
           </div>
-          <div className="text-2xl font-extrabold text-amber-500 mt-1">
-            ₹{totalOrgPendingAmount.toLocaleString('en-IN')}
+          <div className="flex items-center text-2xl font-extrabold text-amber-500 mt-1">
+            <IndianRupee className="h-5 w-5 mr-0.5 text-amber-500" />
+            <span>{totalOrgPendingAmount.toLocaleString('en-IN')}</span>
           </div>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
             {totalOrgPendingCount} Claims Awaiting Admin Approval
@@ -1207,7 +1215,8 @@ export default function ReimbursementsPage() {
 
         <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 relative overflow-hidden">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <ReceiptIndianRupee className="h-3.5 w-3.5 text-brand-500" />
               My Active Claims
             </span>
             <span className="rounded-full bg-brand-500/10 border border-brand-500/30 px-2 py-0.5 text-[9px] font-bold text-brand-600 dark:text-brand-300">
@@ -1216,8 +1225,8 @@ export default function ReimbursementsPage() {
           </div>
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-2xl font-extrabold text-brand-500">{myActiveClaimsCount}</span>
-            <span className="text-sm font-bold text-foreground">
-              (₹{myActiveClaimsAmount.toLocaleString('en-IN')})
+            <span className="text-sm font-bold text-foreground flex items-center">
+              (<IndianRupee className="h-3 w-3 inline text-muted-foreground mr-0.5" />{myActiveClaimsAmount.toLocaleString('en-IN')})
             </span>
           </div>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
@@ -1734,23 +1743,29 @@ export default function ReimbursementsPage() {
 
                   <div>
                     <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-semibold text-foreground">Amount (INR ₹) *</label>
+                      <label className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                        <IndianRupee className="h-3 w-3 text-muted-foreground" />
+                        Amount (INR ₹) *
+                      </label>
                       {isAmountOver200 && (
                         <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
                           &gt; ₹200 (Receipt Required)
                         </span>
                       )}
                     </div>
-                    <input
-                      type="number"
-                      value={item.amount}
-                      onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
-                      placeholder="e.g. 350"
-                      className={`mt-1 w-full rounded-xl border ${
-                        isAmountOver200 ? 'border-amber-500/60' : 'border-zinc-200 dark:border-zinc-800'
-                      } bg-background px-3 py-1.5 text-xs focus-ring`}
-                      required
-                    />
+                    <div className="relative mt-1">
+                      <IndianRupee className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="number"
+                        value={item.amount}
+                        onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
+                        placeholder="e.g. 350"
+                        className={`w-full rounded-xl border pl-8 ${
+                          isAmountOver200 ? 'border-amber-500/60' : 'border-zinc-200 dark:border-zinc-800'
+                        } bg-background pr-3 py-1.5 text-xs focus-ring`}
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div>

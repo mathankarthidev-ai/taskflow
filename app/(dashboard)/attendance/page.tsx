@@ -36,7 +36,7 @@ import {
   UserX,
   FileCheck,
   Calculator,
-  DollarSign,
+  IndianRupee,
   Coffee,
   FileEdit,
   ShieldCheck,
@@ -4063,7 +4063,7 @@ export default function AttendancePage() {
               <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground block">Overtime Pay Disbursed</span>
                 <span className="text-2xl font-extrabold text-purple-600 dark:text-purple-400 font-mono mt-1 block">
-                  {isAustralia ? '+A$420' : '+$1,450'}
+                  {isAustralia ? '+A$420' : '+₹1,450'}
                 </span>
                 <span className="text-[10px] text-muted-foreground">Total overtime compensation</span>
               </div>

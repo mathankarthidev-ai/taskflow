@@ -18,7 +18,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Link from 'next/link';
-import { Users, UserPlus, Trash2, Search, Edit3, DollarSign, Building2, UserCheck, ShieldCheck, CheckCircle2, Plus, Sparkles, FolderPlus, Calendar as CalendarIcon, Download } from 'lucide-react';
+import { Users, UserPlus, Trash2, Search, Edit3, IndianRupee, Building2, UserCheck, ShieldCheck, CheckCircle2, Plus, Sparkles, FolderPlus, Calendar as CalendarIcon, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportToCSV, getEmployeeNumber } from '@/lib/utils';
 
@@ -443,7 +443,7 @@ export function UserManagementTable() {
 
           <Link href="/finance">
             <Button size="sm" variant="outline" className="gap-1.5 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold">
-              <DollarSign className="h-4 w-4" />
+              <IndianRupee className="h-4 w-4" />
               Finance & Payroll Ledger
             </Button>
           </Link>

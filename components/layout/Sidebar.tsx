@@ -13,8 +13,8 @@ import {
   Settings,
   X,
   Clock,
-  Receipt,
-  DollarSign,
+  ReceiptIndianRupee,
+  IndianRupee,
   Bell,
   BellRing,
   MessageSquare,
@@ -174,7 +174,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           restricted: !isTeamLead,
         },
         { label: 'Attendance & Leave', href: '/attendance', icon: Clock, badge: 'New' },
-        { label: 'Reimbursements', href: '/reimbursements', icon: Receipt, badge: 'Claims' },
+        { label: 'Reimbursements', href: '/reimbursements', icon: ReceiptIndianRupee, badge: 'Claims' },
         { label: 'Reports', href: '/reports', icon: FileSpreadsheet },
         { label: 'Analytics', href: '/analytics', icon: BarChart3, badge: 'Insights' },
         {
@@ -187,7 +187,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
         {
           label: 'Company Finance',
           href: '/finance',
-          icon: DollarSign,
+          icon: IndianRupee,
           badge: isSuperAdmin ? 'Admin' : undefined,
           restricted: !isSuperAdmin,
         },

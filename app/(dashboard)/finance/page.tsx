@@ -16,7 +16,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { getReceiptImageUrl } from '@/lib/receipt-helper';
 import {
-  DollarSign,
+  IndianRupee,
   TrendingUp,
   Receipt,
   Building2,
@@ -350,7 +350,7 @@ export default function FinancePage() {
 
     const claimsRows = branchClaims.map(
       (c) =>
-        `"${c.claimNo}","${c.userName}","${c.userTeam}","${c.category}",$${c.amount},"${c.date}","${c.status}","${c.isPaid ? 'PAID' : 'UNPAID'}"`
+        `"${c.claimNo}","${c.userName}","${c.userTeam}","${c.category}",₹${c.amount},"${c.date}","${c.status}","${c.isPaid ? 'PAID' : 'UNPAID'}"`
     );
 
     const csvContent =
@@ -358,15 +358,15 @@ export default function FinancePage() {
       [
         `Ambizcon Health Financial Profit & Loss Statement — ${periodLabel}`,
         `Branch Scope,${activeCompanyScope}`,
-        `Gross Revenue,$${grossRevenue}`,
-        `Total Payroll Salaries,$${totalSalaries}`,
-        `Operational Expenses,$${totalExpenses}`,
-        `Reimbursement Claims Auto-Added,$${totalClaims}`,
-        `Net Profit,$${netProfit}`,
+        `Gross Revenue,₹${grossRevenue}`,
+        `Total Payroll Salaries,₹${totalSalaries}`,
+        `Operational Expenses,₹${totalExpenses}`,
+        `Reimbursement Claims Auto-Added,₹${totalClaims}`,
+        `Net Profit,₹${netProfit}`,
         `Profit Margin,${profitMargin}%`,
         '',
         '--- ITEMIZED AUTO-SYNCED REIMBURSEMENT CLAIMS ---',
-        'Claim No,Employee,Team,Category,Amount,Date,Status,Payment State',
+        'Claim No,Employee,Team,Category,Amount (INR),Date,Status,Payment State',
         ...claimsRows,
       ].join('\n');
 
@@ -404,7 +404,7 @@ export default function FinancePage() {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border ambizcon-hero-banner p-6 glass-panel">
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl ambizcon-gradient text-white shadow-glow">
-            <DollarSign className="h-6 w-6" />
+            <IndianRupee className="h-6 w-6" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -458,7 +458,8 @@ export default function FinancePage() {
         {/* Total Revenue */}
         <Card className="p-5 border border-zinc-200/80 dark:border-zinc-800/80 relative group">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <IndianRupee className="h-3 w-3 text-brand-500" />
               Gross Revenue
             </span>
             <button
@@ -470,7 +471,7 @@ export default function FinancePage() {
             </button>
           </div>
           <div className="text-2xl font-extrabold text-foreground mt-1 font-mono">
-            ${grossRevenue.toLocaleString()}
+            ₹{grossRevenue.toLocaleString()}
           </div>
           <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1 mt-1">
             {grossRevenue === 0 ? 'Set monthly revenue' : 'Monthly client revenue'}
@@ -480,7 +481,8 @@ export default function FinancePage() {
         {/* Employee Salaries */}
         <Card className="p-5 border border-zinc-200/80 dark:border-zinc-800/80 relative group">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <IndianRupee className="h-3 w-3 text-purple-500" />
               Payroll Salaries
             </span>
             <button
@@ -492,7 +494,7 @@ export default function FinancePage() {
             </button>
           </div>
           <div className="text-2xl font-extrabold text-purple-600 dark:text-purple-400 mt-1 font-mono">
-            ${totalSalaries.toLocaleString()}
+            ₹{totalSalaries.toLocaleString()}
           </div>
           <span className="text-[10px] text-muted-foreground mt-1 block">
             {salaryRoster.length} Roster Employees
@@ -502,7 +504,8 @@ export default function FinancePage() {
         {/* Operational Expenses */}
         <Card className="p-5 border border-zinc-200/80 dark:border-zinc-800/80 relative group">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <IndianRupee className="h-3 w-3 text-blue-500" />
               Operational Expenses
             </span>
             <button
@@ -514,7 +517,7 @@ export default function FinancePage() {
             </button>
           </div>
           <div className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-1 font-mono">
-            ${totalExpenses.toLocaleString()}
+            ₹{totalExpenses.toLocaleString()}
           </div>
           <span className="text-[10px] text-muted-foreground mt-1 block">SaaS, Cloud & Rent</span>
         </Card>
@@ -535,28 +538,29 @@ export default function FinancePage() {
             </button>
           </div>
           <div className="text-2xl font-extrabold text-amber-500 mt-1 font-mono">
-            ${totalClaims.toLocaleString()}
+            ₹{totalClaims.toLocaleString()}
           </div>
           <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[10px]">
             <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-              ${totalPaidAmount.toLocaleString()} Paid
+              ₹{totalPaidAmount.toLocaleString()} Paid
             </span>
             <span className="text-muted-foreground">•</span>
             <span className="text-amber-600 dark:text-amber-400 font-bold">
-              ${totalPendingAmount.toLocaleString()} Pending ({pendingClaims.length})
+              ₹{totalPendingAmount.toLocaleString()} Pending ({pendingClaims.length})
             </span>
           </div>
         </Card>
 
         {/* Net Profit */}
         <Card className="p-5 border border-emerald-500/30 bg-emerald-500/10">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+            <IndianRupee className="h-3 w-3 text-emerald-500" />
             Net Profit (Margin)
           </span>
           <div className={`text-2xl font-extrabold mt-1 font-mono ${
             netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
           }`}>
-            {netProfit >= 0 ? `+$${netProfit.toLocaleString()}` : `-$${Math.abs(netProfit).toLocaleString()}`}
+            {netProfit >= 0 ? `+₹${netProfit.toLocaleString()}` : `-₹${Math.abs(netProfit).toLocaleString()}`}
           </div>
           <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold block mt-1">
             {profitMargin}% Net Margin
@@ -579,7 +583,7 @@ export default function FinancePage() {
               </div>
             </div>
             <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 font-mono text-[10px]">
-              ${totalClaims.toLocaleString()} Total Auto-Added
+              ₹{totalClaims.toLocaleString()} Total Auto-Added
             </Badge>
           </div>
 
@@ -597,7 +601,7 @@ export default function FinancePage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="font-extrabold font-mono text-foreground block">${c.amount.toLocaleString()}</span>
+                  <span className="font-extrabold font-mono text-foreground block">₹{c.amount.toLocaleString()}</span>
                   <span className="text-[10px] text-muted-foreground">
                     {totalClaims > 0 ? ((c.amount / totalClaims) * 100).toFixed(1) : '0.0'}% of claims
                   </span>
@@ -620,7 +624,7 @@ export default function FinancePage() {
               </div>
             </div>
             <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 font-mono text-[10px]">
-              ${totalExpenses.toLocaleString()}/mo
+              ₹{totalExpenses.toLocaleString()}/mo
             </Badge>
           </div>
 
@@ -635,7 +639,7 @@ export default function FinancePage() {
                   <span className="text-[10px] text-muted-foreground">{ex.category} • {ex.period}</span>
                 </div>
                 <span className="font-extrabold font-mono text-blue-600 dark:text-blue-400">
-                  ${ex.amount.toLocaleString()}
+                  ₹{ex.amount.toLocaleString()}
                 </span>
               </div>
             ))}
@@ -796,7 +800,7 @@ export default function FinancePage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-mono font-extrabold text-foreground text-sm">
-                          ${claim.amount.toLocaleString()}
+                          ₹{claim.amount.toLocaleString()}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground font-mono text-[11px]">
@@ -932,7 +936,7 @@ export default function FinancePage() {
                     <Badge variant="outline" className="text-[10px]">{emp.role}</Badge>
                   </td>
                   <td className="px-4 py-3 font-medium">{emp.team}</td>
-                  <td className="px-4 py-3 font-mono font-bold text-foreground">${emp.salary.toLocaleString()}</td>
+                  <td className="px-4 py-3 font-mono font-bold text-foreground">₹{emp.salary.toLocaleString()}</td>
                   <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{emp.phone}</td>
                   <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{emp.bank}</td>
                   <td className="px-4 py-3 text-muted-foreground">{emp.address}</td>
@@ -951,7 +955,7 @@ export default function FinancePage() {
           setSelectedReceiptClaim(null);
         }}
         title={`Receipt Attachment • ${selectedReceiptClaim?.claimNo || 'Claim'}`}
-        description={`Submitted by ${selectedReceiptClaim?.userName || 'Employee'} on ${selectedReceiptClaim?.date || ''} for $${selectedReceiptClaim?.amount?.toLocaleString() || '0'}`}
+        description={`Submitted by ${selectedReceiptClaim?.userName || 'Employee'} on ${selectedReceiptClaim?.date || ''} for ₹${selectedReceiptClaim?.amount?.toLocaleString() || '0'}`}
         maxWidth="lg"
       >
         <div className="space-y-4 pt-2">
@@ -964,7 +968,7 @@ export default function FinancePage() {
               />
               <div className="mt-3 flex items-center justify-between w-full text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">{selectedReceiptClaim.receiptName || 'Receipt Document'}</span>
-                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">${selectedReceiptClaim.amount.toLocaleString()}</span>
+                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">₹{selectedReceiptClaim.amount.toLocaleString()}</span>
               </div>
             </div>
           )}
@@ -986,7 +990,7 @@ export default function FinancePage() {
       >
         <form onSubmit={handleSaveMetrics} className="space-y-4 pt-2">
           <div>
-            <label className="text-xs font-semibold text-foreground">Gross Revenue ($ / mo)</label>
+            <label className="text-xs font-semibold text-foreground">Gross Revenue (₹ / mo)</label>
             <input
               type="number"
               value={editRevenue}
@@ -997,7 +1001,7 @@ export default function FinancePage() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-foreground">Total Payroll Salaries ($ / mo)</label>
+            <label className="text-xs font-semibold text-foreground">Total Payroll Salaries (₹ / mo)</label>
             <input
               type="number"
               value={editSalaries}
@@ -1008,7 +1012,7 @@ export default function FinancePage() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-foreground">Operational Expenses ($ / mo)</label>
+            <label className="text-xs font-semibold text-foreground">Operational Expenses (₹ / mo)</label>
             <input
               type="number"
               value={editExpenses}
@@ -1020,13 +1024,13 @@ export default function FinancePage() {
 
           <div>
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-foreground">Reimbursements ($ / mo)</label>
+              <label className="text-xs font-semibold text-foreground">Reimbursements (₹ / mo)</label>
               <button
                 type="button"
                 onClick={() => setEditClaims(totalAutoAddedClaims.toString())}
                 className="text-[10px] text-amber-600 dark:text-amber-400 font-bold hover:underline"
               >
-                Use Live Auto-Calculated (${totalAutoAddedClaims.toLocaleString()})
+                Use Live Auto-Calculated (₹{totalAutoAddedClaims.toLocaleString()})
               </button>
             </div>
             <input
@@ -1037,14 +1041,14 @@ export default function FinancePage() {
               required
             />
             <p className="text-[10px] text-muted-foreground mt-1">
-              Live claims auto-total from AmbizClaim is <strong>${totalAutoAddedClaims.toLocaleString()}</strong>.
+              Live claims auto-total from AmbizClaim is <strong>₹{totalAutoAddedClaims.toLocaleString()}</strong>.
             </p>
           </div>
 
           <div className="p-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 flex justify-between items-center text-xs">
             <span className="text-muted-foreground font-medium">Calculated Net Profit:</span>
             <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
-              +${(Number(editRevenue) - (Number(editSalaries) + Number(editExpenses) + Number(editClaims))).toLocaleString()}
+              +₹{(Number(editRevenue) - (Number(editSalaries) + Number(editExpenses) + Number(editClaims))).toLocaleString()}
             </span>
           </div>
 
