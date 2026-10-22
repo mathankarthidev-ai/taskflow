@@ -410,9 +410,9 @@ export function DashboardOverview() {
               <button
                 type="button"
                 onClick={() => setCreateModalOpen(true)}
-                className="w-full font-bold text-sm py-2.5 px-4 rounded-xl bg-[#0b2545] hover:bg-[#07162c] dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all border border-brand-500/20"
+                className="w-full font-bold text-sm py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 dark:bg-brand-600 dark:hover:bg-brand-700 text-white shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all border border-brand-500/30"
               >
-                <Plus className="h-4 w-4 text-brand-300" />
+                <Plus className="h-4 w-4 text-white" />
                 <span>Create Task</span>
               </button>
             </div>
@@ -424,25 +424,25 @@ export function DashboardOverview() {
           <TeamPresenceOverviewPanel variant="hero-embed" />
         </div>
 
-        {/* Bottom Bar (Theme Deep Blue #0b2545 with Shift Status, Clock-in Time & Dual World Clocks) */}
-        <div className="bg-[#0b2545] border-t border-brand-500/20 p-3 sm:p-4">
+        {/* Bottom Bar (Ambizcon Logo Signature Gradient / Theme) */}
+        <div className="ambizcon-gradient border-t border-brand-500/30 p-3 sm:p-4 shadow-sm text-white">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* SHIFT STATUS */}
-            <div className="bg-[#07162c] border border-white/10 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
+            <div className="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-white/80 block">
                 SHIFT STATUS
               </span>
               <div className="flex items-center gap-2 mt-2">
                 <span
                   className={`h-2.5 w-2.5 rounded-full ${
                     currentShift?.isWorking
-                      ? 'bg-emerald-400 animate-pulse ring-4 ring-emerald-500/20'
+                      ? 'bg-emerald-300 animate-pulse ring-4 ring-emerald-400/30'
                       : currentShift?.status === 'completed'
-                      ? 'bg-zinc-400'
-                      : 'bg-zinc-500'
+                      ? 'bg-zinc-300'
+                      : 'bg-zinc-400'
                   }`}
                 />
-                <span className="text-xs font-bold text-zinc-200">
+                <span className="text-xs font-bold text-white">
                   {currentShift?.isWorking
                     ? 'Shift Active'
                     : currentShift?.status === 'completed'
@@ -453,12 +453,12 @@ export function DashboardOverview() {
             </div>
 
             {/* CLOCKED IN AT */}
-            <div className="bg-[#07162c] border border-white/10 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
+            <div className="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-white/80 block">
                 {isAustralia ? 'CLOCKED IN AT (AUSTRALIA TIME)' : 'CLOCKED IN AT (INDIA TIME)'}
               </span>
               <div className="mt-2">
-                <span className="inline-block px-2.5 py-1 rounded-lg bg-[#0b2545] border border-white/10 text-zinc-200 font-mono text-xs font-semibold">
+                <span className="inline-block px-2.5 py-1 rounded-lg bg-white/20 border border-white/25 text-white font-mono text-xs font-bold shadow-xs">
                   {currentShift?.isWorking
                     ? currentShift.clockIn
                     : currentShift?.status === 'completed'
@@ -469,24 +469,24 @@ export function DashboardOverview() {
             </div>
 
             {/* CHENNAI, INDIA • IST */}
-            <div className="bg-[#07162c] border border-white/10 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-brand-300 block">
+            <div className="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-100 block">
                 CHENNAI, INDIA • IST
               </span>
               <div className="mt-2">
-                <span className="inline-block px-3 py-1 rounded-lg bg-brand-500/25 text-brand-200 border border-brand-500/40 shadow-[0_0_12px_rgba(8,96,117,0.45)] font-mono text-xs font-bold">
+                <span className="inline-block px-3 py-1 rounded-lg bg-white/20 text-white border border-white/25 shadow-sm font-mono text-xs font-extrabold">
                   {chennaiTime || '02:58:49 pm'}
                 </span>
               </div>
             </div>
 
             {/* BRISBANE, AUSTRALIA • AEST */}
-            <div className="bg-[#07162c] border border-white/10 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-sky-300 block">
+            <div className="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-sky-100 block">
                 BRISBANE, AUSTRALIA • AEST
               </span>
               <div className="mt-2">
-                <span className="inline-block px-3 py-1 rounded-lg bg-sky-500/25 text-sky-200 border border-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.35)] font-mono text-xs font-bold">
+                <span className="inline-block px-3 py-1 rounded-lg bg-white/20 text-white border border-white/25 shadow-sm font-mono text-xs font-extrabold">
                   {brisbaneTime || '07:28:49 pm'}
                 </span>
               </div>
