@@ -127,6 +127,30 @@ export function formatSessionDateIST(dateInput: string | Date | number = new Dat
   })})`;
 }
 
+export function convertIstToAest(istTimeStr: string): string {
+  const match = istTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i);
+  if (!match) return istTimeStr;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const isPm = match[3].toLowerCase() === 'pm';
+  if (isPm && hours < 12) hours += 12;
+  if (!isPm && hours === 12) hours = 0;
+
+  // IST (UTC+5:30) to AEST (UTC+10:00) is +4 hours and +30 minutes
+  let aestMinutes = minutes + 30;
+  let aestHours = hours + 4;
+  if (aestMinutes >= 60) {
+    aestMinutes -= 60;
+    aestHours += 1;
+  }
+  aestHours = aestHours % 24;
+
+  const aestPeriod = aestHours >= 12 ? 'pm' : 'am';
+  const displayHours = aestHours % 12 === 0 ? 12 : aestHours % 12;
+  const displayMinutes = String(aestMinutes).padStart(2, '0');
+  return `${String(displayHours).padStart(2, '0')}:${displayMinutes} ${aestPeriod} AEST`;
+}
+
 export function sanitizeClockOutTime(
   clockOut?: string | null,
   isAest: boolean = false,
@@ -135,13 +159,42 @@ export function sanitizeClockOutTime(
   if (isAutoClosed || (clockOut && clockOut.toLowerCase().includes('auto'))) {
     return isAest ? '08:00 pm AEST' : '08:00 pm IST';
   }
-  if (!clockOut || clockOut === '—') return '—';
+  if (!clockOut || clockOut === '—' || clockOut === '-') return '—';
   const str = String(clockOut).trim();
-  if (str.includes('T') || (!str.toLowerCase().includes('m') && !isNaN(Date.parse(str)))) {
-    return isAest ? formatTimeAEST(str) : formatTimeIST(str);
+
+  // If it's an ISO timestamp string like 2026-10-22T04:54:00Z (strictly checking ISO date pattern)
+  if (/\d{4}-\d{2}-\d{2}T/i.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      return isAest
+        ? d.toLocaleTimeString('en-IN', { timeZone: 'Australia/Brisbane', hour: '2-digit', minute: '2-digit', hour12: true }) + ' AEST'
+        : d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST';
+    }
   }
-  const cleaned = str.replace(/\s*\([^)]*\)/g, '').trim();
-  return cleaned || str;
+
+  // If it's already an AEST string
+  if (/aest/i.test(str)) {
+    return str;
+  }
+
+  // If it's already an IST string
+  if (/ist/i.test(str)) {
+    if (isAest) {
+      return convertIstToAest(str);
+    }
+    return str;
+  }
+
+  // If it contains am/pm
+  if (/am|pm/i.test(str)) {
+    const cleaned = str.replace(/\s*\([^)]*\)/g, '').trim();
+    if (isAest) {
+      return convertIstToAest(cleaned);
+    }
+    return cleaned.includes('IST') ? cleaned : `${cleaned} IST`;
+  }
+
+  return str;
 }
 
 const SEED_EMPLOYEE_ID_MAP: Record<string, string> = {
