@@ -172,35 +172,98 @@ export function DashboardOverview() {
 
   const handleClockToggle = async () => {
     if (!currentUser) return;
-    if (currentShift?.isWorking) {
-      router.push('/attendance');
-      return;
-    }
 
     setClockingInProgress(true);
+    const todayKey = new Date().toLocaleDateString('en-CA');
+    const targetTz = isAustralia ? 'Australia/Brisbane' : 'Asia/Kolkata';
+    const formattedNow = new Date().toLocaleTimeString('en-US', {
+      timeZone: targetTz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
     try {
-      const res = await fetch('/api/attendance/clock-in', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser._id,
-          userName: currentUser.name,
-          userEmail: currentUser.email,
-          userTeam: currentUser.team,
-          company: activeCompanyScope,
-          workMode: 'Work From Office',
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(`Clocked In successfully! Shift active.`);
-        await loadCurrentShift();
-        window.dispatchEvent(new CustomEvent('ambizcon_attendance_updated'));
+      if (currentShift?.isWorking) {
+        // Direct Clock Out from Overview
+        const res = await fetch('/api/attendance/clock-out', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser._id,
+            userName: currentUser.name,
+            userEmail: currentUser.email,
+            userTeam: currentUser.team,
+            company: activeCompanyScope,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast.success('Clocked Out successfully! Shift completed.');
+          setCurrentShift((prev) => ({
+            isWorking: false,
+            clockIn: prev?.clockIn || formattedNow,
+            clockOut: data.clockOutTime || formattedNow,
+            status: 'completed',
+            workedHours: prev?.workedHours || '0h 00m',
+          }));
+          localStorage.setItem(
+            `ambizcon_shift_${currentUser._id}`,
+            JSON.stringify({
+              shiftDate: todayKey,
+              isClockedIn: false,
+              clockInTime: currentShift?.clockIn || formattedNow,
+              clockOutTime: data.clockOutTime || formattedNow,
+              status: 'completed',
+            })
+          );
+          await loadCurrentShift();
+          window.dispatchEvent(new CustomEvent('ambizcon_attendance_updated'));
+        } else {
+          toast.error(data.message || 'Failed to clock out');
+        }
       } else {
-        router.push('/attendance');
+        // Direct Clock In from Overview
+        const res = await fetch('/api/attendance/clock-in', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser._id,
+            userName: currentUser.name,
+            userEmail: currentUser.email,
+            userTeam: currentUser.team,
+            company: activeCompanyScope,
+            workMode: 'Work From Office',
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast.success(`Clocked In successfully! Shift active.`);
+          setCurrentShift({
+            isWorking: true,
+            clockIn: data.clockIn || formattedNow,
+            clockOut: '—',
+            status: 'working',
+            workedHours: '0h 00m',
+          });
+          localStorage.setItem(
+            `ambizcon_shift_${currentUser._id}`,
+            JSON.stringify({
+              shiftDate: todayKey,
+              isClockedIn: true,
+              clockInTime: data.clockIn || formattedNow,
+              clockInTimestamp: Date.now(),
+              status: 'working',
+            })
+          );
+          await loadCurrentShift();
+          window.dispatchEvent(new CustomEvent('ambizcon_attendance_updated'));
+        } else {
+          toast.error(data.message || 'Failed to clock in');
+        }
       }
     } catch {
-      router.push('/attendance');
+      toast.error('Network or server error while updating attendance');
     } finally {
       setClockingInProgress(false);
     }
@@ -238,7 +301,7 @@ export function DashboardOverview() {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5);
 
-  // Dynamic Portrait for Left Hero Visual (Black & White with smooth right fade)
+  // Dynamic Portrait for Left Hero Visual (Crystal Clear, High Resolution)
   let portraitUrl = currentUser.avatar;
   if (!portraitUrl || portraitUrl.includes('dicebear') || portraitUrl.includes('api.dicebear.com')) {
     const fallbackPortrait = DEFAULT_PORTRAIT_AVATARS[currentUser.email.toLowerCase()];
@@ -246,8 +309,8 @@ export function DashboardOverview() {
       portraitUrl = fallbackPortrait;
     }
   }
-  if (portraitUrl && portraitUrl.includes('images.unsplash.com') && portraitUrl.includes('w=200')) {
-    portraitUrl = portraitUrl.replace('w=200', 'w=800');
+  if (portraitUrl && portraitUrl.includes('images.unsplash.com')) {
+    portraitUrl = portraitUrl.replace('w=200', 'w=800').replace('q=80', 'q=95');
   }
 
   // Time-based greeting phrase (Good Morning / Good Afternoon / Good Evening)
@@ -262,55 +325,43 @@ export function DashboardOverview() {
   return (
     <div className="space-y-6">
       {/* Unified Hero Widget (Visual Portrait, Greeting, Dual Action & Clocks, Bottom Shift Bar) */}
-      <div className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-950/95 shadow-sm overflow-hidden backdrop-blur-md">
+      <div className="rounded-3xl border border-brand-500/20 bg-white/95 dark:bg-zinc-950/95 shadow-sm overflow-hidden backdrop-blur-md">
         {/* Top Zone: Portrait, Greeting & Badges, Right Live Time & Action Buttons */}
         <div className="flex flex-col md:flex-row items-stretch justify-between relative min-h-[220px]">
-          {/* Left: Grayscale Portrait with Fade Mask */}
-          <div className="relative w-full md:w-56 lg:w-64 shrink-0 h-48 md:h-auto overflow-hidden self-stretch">
+          {/* Left: Sharp, Crisp Portrait (Natural Color, No Blur, No Fade Mask) */}
+          <div className="relative w-full md:w-56 lg:w-64 shrink-0 h-52 md:h-auto overflow-hidden self-stretch border-b md:border-b-0 md:border-r border-brand-500/20 bg-zinc-100 dark:bg-zinc-900">
             {portraitUrl ? (
               <img
                 src={portraitUrl}
                 alt={currentUser.name}
-                className="h-full w-full object-cover object-top grayscale contrast-110"
-                style={{
-                  maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)',
-                  WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)',
-                }}
+                className="h-full w-full object-cover object-top"
               />
             ) : (
-              <div
-                className="h-full w-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-4xl font-bold text-zinc-400"
-                style={{
-                  maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)',
-                  WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)',
-                }}
-              >
+              <div className="h-full w-full bg-brand-500/10 text-brand-600 dark:text-brand-300 flex items-center justify-center text-4xl font-extrabold">
                 {currentUser.name.slice(0, 2).toUpperCase()}
               </div>
             )}
-            {/* Mobile bottom fade */}
-            <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-zinc-950 via-transparent to-transparent md:hidden pointer-events-none" />
           </div>
 
           {/* Center: Greeting, Badges, Quote */}
           <div className="flex-1 p-6 flex flex-col justify-center gap-3">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground leading-snug">
-                <span className="text-[#0d9488] dark:text-[#2dd4bf] font-black">
+                <span className="ambizcon-gradient-text font-black">
                   {getGreetingPhrase()}!
                 </span>{' '}
                 Welcome back,
                 <br className="hidden sm:inline" />
-                <span className="font-extrabold"> {currentUser.name}!</span>
+                <span className="font-extrabold text-foreground"> {currentUser.name}!</span>
               </h1>
             </div>
 
-            {/* Badges Row */}
+            {/* Badges Row with Ambizcon Brand Colors */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
+              <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold bg-brand-500/10 text-brand-700 dark:text-brand-300 border border-brand-500/25">
                 {currentUser.role} • {currentUser.team}
               </span>
-              <span className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
+              <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold bg-brand-500/10 text-brand-700 dark:text-brand-300 border border-brand-500/25">
                 {isAustralia ? 'Ambizcon (Brisbane HQ)' : 'Ambizcon Health (Chennai HQ)'}
               </span>
             </div>
@@ -325,7 +376,7 @@ export function DashboardOverview() {
           </div>
 
           {/* Right: Divider + Live Time Clock & Action Buttons */}
-          <div className="w-full md:w-64 lg:w-72 shrink-0 border-t md:border-t-0 md:border-l border-zinc-200/80 dark:border-zinc-800/80 p-6 flex flex-col items-center justify-center text-center gap-3">
+          <div className="w-full md:w-64 lg:w-72 shrink-0 border-t md:border-t-0 md:border-l border-brand-500/20 p-6 flex flex-col items-center justify-center text-center gap-3">
             <div>
               <div className="text-3xl font-extrabold tracking-tight text-foreground font-sans">
                 {digitalClock24 || '14:58:49'}
@@ -340,13 +391,13 @@ export function DashboardOverview() {
                 type="button"
                 onClick={handleClockToggle}
                 disabled={clockingInProgress}
-                className={`w-full font-bold text-sm py-2 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
+                className={`w-full font-bold text-sm py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
                   currentShift?.isWorking
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                    : 'bg-[#15803d] hover:bg-[#166534] text-white'
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm ring-2 ring-rose-500/30'
+                    : 'ambizcon-gradient hover:opacity-95 text-white shadow-glow'
                 }`}
               >
-                <Clock className="h-4 w-4" />
+                <Clock className={`h-4 w-4 ${currentShift?.isWorking ? 'animate-pulse' : ''}`} />
                 <span>
                   {clockingInProgress
                     ? 'Updating...'
@@ -359,31 +410,31 @@ export function DashboardOverview() {
               <button
                 type="button"
                 onClick={() => setCreateModalOpen(true)}
-                className="w-full font-bold text-sm py-2 px-4 rounded-xl bg-gradient-to-r from-[#0f766e] to-[#047857] hover:brightness-110 text-white shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+                className="w-full font-bold text-sm py-2.5 px-4 rounded-xl bg-[#0b2545] hover:bg-[#07162c] dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all border border-brand-500/20"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4 text-brand-300" />
                 <span>Create Task</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Bottom Dark Bar (Shift Status, Clock-in Time & Dual World Clocks) */}
-        <div className="bg-[#0b131d] border-t border-zinc-800/80 p-3 sm:p-4">
+        {/* Bottom Bar (Theme Deep Blue #0b2545 with Shift Status, Clock-in Time & Dual World Clocks) */}
+        <div className="bg-[#0b2545] border-t border-brand-500/20 p-3 sm:p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* SHIFT STATUS */}
-            <div className="bg-[#15212d] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-center">
+            <div className="bg-[#07162c] border border-white/10 rounded-2xl p-3.5 flex flex-col justify-center">
               <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
                 SHIFT STATUS
               </span>
               <div className="flex items-center gap-2 mt-2">
                 <span
-                  className={`h-2 w-2 rounded-full ${
+                  className={`h-2.5 w-2.5 rounded-full ${
                     currentShift?.isWorking
-                      ? 'bg-emerald-400 animate-pulse'
+                      ? 'bg-emerald-400 animate-pulse ring-4 ring-emerald-500/20'
                       : currentShift?.status === 'completed'
                       ? 'bg-zinc-400'
-                      : 'bg-zinc-400'
+                      : 'bg-zinc-500'
                   }`}
                 />
                 <span className="text-xs font-bold text-zinc-200">
@@ -397,12 +448,12 @@ export function DashboardOverview() {
             </div>
 
             {/* CLOCKED IN AT */}
-            <div className="bg-[#15212d] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-center">
+            <div className="bg-[#07162c] border border-white/10 rounded-2xl p-3.5 flex flex-col justify-center">
               <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
                 {isAustralia ? 'CLOCKED IN AT (AUSTRALIA TIME)' : 'CLOCKED IN AT (INDIA TIME)'}
               </span>
               <div className="mt-2">
-                <span className="inline-block px-2.5 py-1 rounded-lg bg-[#202f40] text-zinc-300 font-mono text-xs font-semibold">
+                <span className="inline-block px-2.5 py-1 rounded-lg bg-[#0b2545] border border-white/10 text-zinc-200 font-mono text-xs font-semibold">
                   {currentShift?.isWorking
                     ? currentShift.clockIn
                     : currentShift?.status === 'completed'
@@ -413,24 +464,24 @@ export function DashboardOverview() {
             </div>
 
             {/* CHENNAI, INDIA • IST */}
-            <div className="bg-[#15212d] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
+            <div className="bg-[#07162c] border border-white/10 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-brand-300 block">
                 CHENNAI, INDIA • IST
               </span>
               <div className="mt-2">
-                <span className="inline-block px-3 py-1 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-[0_0_12px_rgba(20,184,166,0.35)] font-mono text-xs font-bold">
+                <span className="inline-block px-3 py-1 rounded-lg bg-brand-500/25 text-brand-200 border border-brand-500/40 shadow-[0_0_12px_rgba(8,96,117,0.45)] font-mono text-xs font-bold">
                   {chennaiTime || '02:58:49 pm'}
                 </span>
               </div>
             </div>
 
             {/* BRISBANE, AUSTRALIA • AEST */}
-            <div className="bg-[#15212d] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 block">
+            <div className="bg-[#07162c] border border-white/10 rounded-2xl p-3.5 flex flex-col justify-center">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-sky-300 block">
                 BRISBANE, AUSTRALIA • AEST
               </span>
               <div className="mt-2">
-                <span className="inline-block px-3 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.35)] font-mono text-xs font-bold">
+                <span className="inline-block px-3 py-1 rounded-lg bg-sky-500/25 text-sky-200 border border-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.35)] font-mono text-xs font-bold">
                   {brisbaneTime || '07:28:49 pm'}
                 </span>
               </div>
