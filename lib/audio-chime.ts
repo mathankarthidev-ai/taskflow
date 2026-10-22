@@ -243,10 +243,10 @@ export function playNotificationChime(soundType: NotificationSoundType = 'chat')
       playChatNotificationSound();
       break;
     case 'reminder':
-      playReminderNotificationSound();
+      playReminderAlarmSound(30);
       break;
     case 'self_reminder':
-      playSelfReminderNotificationSound();
+      playReminderAlarmSound(30);
       break;
     case 'task_assigned':
       playTaskAssignedNotificationSound();
@@ -256,3 +256,125 @@ export function playNotificationChime(soundType: NotificationSoundType = 'chat')
       break;
   }
 }
+
+/**
+ * 5. CONTINUOUS 30-SECOND REMINDER ALARM SOUND
+ * Plays an attention-grabbing, pleasant repeating alarm sequence for 30 seconds.
+ * Automatically halts at 30 seconds, or stops immediately when clicked / dismissed.
+ */
+let activeAlarmCtx: AudioContext | null = null;
+let activeAlarmInterval: any = null;
+let activeAlarmTimeout: any = null;
+let isAlarmCurrentlyActive = false;
+
+export function stopReminderAlarmSound() {
+  if (typeof window === 'undefined') return;
+  isAlarmCurrentlyActive = false;
+
+  if (activeAlarmTimeout) {
+    clearTimeout(activeAlarmTimeout);
+    activeAlarmTimeout = null;
+  }
+  if (activeAlarmInterval) {
+    clearInterval(activeAlarmInterval);
+    activeAlarmInterval = null;
+  }
+  if (activeAlarmCtx) {
+    try {
+      activeAlarmCtx.close();
+    } catch (_) {}
+    activeAlarmCtx = null;
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('ambizcon_alarm_stopped'));
+  } catch (_) {}
+}
+
+export function isReminderAlarmPlaying(): boolean {
+  return isAlarmCurrentlyActive;
+}
+
+export function playReminderAlarmSound(durationSeconds: number = 30) {
+  if (typeof window === 'undefined') return;
+  stopReminderAlarmSound(); // Stop previous active alarm if any
+
+  const AudioContextClass =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  try {
+    const ctx = new AudioContextClass();
+    activeAlarmCtx = ctx;
+    isAlarmCurrentlyActive = true;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    const playBeepCycle = () => {
+      if (!isAlarmCurrentlyActive || !activeAlarmCtx || activeAlarmCtx.state === 'closed') return;
+      const now = activeAlarmCtx.currentTime;
+
+      // Pulse 1: 880 Hz (A5)
+      const osc1 = activeAlarmCtx.createOscillator();
+      const gain1 = activeAlarmCtx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.001, now);
+      gain1.gain.setValueAtTime(0.35, now + 0.02);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      osc1.connect(gain1);
+      gain1.connect(activeAlarmCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.15);
+
+      // Pulse 2: 1046.5 Hz (C6)
+      const osc2 = activeAlarmCtx.createOscillator();
+      const gain2 = activeAlarmCtx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(1046.5, now + 0.14);
+      gain2.gain.setValueAtTime(0.001, now + 0.14);
+      gain2.gain.setValueAtTime(0.38, now + 0.16);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      osc2.connect(gain2);
+      gain2.connect(activeAlarmCtx.destination);
+      osc2.start(now + 0.14);
+      osc2.stop(now + 0.33);
+
+      // Pulse 3: 1318.5 Hz (E6) - bright chime
+      const osc3 = activeAlarmCtx.createOscillator();
+      const gain3 = activeAlarmCtx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(1318.5, now + 0.33);
+      gain3.gain.setValueAtTime(0.001, now + 0.33);
+      gain3.gain.setValueAtTime(0.42, now + 0.35);
+      gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+      osc3.connect(gain3);
+      gain3.connect(activeAlarmCtx.destination);
+      osc3.start(now + 0.33);
+      osc3.stop(now + 0.66);
+    };
+
+    // Play first cycle immediately
+    playBeepCycle();
+
+    // Repeat every 1.2s
+    activeAlarmInterval = setInterval(playBeepCycle, 1200);
+
+    // Auto turn off after durationSeconds (default 30 seconds)
+    activeAlarmTimeout = setTimeout(() => {
+      stopReminderAlarmSound();
+    }, durationSeconds * 1000);
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent('ambizcon_alarm_started', { detail: { durationSeconds } })
+      );
+    } catch (_) {}
+  } catch (err) {
+    console.debug('Alarm audio playback skipped:', err);
+    isAlarmCurrentlyActive = false;
+  }
+}
+

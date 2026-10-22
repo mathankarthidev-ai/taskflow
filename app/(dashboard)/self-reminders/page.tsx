@@ -129,7 +129,19 @@ export default function SelfRemindersPage() {
           if (!localStorage.getItem(firedKey)) {
             localStorage.setItem(firedKey, '1');
             try {
-              playAlertSound();
+              window.dispatchEvent(
+                new CustomEvent('ambizcon_trigger_reminder_alarm', {
+                  detail: {
+                    id: `self_${rem.id}`,
+                    type: 'self_reminder',
+                    title: `⏰ Self Reminder: ${rem.title}`,
+                    description: `${rem.note ? `${rem.note} — ` : ''}Scheduled for ${rem.day_name} at ${rem.reminder_time} (${rem.repeat_type})`,
+                    time: rem.reminder_time,
+                    badge: `${rem.repeat_type} Reminder`,
+                    link: '/self-reminders',
+                  },
+                })
+              );
             } catch (e) {}
             useNotificationStore.getState().addNotification({
               id: `notif_self_due_${rem.id}_${todayKey}`,

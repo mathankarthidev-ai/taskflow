@@ -30,6 +30,9 @@ import {
   CheckCircle2,
   X,
   BellRing,
+  Filter,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '../ui/Button';
@@ -57,7 +60,11 @@ import {
   getDailyShuffledCheckpoints,
   HealthQuote,
 } from '@/components/attendance/HealthCheckModal';
-import { playNotificationChime } from '@/lib/audio-chime';
+import {
+  playNotificationChime,
+  playReminderAlarmSound,
+  stopReminderAlarmSound,
+} from '@/lib/audio-chime';
 import { fetchSelfReminders } from '@/lib/self-reminders-store';
 import {
   getChatBroadcastChannel,
@@ -164,6 +171,19 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     toast.success('🔀 Shuffled daily wellness task & exercises!');
   };
 
+  interface ActiveReminderPopup {
+    id: string;
+    type: 'health_check' | 'task_reminder' | 'self_reminder';
+    title: string;
+    description: string;
+    time?: string;
+    badge?: string;
+    habitGif?: string;
+    habitGoal?: string;
+    link?: string;
+    startedAt: number;
+  }
+
   // System Notifications State (Includes Role-Targeted Reimbursement Note Alerts & Persistent Right-Side Pop-up Alerts)
   const rawNotificationsList = useNotificationStore((s) => s.notifications);
   const rawPopupAlerts = useNotificationStore((s) => s.popupAlerts);
@@ -171,6 +191,106 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const markAsReadStore = useNotificationStore((s) => s.markAsRead);
   const dismissPopupAlert = useNotificationStore((s) => s.dismissPopupAlert);
   const dismissAllPopupAlerts = useNotificationStore((s) => s.dismissAllPopupAlerts);
+
+  const tasks = useTaskStore((s) => s.tasks);
+  const [userSelfReminders, setUserSelfReminders] = useState<any[]>([]);
+  const [notifCategoryFilter, setNotifCategoryFilter] = useState<
+    'All' | 'Reminders' | 'Tasks' | 'Chat' | 'Reimbursements' | 'System'
+  >('All');
+  const [activeReminderAlert, setActiveReminderAlert] = useState<ActiveReminderPopup | null>(null);
+  const [alarmRemainingSec, setAlarmRemainingSec] = useState<number>(30);
+
+  // Sync personal self reminders so all reminders appear in notifications dropdown
+  useEffect(() => {
+    if (!currentUser) return;
+    let isMounted = true;
+    const loadSelfRems = async () => {
+      try {
+        const data = await fetchSelfReminders(currentUser._id, currentUser.email, currentUser.name);
+        if (isMounted && Array.isArray(data)) {
+          setUserSelfReminders(data);
+        }
+      } catch (_) {}
+    };
+    loadSelfRems();
+    const handleSync = () => loadSelfRems();
+    window.addEventListener('ambizcon_self_reminders_updated', handleSync);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('ambizcon_self_reminders_updated', handleSync);
+    };
+  }, [currentUser?._id, currentUser?.email, currentUser?.name]);
+
+  // 30-Second Alarm Countdown Timer: Stops alarm and closes popup after 30 seconds
+  useEffect(() => {
+    if (!activeReminderAlert) return;
+    setAlarmRemainingSec(30);
+
+    const interval = setInterval(() => {
+      setAlarmRemainingSec((prev) => {
+        if (prev <= 1) {
+          stopReminderAlarmSound();
+          setActiveReminderAlert(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeReminderAlert?.id]);
+
+  // Listen for reminder triggers across any tab or component
+  useEffect(() => {
+    const handleTriggerAlarm = (e: any) => {
+      const data = e.detail;
+      if (!data) return;
+      setActiveReminderAlert({
+        id: data.id || `custom_${Date.now()}`,
+        type: data.type || 'task_reminder',
+        title: data.title || '🔔 Reminder Alert',
+        description: data.description || 'Your scheduled reminder is due now.',
+        time: data.time || 'Due now',
+        badge: data.badge || 'Reminder Alert',
+        link: data.link || '/reminders',
+        habitGif: data.habitGif,
+        habitGoal: data.habitGoal,
+        startedAt: Date.now(),
+      });
+      playReminderAlarmSound(30);
+    };
+
+    window.addEventListener('ambizcon_trigger_reminder_alarm', handleTriggerAlarm);
+    return () => {
+      window.removeEventListener('ambizcon_trigger_reminder_alarm', handleTriggerAlarm);
+    };
+  }, []);
+
+  const handleDismissActiveReminder = () => {
+    stopReminderAlarmSound();
+    setActiveReminderAlert(null);
+  };
+
+  const handleOpenActiveReminder = () => {
+    stopReminderAlarmSound();
+    const link = activeReminderAlert?.link;
+    setActiveReminderAlert(null);
+    if (link === '#health') {
+      setActiveMenu('health');
+    } else if (link) {
+      router.push(link);
+    }
+  };
+
+  const handleDismissPopup = (id: string) => {
+    stopReminderAlarmSound();
+    dismissPopupAlert(id);
+  };
+
+  const handleDismissAllPopups = () => {
+    stopReminderAlarmSound();
+    dismissAllPopupAlerts();
+  };
 
   // Filter notifications: show only notifications that are visible to currentUser (e.g. strict completed task targeting)
   const notificationsList = (Array.isArray(rawNotificationsList) ? rawNotificationsList : []).filter((n) =>
@@ -181,7 +301,168 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     isNotificationVisibleForUser(n, currentUser)
   );
 
-  const unreadCount = notificationsList.filter((n) => n.unread).length;
+  // Unified Notifications list: combines system notifications + all task reminders + all self-reminders + health checkpoint
+  const allUnifiedNotifications = useMemo(() => {
+    if (!currentUser) return [];
+    const items: any[] = [];
+    const seenIds = new Set<string>();
+
+    // 1. Existing System & Chat & Task Notifications (already role-scoped)
+    for (const n of notificationsList) {
+      if (!n || !n.id) continue;
+      seenIds.add(n.id);
+      const catLower = (n.category || '').toLowerCase();
+      const typeLower = (n.type || '').toLowerCase();
+      const isRem =
+        typeLower === 'due_date_reminder' ||
+        catLower.includes('reminder') ||
+        catLower.includes('wellness') ||
+        catLower.includes('health') ||
+        n.link === '/reminders' ||
+        n.link === '/self-reminders';
+
+      items.push({
+        ...n,
+        isReminder: isRem,
+      });
+    }
+
+    // 2. All Task Reminders (so every task reminder appears in Notifications)
+    const isAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
+    const taskReminders = (Array.isArray(tasks) ? tasks : []).filter(
+      (t) =>
+        t &&
+        t.reminderSettings?.enabled &&
+        (isAdmin ||
+          t.assignedTo === currentUser._id ||
+          t.createdBy === currentUser._id ||
+          t.team === currentUser.team)
+    );
+
+    for (const t of taskReminders) {
+      const id = `rem_task_${t._id}`;
+      if (!seenIds.has(id)) {
+        seenIds.add(id);
+        const isDone = t.status === 'Done';
+        items.push({
+          id,
+          type: 'due_date_reminder',
+          category: 'Task Reminder',
+          subCategory: 'Task Reminder',
+          title: `🔔 ${t.title}`,
+          text: `${t.clientName ? `${t.clientName} • ` : ''}${t.reminderSettings?.frequency || 'Scheduled'} at ${
+            t.reminderSettings?.reminderTime || '09:30 AM'
+          } (${t.team || 'Team'})`,
+          time: t.reminderSettings?.reminderDate || 'Scheduled',
+          unread: !isDone,
+          color: isDone ? 'bg-emerald-500' : 'bg-amber-500',
+          link: '/reminders',
+          taskId: t._id,
+          isReminder: true,
+        });
+      }
+    }
+
+    // 3. All Self Reminders (so every personal self-reminder appears in Notifications)
+    for (const r of userSelfReminders) {
+      const id = `rem_self_${r.id}`;
+      if (!seenIds.has(id)) {
+        seenIds.add(id);
+        items.push({
+          id,
+          type: 'system',
+          category: 'Self Reminder',
+          subCategory: 'Self Reminder',
+          title: `⏰ ${r.title}`,
+          text: `${r.note ? `${r.note} — ` : ''}${r.day_name} at ${r.reminder_time} (${r.repeat_type})`,
+          time: r.reminder_date || 'Personal',
+          unread: !r.is_completed,
+          color: r.is_completed ? 'bg-emerald-500' : 'bg-purple-500',
+          link: '/self-reminders',
+          isReminder: true,
+        });
+      }
+    }
+
+    // 4. Hourly Workspace Wellness Checkpoint Reminder
+    const healthId = 'rem_health_workspace_wellness';
+    if (!seenIds.has(healthId)) {
+      seenIds.add(healthId);
+      items.push({
+        id: healthId,
+        type: 'system',
+        category: 'Health Check',
+        subCategory: 'Health Check',
+        title: '🧘 Hourly Workspace Wellness',
+        text: `${currentHabit.title} (${currentHabit.goal}) • Reset posture, stretch muscles & hydrate`,
+        time: `Every ${healthIntervalMins}m`,
+        unread: healthCompletedItems.length < HEALTH_CHECKLIST.length,
+        color: 'bg-emerald-500',
+        link: '#health',
+        isReminder: true,
+      });
+    }
+
+    return items;
+  }, [notificationsList, tasks, userSelfReminders, currentUser, currentHabit, healthIntervalMins, healthCompletedItems]);
+
+  // Filtered Notifications based on user-selected dropdown category
+  const filteredNotifications = useMemo(() => {
+    if (notifCategoryFilter === 'All') {
+      return allUnifiedNotifications;
+    }
+    if (notifCategoryFilter === 'Reminders') {
+      return allUnifiedNotifications.filter(
+        (n) =>
+          n.isReminder ||
+          n.category === 'Reminders' ||
+          n.type === 'due_date_reminder' ||
+          (n.category &&
+            (n.category.toLowerCase().includes('reminder') ||
+              n.category.toLowerCase().includes('health') ||
+              n.category.toLowerCase().includes('wellness')))
+      );
+    }
+    if (notifCategoryFilter === 'Tasks') {
+      return allUnifiedNotifications.filter(
+        (n) =>
+          !n.isReminder &&
+          (n.type === 'task_completed' ||
+            n.type === 'task_update' ||
+            n.type === 'task_approval' ||
+            n.type === 'review_assigned' ||
+            n.type === 'assigned' ||
+            (n.category && n.category.toLowerCase().includes('task')))
+      );
+    }
+    if (notifCategoryFilter === 'Chat') {
+      return allUnifiedNotifications.filter(
+        (n) =>
+          n.type === 'chat_message' || (n.category && n.category.toLowerCase().includes('chat'))
+      );
+    }
+    if (notifCategoryFilter === 'Reimbursements') {
+      return allUnifiedNotifications.filter(
+        (n) =>
+          n.type === 'reimbursement_note' ||
+          (n.category && n.category.toLowerCase().includes('reimbursement')) ||
+          Boolean(n.claimId)
+      );
+    }
+    if (notifCategoryFilter === 'System') {
+      return allUnifiedNotifications.filter(
+        (n) =>
+          !n.isReminder &&
+          (n.type === 'system' ||
+            (n.category &&
+              (n.category.toLowerCase().includes('system') ||
+                n.category.toLowerCase().includes('attendance'))))
+      );
+    }
+    return allUnifiedNotifications;
+  }, [allUnifiedNotifications, notifCategoryFilter]);
+
+  const totalUnreadCount = allUnifiedNotifications.filter((n) => n.unread).length;
 
   const toggleMenu = (menu: ActiveMenu) => {
     setActiveMenu((prev) => (prev === menu ? null : menu));
@@ -212,11 +493,21 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         const elapsed = now - Number(lastCheckStr);
         if (elapsed >= INTERVAL_MS) {
           localStorage.setItem(storageKeyLast, now.toString());
-          // Open ONLY in navbar dropdown itself
-          setActiveMenu('health');
-          playNotificationChime('reminder');
+          setActiveReminderAlert({
+            id: `health_${now}`,
+            type: 'health_check',
+            title: '🧘 Hourly Workspace Wellness Check',
+            description: `${currentHabit.title}: ${currentHabit.description}`,
+            time: `Every ${healthIntervalMins}m`,
+            badge: currentHabit.badge || 'Workspace Wellness',
+            habitGif: currentHabit.gif,
+            habitGoal: currentHabit.goal,
+            link: '#health',
+            startedAt: now,
+          });
+          playReminderAlarmSound(30);
           toast.info('🧘 Time for your Hourly Wellness Check!', {
-            description: 'Take 60 seconds to reset posture, stretch, and hydrate in the navbar.',
+            description: 'Take 60 seconds to reset posture, stretch, and hydrate.',
           });
         }
       } else {
@@ -473,6 +764,17 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               const dueKey = `ambizcon_duerem_alert_v1_${currentUser._id}_${remTask._id}_${todayIsoStr}_${r24}`;
               if (!localStorage.getItem(dueKey)) {
                 localStorage.setItem(dueKey, '1');
+                setActiveReminderAlert({
+                  id: `task_${remTask._id}_${Date.now()}`,
+                  type: 'task_reminder',
+                  title: `🔔 Reminder: ${remTask.title}`,
+                  description: `Scheduled ${remTask.reminderSettings?.frequency || 'Daily'} alert for ${remTask.clientName || remTask.team || 'Task'} at ${rTime}.`,
+                  time: rTime,
+                  badge: `${remTask.reminderSettings?.frequency || 'Daily'} Reminder`,
+                  link: '/reminders',
+                  startedAt: Date.now(),
+                });
+                playReminderAlarmSound(30);
                 useNotificationStore.getState().addNotification({
                   type: 'due_date_reminder',
                   category: 'Due Reminder Triggered',
@@ -520,6 +822,19 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               const remSyncKey = `ambizcon_selfrem_alert_v2_${currentUser._id}_${rem.id}_${todayStr}_${stateTag}`;
               if (!localStorage.getItem(remSyncKey)) {
                 localStorage.setItem(remSyncKey, '1');
+                if (!rem.is_completed) {
+                  setActiveReminderAlert({
+                    id: `self_${rem.id}_${Date.now()}`,
+                    type: 'self_reminder',
+                    title: `⏰ Self Reminder: ${rem.title}`,
+                    description: `${rem.note || rem.title} • Scheduled at ${rem.reminder_time} (${rem.repeat_type})`,
+                    time: rem.reminder_time,
+                    badge: `${rem.repeat_type} Reminder`,
+                    link: '/self-reminders',
+                    startedAt: Date.now(),
+                  });
+                  playReminderAlarmSound(30);
+                }
                 useNotificationStore.getState().addNotification({
                   type: 'system',
                   category: rem.is_completed ? 'Self Reminder Completed' : 'Self Reminder Alert',
@@ -627,14 +942,21 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   };
 
   const handleMarkAllRead = () => {
+    stopReminderAlarmSound();
     markAllReadStore();
     markChannelMessagesAsRead();
     toast.info('All notifications marked as read');
   };
 
   const handleNotificationClick = (notif: any) => {
+    stopReminderAlarmSound();
     markAsReadStore(notif.id);
     closeAllMenus();
+
+    if (notif.link === '#health' || notif.category === 'Health Check') {
+      setActiveMenu('health');
+      return;
+    }
 
     if (notif.type === 'chat_message') {
       if (notif.channelId) {
@@ -1194,32 +1516,32 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           <button
             onClick={() => toggleMenu('notif')}
             className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            title="System Notifications"
+            title="System Notifications & Reminders"
           >
             <Bell className="h-4 w-4" />
-            {unreadCount > 0 && (
+            {totalUnreadCount > 0 && (
               <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full ambizcon-gradient text-white font-mono text-[9px] font-extrabold flex items-center justify-center border border-background shadow-sm">
-                {unreadCount}
+                {totalUnreadCount}
               </span>
             )}
           </button>
 
           {activeMenu === 'notif' && (
-            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 shadow-xl glass-panel z-50 animate-fade">
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60">
+            <div className="absolute right-0 mt-2 w-84 sm:w-96 max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 shadow-xl glass-panel z-50 animate-fade">
+              <div className="flex items-center justify-between pb-2.5 border-b border-zinc-200/60 dark:border-zinc-800/60">
                 <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Bell className="h-3.5 w-3.5 text-emerald-500" />
-                  System Notifications
+                  Notifications &amp; Reminders
                 </span>
                 <div className="flex items-center gap-1">
-                  {unreadCount > 0 ? (
+                  {totalUnreadCount > 0 ? (
                     <Badge variant="default" className="text-[10px] bg-emerald-600 text-white font-mono font-bold">
-                      {unreadCount} New
+                      {totalUnreadCount} New
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-[10px] font-mono">All Read</Badge>
                   )}
-                  {unreadCount > 0 && (
+                  {totalUnreadCount > 0 && (
                     <button
                       onClick={handleMarkAllRead}
                       className="text-[10px] text-muted-foreground hover:text-foreground ml-1 p-0.5 rounded hover:bg-accent"
@@ -1231,39 +1553,67 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 </div>
               </div>
 
+              {/* Category Filter Dropdown - Default: All Notifications */}
+              <div className="py-2 border-b border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  <Filter className="h-3 w-3 text-emerald-500" />
+                  Category:
+                </span>
+                <select
+                  value={notifCategoryFilter}
+                  onChange={(e) => setNotifCategoryFilter(e.target.value as any)}
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2.5 py-1 text-xs font-bold text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="All">All Notifications</option>
+                  <option value="Reminders">🔔 Reminders &amp; Health</option>
+                  <option value="Tasks">📋 Tasks &amp; Approvals</option>
+                  <option value="Chat">💬 Chat &amp; Messages</option>
+                  <option value="Reimbursements">💳 Reimbursements</option>
+                  <option value="System">⚙️ System &amp; Attendance</option>
+                </select>
+              </div>
 
-              <div className="space-y-2.5 pt-3 max-h-72 overflow-y-auto pr-1">
-                {notificationsList.map((notif) => {
-                  const isChatBroadcast = notif.type === 'chat_message';
-                  const isForAdmin =
-                    !isChatBroadcast &&
-                    (notif.targetRoles?.includes('Super Admin') || notif.targetRoles?.includes('Admin'));
-                  const isForMemAndTL =
-                    !isChatBroadcast &&
-                    notif.targetRoles?.includes('Team Member') &&
-                    notif.targetRoles?.includes('Team Lead');
+              <div className="space-y-2.5 pt-3 max-h-80 overflow-y-auto pr-1">
+                {filteredNotifications.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted-foreground">
+                    <Bell className="h-6 w-6 mx-auto mb-1.5 opacity-30" />
+                    No notifications or reminders in this category.
+                  </div>
+                ) : (
+                  filteredNotifications.map((notif) => {
+                    const isChatBroadcast = notif.type === 'chat_message';
+                    const isForAdmin =
+                      !isChatBroadcast &&
+                      !notif.isReminder &&
+                      (notif.targetRoles?.includes('Super Admin') || notif.targetRoles?.includes('Admin'));
+                    const isForMemAndTL =
+                      !isChatBroadcast &&
+                      !notif.isReminder &&
+                      notif.targetRoles?.includes('Team Member') &&
+                      notif.targetRoles?.includes('Team Lead');
 
-                  return (
-                    <div
-                      key={notif.id}
-                      onClick={() => handleNotificationClick(notif)}
-                      className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all hover:scale-[1.01] ${
-                        notif.unread
-                          ? 'border-emerald-500/40 bg-emerald-500/10 font-medium hover:border-emerald-500/70'
-                          : 'border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                      }`}
-                    >
-                      <div className={`h-2 w-2 rounded-full ${notif.color} mt-1.5 shrink-0`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="font-bold text-foreground text-xs truncate">{notif.title}</p>
-                          <span className="text-[10px] text-zinc-400 font-mono shrink-0">{notif.time}</span>
-                        </div>
-                        {(notif.targetRoles || isChatBroadcast) && (
+                    return (
+                      <div
+                        key={notif.id}
+                        onClick={() => handleNotificationClick(notif)}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all hover:scale-[1.01] ${
+                          notif.unread
+                            ? 'border-emerald-500/40 bg-emerald-500/10 font-medium hover:border-emerald-500/70'
+                            : 'border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/40 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        <div className={`h-2 w-2 rounded-full ${notif.color} mt-1.5 shrink-0`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="font-bold text-foreground text-xs truncate">{notif.title}</p>
+                            <span className="text-[10px] text-zinc-400 font-mono shrink-0">{notif.time}</span>
+                          </div>
                           <div className="mt-0.5">
                             <span
                               className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
-                                isChatBroadcast
+                                notif.isReminder
+                                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                  : isChatBroadcast
                                   ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30'
                                   : isForAdmin
                                   ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
@@ -1272,7 +1622,9 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                                   : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                               }`}
                             >
-                              {isChatBroadcast
+                              {notif.isReminder
+                                ? `🔔 ${notif.subCategory || notif.category || 'Reminder'}`
+                                : isChatBroadcast
                                 ? '🔔 Sent to All Teams (TL, Member & Admin)'
                                 : isForAdmin
                                 ? '🔔 Notify Admin'
@@ -1281,12 +1633,12 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                                 : `🔔 ${notif.category}`}
                             </span>
                           </div>
-                        )}
-                        <p className="text-muted-foreground text-[11px] mt-1 leading-snug">{notif.text}</p>
+                          <p className="text-muted-foreground text-[11px] mt-1 leading-snug">{notif.text}</p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -1555,6 +1907,112 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         </div>
       </div>
 
+      {/* Active Reminder Alarm Popup (styled like health check card, 30s alarm sound, closes on click) */}
+      {activeReminderAlert && (
+        <div className="fixed top-20 right-4 md:right-8 z-[100] w-[360px] sm:w-[420px] max-w-[calc(100vw-24px)] animate-fade pointer-events-auto">
+          <div
+            onClick={handleDismissActiveReminder}
+            className="cursor-pointer rounded-2xl border-2 border-amber-500/70 dark:border-amber-500/60 bg-background/95 dark:bg-zinc-900/95 backdrop-blur-xl p-4 shadow-2xl glass-panel space-y-3 transition-all hover:scale-[1.01] ring-4 ring-amber-500/20"
+            title="Click anywhere to dismiss & stop alarm"
+          >
+            {/* Top Header Row with Badge & 30s Countdown */}
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2.5">
+              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                {activeReminderAlert.type === 'health_check' ? (
+                  <HeartPulse className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
+                ) : (
+                  <BellRing className="h-3.5 w-3.5 text-amber-500 animate-bounce" />
+                )}
+                {activeReminderAlert.badge || 'Reminder Alert'}
+              </Badge>
+
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 animate-pulse">
+                  <Volume2 className="h-3 w-3" />
+                  Alarm {alarmRemainingSec}s
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDismissActiveReminder();
+                  }}
+                  className="h-6 w-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:text-rose-500 hover:border-rose-500/40 flex items-center justify-center transition-colors"
+                  title="Close and stop alarm"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Main Content Area — like health card */}
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-black text-foreground flex items-center gap-1.5 leading-snug">
+                {activeReminderAlert.title}
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {activeReminderAlert.description}
+              </p>
+            </div>
+
+            {/* If health check habit illustration */}
+            {activeReminderAlert.habitGif && (
+              <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-gradient-to-br from-emerald-500/10 via-brand-500/5 to-purple-500/10 p-2.5 flex items-center gap-3">
+                <img
+                  src={activeReminderAlert.habitGif}
+                  alt="Wellness Exercise"
+                  className="h-14 w-16 rounded-lg object-cover border border-zinc-200/60 dark:border-zinc-700/60 shrink-0 bg-zinc-900"
+                />
+                <div className="min-w-0 flex-1 text-xs">
+                  <p className="font-bold text-foreground truncate">{activeReminderAlert.habitGoal || 'Quick Health Reset'}</p>
+                  <p className="text-[11px] text-muted-foreground line-clamp-2">Reset posture, breathe deeply, and hydrate.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Rhythmic alarm animated progress bar */}
+            <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-amber-500 h-full transition-all duration-1000 ease-linear rounded-full"
+                style={{ width: `${(alarmRemainingSec / 30) * 100}%` }}
+              />
+            </div>
+
+            {/* Bottom Action Footer */}
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60">
+              <span className="text-[10px] text-muted-foreground italic flex items-center gap-1">
+                👆 Click anywhere to dismiss
+              </span>
+              <div className="flex items-center gap-2">
+                {activeReminderAlert.link && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenActiveReminder();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold transition-colors"
+                  >
+                    Open
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDismissActiveReminder();
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-rose-500/10 hover:text-rose-500 text-foreground border border-zinc-200 dark:border-zinc-700 text-[10px] font-bold transition-colors flex items-center gap-1"
+                >
+                  <X className="h-3 w-3" />
+                  Close &amp; Stop Alarm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Persistent Right-Side Notification & Alert Pop-up (Stays open until user clicks Close) */}
       {visiblePopupAlerts.length > 0 && (
         <div className="fixed top-20 right-4 z-[95] w-80 sm:w-96 max-w-[calc(100vw-24px)] space-y-2.5 pointer-events-none">
@@ -1562,7 +2020,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             <div className="flex justify-end pointer-events-auto">
               <button
                 type="button"
-                onClick={dismissAllPopupAlerts}
+                onClick={handleDismissAllPopups}
                 className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300/80 dark:border-zinc-700/80 bg-background/95 backdrop-blur-md px-3 py-1 text-[10px] font-extrabold text-muted-foreground hover:text-rose-500 hover:border-rose-500/40 shadow-md transition-all"
               >
                 <X className="h-3 w-3" />
@@ -1606,7 +2064,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 {/* Explicit Close Button (Only closes when user clicks this) */}
                 <button
                   type="button"
-                  onClick={() => dismissPopupAlert(alert.id)}
+                  onClick={() => handleDismissPopup(alert.id)}
                   className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-800/80 text-muted-foreground hover:text-rose-500 hover:border-rose-500/40 hover:bg-rose-500/10 flex items-center justify-center shrink-0 transition-colors"
                   title="Close Alert Pop-up"
                 >
@@ -1618,7 +2076,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    dismissPopupAlert(alert.id);
+                    handleDismissPopup(alert.id);
                     handleNotificationClick(alert);
                   }}
                   className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-bold transition-colors"
@@ -1627,7 +2085,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => dismissPopupAlert(alert.id)}
+                  onClick={() => handleDismissPopup(alert.id)}
                   className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-rose-500/10 hover:text-rose-500 text-foreground border border-zinc-200 dark:border-zinc-700 text-[10px] font-bold transition-colors flex items-center gap-1"
                 >
                   <X className="h-3 w-3" />
