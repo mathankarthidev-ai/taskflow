@@ -1226,161 +1226,11 @@ export default function ReimbursementsPage() {
         </Card>
       </div>
 
-      {/* Date Range & Category Management Bar */}
+      {/* Filter & Management Toolbar */}
       <Card className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 space-y-3">
-        {/* Date Range Selector Row */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-zinc-100 dark:border-zinc-900">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5 text-brand-500" />
-              Time Range:
-            </span>
-            {([
-              { id: 'All Time', label: 'All Time' },
-              { id: 'Today', label: 'Daily (Today)' },
-              { id: 'This Week', label: 'Weekly (This Week)' },
-              { id: 'This Month', label: 'Monthly (This Month)' },
-              { id: 'Custom', label: 'Custom Range' },
-            ] as const).map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => {
-                  setDateRangeOption(opt.id);
-                  if (opt.id === 'Custom') {
-                    if (!customStartDate) setCustomStartDate(getLocalYMD(30));
-                    if (!customEndDate) setCustomEndDate(getLocalYMD(0));
-                  }
-                }}
-                className={`rounded-full px-3.5 py-1 text-xs font-bold border transition-all ${
-                  dateRangeOption === opt.id
-                    ? 'border-brand-500 bg-brand-500/15 text-brand-600 dark:text-brand-300 shadow-sm'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {dateRangeOption === 'Custom' && (
-              <div className="flex items-center gap-2 text-xs bg-zinc-100/70 dark:bg-zinc-900/70 px-3 py-1.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
-                <span className="text-muted-foreground text-[11px] font-semibold">From:</span>
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-2 py-0.5 text-xs focus-ring"
-                />
-                <span className="text-muted-foreground text-[11px] font-semibold">To:</span>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-2 py-0.5 text-xs focus-ring"
-                />
-              </div>
-            )}
-
-            <Button
-              onClick={handleOpenCustomExportModal}
-              size="sm"
-              variant="outline"
-              className="text-xs gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/20"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download Custom CSV
-            </Button>
-          </div>
-        </div>
-
-        {/* Live Period Breakdown Summary Bar (Updates immediately on Daily / Weekly / Monthly / Custom click) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/80 px-3.5 py-2 text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-extrabold text-foreground uppercase tracking-wider text-[10px]">
-              {activeTimeRangeBadgeText} Breakdown:
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-lg bg-card px-2.5 py-1 border border-zinc-200/70 dark:border-zinc-800 font-bold text-foreground">
-              Total Claimed: <span className="text-brand-500">₹{totalOrgClaimedAmount.toLocaleString('en-IN')}</span> ({totalOrgClaimsCount})
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2.5 py-1 border border-emerald-500/25 font-bold text-emerald-600 dark:text-emerald-400">
-              ✓ Approved: ₹{totalOrgApprovedAmount.toLocaleString('en-IN')} ({totalOrgApprovedCount})
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1 border border-blue-500/25 font-bold text-blue-600 dark:text-blue-400">
-              Paid &amp; Settled: ₹{totalOrgPaidAmount.toLocaleString('en-IN')} ({totalOrgPaidCount})
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-2.5 py-1 border border-amber-500/25 font-bold text-amber-600 dark:text-amber-400">
-              Pending Signoff: ₹{totalOrgPendingAmount.toLocaleString('en-IN')} ({totalOrgPendingCount})
-            </span>
-          </div>
-
-          <button
-            onClick={handleExportCSV}
-            className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
-          >
-            <Download className="h-3 w-3" />
-            Quick Download ({TIME_RANGE_DISPLAY_LABELS[dateRangeOption]})
-          </button>
-        </div>
-
-        {/* Category Pills & Add Custom Category */}
+        {/* Main Controls Row */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 overflow-x-auto py-1">
-            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider text-[10px] mr-1">
-              Category:
-            </span>
-            <button
-              onClick={() => setSelectedCategoryFilter('All')}
-              className={`rounded-full px-3.5 py-1 text-xs font-bold border transition-all ${
-                selectedCategoryFilter === 'All'
-                  ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300'
-                  : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              All Categories
-            </button>
-
-            {categoriesList.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategoryFilter(cat)}
-                className={`rounded-full px-3.5 py-1 text-xs font-bold border transition-all ${
-                  selectedCategoryFilter === cat
-                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-card text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {!isAddingNewCategory ? (
-            <Button onClick={() => setIsAddingNewCategory(true)} variant="outline" size="sm" className="text-xs gap-1">
-              <Plus className="h-3.5 w-3.5" />
-              Add Custom Category
-            </Button>
-          ) : (
-            <div className="flex items-center gap-1.5">
-              <input
-                type="text"
-                value={newCategoryInput}
-                onChange={(e) => setNewCategoryInput(e.target.value)}
-                placeholder="New Category Name..."
-                className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1 text-xs focus-ring"
-              />
-              <Button onClick={handleAddNewCategory} size="sm" className="bg-emerald-600 text-white text-xs">
-                Save
-              </Button>
-              <Button onClick={() => setIsAddingNewCategory(false)} size="sm" variant="ghost" className="text-xs">
-                Cancel
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Search, Status & Sort Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-900">
+          {/* Search Box */}
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <input
@@ -1392,11 +1242,59 @@ export default function ReimbursementsPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Dropdown Filters & Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Time Range Dropdown */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1 shrink-0">
+                <Calendar className="h-3.5 w-3.5 text-brand-500" />
+                Time Range:
+              </span>
+              <select
+                value={dateRangeOption}
+                onChange={(e) => {
+                  const val = e.target.value as any;
+                  setDateRangeOption(val);
+                  if (val === 'Custom') {
+                    if (!customStartDate) setCustomStartDate(getLocalYMD(30));
+                    if (!customEndDate) setCustomEndDate(getLocalYMD(0));
+                  }
+                }}
+                className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring cursor-pointer"
+              >
+                <option value="All Time">All Time</option>
+                <option value="Today">Daily (Today)</option>
+                <option value="This Week">Weekly (This Week)</option>
+                <option value="This Month">Monthly (This Month)</option>
+                <option value="Custom">Custom Range</option>
+              </select>
+            </div>
+
+            {/* Category Dropdown */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1 shrink-0">
+                <Layers className="h-3.5 w-3.5 text-emerald-500" />
+                Category:
+              </span>
+              <select
+                value={selectedCategoryFilter}
+                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring cursor-pointer"
+              >
+                <option value="All">All Categories</option>
+                {categoriesList.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Dropdown */}
             <select
               value={selectedStatusFilter}
               onChange={(e) => setSelectedStatusFilter(e.target.value as any)}
-              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring cursor-pointer"
             >
               <option value="All">All Statuses</option>
               <option value="Draft">Draft</option>
@@ -1407,18 +1305,81 @@ export default function ReimbursementsPage() {
               <option value="Cancelled">Cancelled</option>
             </select>
 
+            {/* Sort Dropdown */}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs font-semibold focus-ring cursor-pointer"
             >
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
               <option value="amount_high">Amount: High to Low</option>
               <option value="amount_low">Amount: Low to High</option>
             </select>
+
+            {/* Download Custom CSV */}
+            <Button
+              onClick={handleOpenCustomExportModal}
+              size="sm"
+              variant="outline"
+              className="text-xs gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/20"
+              title="Download claims spreadsheet"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download CSV
+            </Button>
+
+            {/* Add Custom Category */}
+            {!isAddingNewCategory ? (
+              <Button
+                onClick={() => setIsAddingNewCategory(true)}
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1"
+                title="Create a new expense category"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Category
+              </Button>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={newCategoryInput}
+                  onChange={(e) => setNewCategoryInput(e.target.value)}
+                  placeholder="New Category..."
+                  className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1 text-xs focus-ring"
+                />
+                <Button onClick={handleAddNewCategory} size="sm" className="bg-emerald-600 text-white text-xs">
+                  Save
+                </Button>
+                <Button onClick={() => setIsAddingNewCategory(false)} size="sm" variant="ghost" className="text-xs">
+                  Cancel
+                </Button>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Custom Range Date Pickers */}
+        {dateRangeOption === 'Custom' && (
+          <div className="flex items-center gap-2 text-xs bg-zinc-100/70 dark:bg-zinc-900/70 px-3 py-1.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 w-fit pt-2">
+            <span className="text-muted-foreground text-[11px] font-semibold">From:</span>
+            <input
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-2 py-0.5 text-xs focus-ring"
+            />
+            <span className="text-muted-foreground text-[11px] font-semibold">To:</span>
+            <input
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-2 py-0.5 text-xs focus-ring"
+            />
+          </div>
+        )}
       </Card>
 
       {/* Claims Table & Management */}
