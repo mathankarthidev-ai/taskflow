@@ -109,7 +109,11 @@ function findTodayAttendanceForUser(
   });
 }
 
-export function TeamPresenceOverviewPanel() {
+export interface TeamPresenceOverviewPanelProps {
+  variant?: 'full' | 'hero-embed';
+}
+
+export function TeamPresenceOverviewPanel({ variant = 'full' }: TeamPresenceOverviewPanelProps) {
   const currentUser = useAuthStore((s) => s.currentUser);
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
 
@@ -462,6 +466,210 @@ export function TeamPresenceOverviewPanel() {
 
   const presentCount = departmentMembers.filter((m) => m.isPresent).length;
   const absentCount = departmentMembers.filter((m) => !m.isPresent).length;
+
+  if (variant === 'hero-embed') {
+    return (
+      <div className="space-y-3.5">
+        {/* Header Row: Title & Subtitle + Admin Selector + Filter Pills */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-brand-500/15">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-zinc-100 tracking-tight">
+                Department Members
+              </h3>
+              <span className="rounded-full bg-brand-500/10 border border-brand-500/25 px-2.5 py-0.5 text-[10px] font-bold text-brand-700 dark:text-brand-300">
+                {effectiveTeamScope === 'All' ? 'All Teams' : `${effectiveTeamScope} Team`}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium mt-0.5">
+              Live Team Presence • <strong className="text-emerald-600 dark:text-emerald-400">{presentCount} Present</strong>, <strong className="text-rose-500">{absentCount} Absent</strong>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Super Admin Team Dropdown */}
+            {isSuperAdmin && (
+              <select
+                value={adminSelectedTeam}
+                onChange={(e) => setAdminSelectedTeam(e.target.value as 'All' | TeamName)}
+                className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500 shadow-2xs"
+              >
+                {isAustralia ? (
+                  <>
+                    <option value="All">🇦🇺 All AU Members</option>
+                    <option value="Marketing">📈 Marketing (AU)</option>
+                    <option value="Development">💻 Executive (AU)</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="Development">💻 Development</option>
+                    <option value="Marketing">📈 Marketing</option>
+                    <option value="Creative">🎨 Creative</option>
+                    <option value="All">🌐 All Teams</option>
+                  </>
+                )}
+              </select>
+            )}
+
+            {/* Quick Filter Pills (All, Present, Absent) */}
+            <div className="inline-flex items-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/90 p-0.5 text-[10px] font-bold shadow-2xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('all');
+                  if (isSuperAdmin && (adminViewOption === 'present' || adminViewOption === 'absent')) {
+                    setAdminViewOption('all');
+                  }
+                }}
+                className={`rounded-lg px-2.5 py-1 transition-all ${
+                  statusFilter === 'all'
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-zinc-300'
+                }`}
+              >
+                All ({departmentMembers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('present');
+                  if (isSuperAdmin) setAdminViewOption('present');
+                }}
+                className={`rounded-lg px-2.5 py-1 transition-all ${
+                  statusFilter === 'present'
+                    ? 'bg-emerald-500 text-white shadow-sm'
+                    : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+                }`}
+              >
+                Present ({presentCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('absent');
+                  if (isSuperAdmin) setAdminViewOption('absent');
+                }}
+                className={`rounded-lg px-2.5 py-1 transition-all ${
+                  statusFilter === 'absent'
+                    ? 'bg-rose-500 text-white shadow-sm'
+                    : 'text-rose-500 hover:bg-rose-500/10'
+                }`}
+              >
+                Absent ({absentCount})
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* TL Quick Member Filter Pills for Team Lead */}
+        {isTeamLead && !isSuperAdmin && (
+          <div className="pt-0.5 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-600 dark:text-brand-400 mr-1">
+              TL Filter:
+            </span>
+            <button
+              type="button"
+              onClick={() => setTlSelectedMemberEmail('all')}
+              className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
+                tlSelectedMemberEmail === 'all'
+                  ? 'bg-brand-600 text-white border-brand-500 shadow-xs'
+                  : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
+              }`}
+            >
+              All
+            </button>
+            {departmentMembers.map((m) => {
+              const isSelected =
+                tlSelectedMemberEmail.toLowerCase() === (m.email || '').toLowerCase();
+              return (
+                <button
+                  key={m.email}
+                  type="button"
+                  onClick={() =>
+                    setTlSelectedMemberEmail(isSelected ? 'all' : m.email)
+                  }
+                  className={`flex items-center gap-1 pl-1 pr-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
+                    isSelected
+                      ? 'bg-brand-600 text-white border-brand-500 shadow-xs'
+                      : 'bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700 hover:border-brand-500/50'
+                  }`}
+                  title={`${m.hrmCode} - ${m.displayName}`}
+                >
+                  <img
+                    src={m.portrait}
+                    alt={m.displayName}
+                    className="h-4 w-4 rounded-full object-cover shrink-0 border border-white/30"
+                  />
+                  <span className="truncate max-w-[80px]">
+                    {m.displayName.split(' ')[0]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Responsive Grid of Team Members */}
+        {filteredDepartmentMembers.length === 0 ? (
+          <p className="py-6 text-center text-xs text-slate-400">
+            No matching members in {effectiveTeamScope === 'All' ? 'All Teams' : `${effectiveTeamScope} team`}.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {filteredDepartmentMembers.map((member) => (
+              <div
+                key={member.email || member._id}
+                className="flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 shadow-2xs hover:border-brand-500/30 transition-all"
+              >
+                <div className="h-11 w-11 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shrink-0 bg-slate-100 dark:bg-zinc-800">
+                  <img
+                    src={member.portrait}
+                    alt={member.displayName}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 truncate" title={`${member.hrmCode} - ${member.displayName}`}>
+                      <span className="font-normal text-slate-500 dark:text-zinc-400">
+                        {member.hrmCode} -{' '}
+                      </span>
+                      {member.displayName}
+                    </p>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold shrink-0 ${
+                        member.isPresent
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
+                          : 'bg-rose-500/10 text-rose-500 border border-rose-500/25'
+                      }`}
+                    >
+                      {member.isPresent ? 'Present' : 'Absent'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span
+                      className={`text-[11px] font-semibold ${
+                        member.isPresent
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-rose-500 dark:text-rose-400'
+                      }`}
+                    >
+                      {member.isPresent ? 'Clocked In' : member.modeText}
+                    </span>
+                    {isSuperAdmin && (
+                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
+                        {member.team}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

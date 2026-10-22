@@ -419,6 +419,11 @@ export function DashboardOverview() {
           </div>
         </div>
 
+        {/* Integrated Team View (Department Members) - Directly Below Clock In Button, Kept Inside Hero Card */}
+        <div className="border-t border-brand-500/15 bg-zinc-50/70 dark:bg-zinc-900/50 p-4 sm:p-5">
+          <TeamPresenceOverviewPanel variant="hero-embed" />
+        </div>
+
         {/* Bottom Bar (Theme Deep Blue #0b2545 with Shift Status, Clock-in Time & Dual World Clocks) */}
         <div className="bg-[#0b2545] border-t border-brand-500/20 p-3 sm:p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -553,16 +558,9 @@ export function DashboardOverview() {
       {/* Hourly Work Slots & Task Progress Tracker (Admin view & My tab user view) */}
       <HourlyWorkTrackerPanel tasks={scopedTasks} />
 
-      {/* Main Grid: Team Presence Overview (Check-in/Out + Reporting Manager + Department Members) + Assigned Tasks & Deadlines */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left Column (1 Col): Zoho-Style Team Presence Overview Panel (Strictly Scoped to Their Team Only) */}
-        <div className="lg:col-span-1">
-          <TeamPresenceOverviewPanel />
-        </div>
-
-        {/* Right Column (2 Cols): My Active Assigned Tasks + Deadlines & Activity */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
+      {/* Main Workspace Tasks & Deadlines Section (Full Width, Team View is now inside Top Hero Card) */}
+      <div className="space-y-6">
+        <Card className="p-6 border border-zinc-200/80 dark:border-zinc-800/80">
             <div className="flex items-center justify-between pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 mb-4">
               <div>
                 <h3 className="text-base font-bold text-foreground">My Assigned Workspace Tasks</h3>
@@ -690,6 +688,5 @@ export function DashboardOverview() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
