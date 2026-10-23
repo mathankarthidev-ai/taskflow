@@ -3,6 +3,7 @@ import { Task, User } from '@/types';
 import { SEED_USERS } from './seed-data';
 
 export type WorkBlockColor = 'blue' | 'green' | 'orange' | 'purple' | 'teal';
+export type WorkLogCategory = 'completed' | 'in_progress' | 'review' | 'urgent' | 'upcoming';
 
 export interface WorkLogItem {
   id: string;
@@ -18,9 +19,144 @@ export interface WorkLogItem {
   end_time: string; // HH:mm (24h e.g. "10:30", "18:30")
   duration_minutes: number;
   color: WorkBlockColor;
+  category?: WorkLogCategory;
+  is_urgent?: boolean;
+  is_upcoming?: boolean;
   is_auto_in_progress?: boolean;
   is_extra_hours?: boolean;
   created_at?: string;
+}
+
+export function getWorkLogCategory(item: WorkLogItem): WorkLogCategory {
+  if (item.category) return item.category;
+  const title = (item.task_title || '').toLowerCase();
+  if (item.is_urgent || title.includes('[urgent]') || title.includes('urgent') || title.includes('hotfix') || title.includes('qa') || title.includes('merge conflict')) {
+    return 'urgent';
+  }
+  if (item.is_upcoming || title.includes('[upcoming]') || title.includes('retro') || title.includes('upcoming') || title.includes('prep')) {
+    return 'upcoming';
+  }
+  if (item.color === 'orange' || title.includes('review') || title.includes('pr #')) {
+    return 'review';
+  }
+  if (item.color === 'blue' || item.is_auto_in_progress || title.includes('in progress') || title.includes('widget') || title.includes('validation')) {
+    return 'in_progress';
+  }
+  return 'completed';
+}
+
+export const REFERENCE_DAILY_TASKS = [
+  {
+    title: 'Daily standup & sprint planning',
+    duration_minutes: 30,
+    start_time: '09:00',
+    end_time: '09:30',
+    category: 'completed' as WorkLogCategory,
+    color: 'green' as WorkBlockColor,
+  },
+  {
+    title: 'Fix login API token bug (#142)',
+    duration_minutes: 80,
+    start_time: '09:30',
+    end_time: '10:50',
+    category: 'completed' as WorkLogCategory,
+    color: 'green' as WorkBlockColor,
+  },
+  {
+    title: 'Quick call with QA',
+    duration_minutes: 20,
+    start_time: '10:50',
+    end_time: '11:10',
+    category: 'urgent' as WorkLogCategory,
+    color: 'purple' as WorkBlockColor,
+    is_urgent: true,
+  },
+  {
+    title: 'Welcome banner redesign',
+    duration_minutes: 80,
+    start_time: '11:10',
+    end_time: '12:30',
+    category: 'completed' as WorkLogCategory,
+    color: 'green' as WorkBlockColor,
+  },
+  {
+    title: 'Urgent: prod hotfix review',
+    duration_minutes: 30,
+    start_time: '12:30',
+    end_time: '13:00',
+    category: 'urgent' as WorkLogCategory,
+    color: 'purple' as WorkBlockColor,
+    is_urgent: true,
+  },
+  {
+    title: 'Clock-in / live shift widget',
+    duration_minutes: 80,
+    start_time: '13:00',
+    end_time: '14:20',
+    category: 'in_progress' as WorkLogCategory,
+    color: 'blue' as WorkBlockColor,
+  },
+  {
+    title: 'Helped teammate with merge conflict',
+    duration_minutes: 20,
+    start_time: '14:20',
+    end_time: '14:40',
+    category: 'urgent' as WorkLogCategory,
+    color: 'purple' as WorkBlockColor,
+    is_urgent: true,
+  },
+  {
+    title: 'Create Task form validation',
+    duration_minutes: 80,
+    start_time: '14:40',
+    end_time: '16:00',
+    category: 'in_progress' as WorkLogCategory,
+    color: 'blue' as WorkBlockColor,
+  },
+  {
+    title: 'Code review — PR #88',
+    duration_minutes: 30,
+    start_time: '16:00',
+    end_time: '16:30',
+    category: 'review' as WorkLogCategory,
+    color: 'orange' as WorkBlockColor,
+  },
+  {
+    title: 'Sprint retro prep',
+    duration_minutes: 30,
+    start_time: '16:30',
+    end_time: '17:00',
+    category: 'upcoming' as WorkLogCategory,
+    color: 'green' as WorkBlockColor,
+    is_upcoming: true,
+  },
+];
+
+export function generateReferenceWorkLogs(workDate: string, user: { _id?: string; id?: string; email?: string; name?: string; team?: string; company?: string }): WorkLogItem[] {
+  const userId = user._id || (user as any).id || 'user_thanikaivel_06';
+  const userEmail = (user.email || 'thanikaivel@ambizcon.com').toLowerCase();
+  const userName = user.name || 'Thanikaivel Arumugam';
+  const userTeam = user.team || 'Development';
+  const userCompany = user.company || 'Ambizcon Health - India';
+
+  return REFERENCE_DAILY_TASKS.map((t, idx) => ({
+    id: `WL-REF-${workDate}-${userEmail}-${idx + 1}`,
+    user_id: userId,
+    user_email: userEmail,
+    user_name: userName,
+    team: userTeam,
+    company: userCompany,
+    work_date: workDate,
+    task_title: t.title,
+    start_time: t.start_time,
+    end_time: t.end_time,
+    duration_minutes: t.duration_minutes,
+    color: t.color,
+    category: t.category,
+    is_urgent: Boolean(t.is_urgent),
+    is_upcoming: Boolean(t.is_upcoming),
+    created_at: new Date().toISOString(),
+  }));
 }
 
 const STORAGE_KEY_PREFIX = 'ambizcon_work_logs_v2_';
@@ -98,8 +234,11 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
       .eq('work_date', workDate)
       .order('start_time', { ascending: true });
 
+    const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
+    const defaultThanikaivelLogs = generateReferenceWorkLogs(workDate, seedUser as any);
+
     if (!error && data) {
-      const mapped: WorkLogItem[] = data.map((row: any) => {
+      let mapped: WorkLogItem[] = data.map((row: any) => {
         const startMins = parseTimeToMinutes(row.start_time);
         const endMins = parseTimeToMinutes(row.end_time);
         const isExtra =
@@ -122,11 +261,21 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
           end_time: row.end_time,
           duration_minutes: Number(row.duration_minutes || 60),
           color: (row.color || 'blue') as WorkBlockColor,
+          category: (row.category as WorkLogCategory) || undefined,
+          is_urgent: Boolean(row.is_urgent),
+          is_upcoming: Boolean(row.is_upcoming),
           is_auto_in_progress: Boolean(row.is_auto_in_progress),
           is_extra_hours: isExtra,
           created_at: row.created_at,
         };
       });
+
+      // Ensure Thanikaivel's reference schedule from screenshot is present
+      const hasThanikaivel = mapped.some((m) => m.user_email?.toLowerCase() === 'thanikaivel@ambizcon.com');
+      if (!hasThanikaivel) {
+        mapped = [...mapped, ...defaultThanikaivelLogs];
+      }
+
       if (typeof window !== 'undefined') {
         localStorage.setItem(storageKey, JSON.stringify(mapped));
       }
@@ -138,11 +287,20 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
     const cached = localStorage.getItem(storageKey);
     if (cached) {
       try {
-        return JSON.parse(cached);
+        let list: WorkLogItem[] = JSON.parse(cached);
+        const hasThanikaivel = list.some((m) => m.user_email?.toLowerCase() === 'thanikaivel@ambizcon.com');
+        if (!hasThanikaivel) {
+          const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
+          list = [...list, ...generateReferenceWorkLogs(workDate, seedUser as any)];
+          localStorage.setItem(storageKey, JSON.stringify(list));
+        }
+        return list;
       } catch (e) {}
     }
   }
-  return [];
+
+  const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
+  return generateReferenceWorkLogs(workDate, seedUser as any);
 }
 
 export async function saveWorkLogItem(

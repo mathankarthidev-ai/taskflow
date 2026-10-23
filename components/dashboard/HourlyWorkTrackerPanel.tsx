@@ -12,6 +12,7 @@ import { syncUsersAvatarsToLocalStore } from '@/lib/avatar-store';
 import {
   WorkLogItem,
   WorkBlockColor,
+  WorkLogCategory,
   fetchWorkLogsForDate,
   saveWorkLogItem,
   deleteWorkLogItem,
@@ -19,6 +20,9 @@ import {
   parseTimeToMinutes,
   formatDurationHrs,
   isWorkLogExtraHours,
+  getWorkLogCategory,
+  generateReferenceWorkLogs,
+  REFERENCE_DAILY_TASKS,
 } from '@/lib/work-logs-store';
 import {
   Plus,
@@ -68,6 +72,63 @@ const EXTRA_TIMELINE_END_MINUTES = 21 * 60; // 21:00 = 1260 mins
 function getHandleFromName(name: string): string {
   const first = (name || 'user').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, '');
   return `@${first || 'user'}`;
+}
+
+export function formatDurationHrsShort(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+export function getCategoryBadgeAndStyle(cat: WorkLogCategory) {
+  switch (cat) {
+    case 'completed':
+      return {
+        label: 'Completed',
+        badgeBg: 'bg-emerald-600 text-white',
+        borderStyle: 'border-[#22c55e] border-2',
+        blockStyle: 'border-[#22c55e] border-2 bg-[#f0fdf4] dark:bg-emerald-950/40 text-[#15803d] dark:text-emerald-200',
+        timelineColor: '#10b981',
+      };
+    case 'in_progress':
+      return {
+        label: 'In progress',
+        badgeBg: 'bg-blue-600 text-white',
+        borderStyle: 'border-[#3b82f6] border-2',
+        blockStyle: 'border-[#3b82f6] border-2 bg-[#eff6ff] dark:bg-blue-950/40 text-[#1d4ed8] dark:text-blue-200',
+        timelineColor: '#3b82f6',
+      };
+    case 'review':
+      return {
+        label: 'Review',
+        badgeBg: 'bg-amber-500 text-white',
+        borderStyle: 'border-[#f59e0b] border-2',
+        blockStyle: 'border-[#f59e0b] border-2 bg-[#fffbeb] dark:bg-amber-950/40 text-[#b45309] dark:text-amber-200',
+        timelineColor: '#f59e0b',
+      };
+    case 'urgent':
+      return {
+        label: 'Urgent task (in-between)',
+        badgeBg: 'bg-purple-600 text-white',
+        borderStyle: 'border-[#a855f7] border-2',
+        blockStyle: 'border-[#a855f7] border-2 text-[#581c87] dark:text-purple-200',
+        blockCustomBg: 'repeating-linear-gradient(-45deg, rgba(168,85,247,0.18), rgba(168,85,247,0.18) 6px, rgba(216,180,254,0.4) 6px, rgba(216,180,254,0.4) 12px)',
+        timelineCustomBg: 'repeating-linear-gradient(-45deg, #a855f7, #a855f7 6px, #c084fc 6px, #c084fc 12px)',
+        timelineColor: '#a855f7',
+      };
+    case 'upcoming':
+      return {
+        label: 'Upcoming',
+        badgeBg: 'bg-emerald-600 text-white',
+        borderStyle: 'border-[#22c55e] border-2',
+        blockStyle: 'border-[#22c55e] border-2 text-[#14532d] dark:text-emerald-200',
+        blockCustomBg: 'repeating-linear-gradient(-45deg, rgba(34,197,94,0.15), rgba(34,197,94,0.15) 6px, rgba(187,247,208,0.4) 6px, rgba(187,247,208,0.4) 12px)',
+        timelineCustomBg: 'repeating-linear-gradient(-45deg, #22c55e, #22c55e 6px, #86efac 6px, #86efac 12px)',
+        timelineColor: '#22c55e',
+      };
+  }
 }
 
 function getBlockColorStyles(color: WorkBlockColor): string {
@@ -133,6 +194,7 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
   const [endHour, setEndHour] = useState('10');
   const [endMinute, setEndMinute] = useState('00');
   const [selectedColor, setSelectedColor] = useState<WorkBlockColor>('blue');
+  const [selectedCategory, setSelectedCategory] = useState<WorkLogCategory>('completed');
   const [isExtraHoursModal, setIsExtraHoursModal] = useState<boolean>(false);
 
   useEffect(() => {
@@ -272,6 +334,7 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
     setEndHour(eH || '10');
     setEndMinute(eM || '00');
     setSelectedColor(nextColor);
+    setSelectedCategory(isExtraSlot ? 'urgent' : 'completed');
     setIsExtraHoursModal(isExtraSlot);
     setIsModalOpen(true);
   };
@@ -282,6 +345,7 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
     const [eH, eM] = (log.end_time || '10:00').split(':');
     const isExtra = isWorkLogExtraHours(log);
     const cleanedTitle = (log.task_title || '').replace(/^\[Extra Hr\]\s*/i, '');
+    const cat = getWorkLogCategory(log);
 
     setEditingLog(log);
     setModalTargetUser(userObj);
@@ -291,8 +355,33 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
     setEndHour(eH || '10');
     setEndMinute(eM || '00');
     setSelectedColor(log.color || 'blue');
+    setSelectedCategory(cat);
     setIsExtraHoursModal(isExtra);
     setIsModalOpen(true);
+  };
+
+  // Load sample reference schedule for active user
+  const handleLoadReferenceSchedule = async (targetUser: User) => {
+    try {
+      const refLogs = generateReferenceWorkLogs(workDate, targetUser);
+      for (const item of refLogs) {
+        await saveWorkLogItem(
+          item,
+          currentUser
+            ? { id: currentUser._id, email: currentUser.email, role: currentUser.role }
+            : undefined
+        );
+      }
+      setWorkLogs((prev) => {
+        const withoutTarget = prev.filter(
+          (p) => p.user_email.toLowerCase() !== targetUser.email.toLowerCase()
+        );
+        return [...withoutTarget, ...refLogs];
+      });
+      toast.success(`Loaded 10 reference tasks for ${targetUser.name} matching reference image!`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load reference schedule');
+    }
   };
 
   // Save Work Item
@@ -332,6 +421,9 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
       end_time: endStr,
       duration_minutes: modalDurationMinutes,
       color: selectedColor,
+      category: selectedCategory,
+      is_urgent: selectedCategory === 'urgent',
+      is_upcoming: selectedCategory === 'upcoming',
       is_auto_in_progress: editingLog?.is_auto_in_progress || false,
       is_extra_hours: isExtra,
       created_at: editingLog?.created_at || new Date().toISOString(),
@@ -384,12 +476,83 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
     const handle = getHandleFromName(userObj.name);
     const showExtraGrid = showExtraSlotsManual || hasAfter17Logs || extraMinutes > 0;
     const activeSlots = showExtraGrid ? [...HOUR_SLOTS, ...EXTRA_HOUR_SLOTS] : HOUR_SLOTS;
-    const maxTimelineMinutes = showExtraGrid ? EXTRA_TIMELINE_END_MINUTES : TIMELINE_END_MINUTES;
+
+    // Categorized breakdown for KPI cards and chart
+    const catLogs = userLogs.map((l) => ({ log: l, category: getWorkLogCategory(l) }));
+    const kpiCompletedMins = catLogs
+      .filter((x) => x.category === 'completed')
+      .reduce((acc, curr) => acc + (curr.log.duration_minutes || 0), 0);
+    const kpiInProgressMins = catLogs
+      .filter((x) => x.category === 'in_progress')
+      .reduce((acc, curr) => acc + (curr.log.duration_minutes || 0), 0);
+    const kpiReviewMins = catLogs
+      .filter((x) => x.category === 'review')
+      .reduce((acc, curr) => acc + (curr.log.duration_minutes || 0), 0);
+    const kpiUrgentMins = catLogs
+      .filter((x) => x.category === 'urgent')
+      .reduce((acc, curr) => acc + (curr.log.duration_minutes || 0), 0);
+    const kpiUpcomingMins = catLogs
+      .filter((x) => x.category === 'upcoming')
+      .reduce((acc, curr) => acc + (curr.log.duration_minutes || 0), 0);
+
+    const shiftFilledPercent = Math.min(
+      100,
+      Math.round(
+        ((kpiCompletedMins + kpiInProgressMins + kpiReviewMins + kpiUrgentMins + kpiUpcomingMins) / 480) * 100
+      )
+    );
+
+    // Continuous timeline chart segments from 09:00 to 17:00 (480 mins)
+    const sortedTimelineLogs = [...userLogs]
+      .filter((l) => {
+        const s = parseTimeToMinutes(l.start_time);
+        const e = parseTimeToMinutes(l.end_time);
+        return s < 17 * 60 && e > 9 * 60;
+      })
+      .sort((a, b) => parseTimeToMinutes(a.start_time) - parseTimeToMinutes(b.start_time));
+
+    const chartSegments: Array<{
+      title: string;
+      durationMins: number;
+      bgColor?: string;
+      customBg?: string;
+      isGap: boolean;
+    }> = [];
+
+    let chartPointer = 9 * 60; // 540
+    sortedTimelineLogs.forEach((l) => {
+      const s = Math.max(9 * 60, parseTimeToMinutes(l.start_time));
+      const e = Math.min(17 * 60, parseTimeToMinutes(l.end_time));
+      if (s > chartPointer) {
+        chartSegments.push({
+          title: 'No task',
+          durationMins: s - chartPointer,
+          isGap: true,
+        });
+      }
+      const cat = getWorkLogCategory(l);
+      const badgeInfo = getCategoryBadgeAndStyle(cat);
+      chartSegments.push({
+        title: `${l.task_title} (${formatDurationHrsShort(l.duration_minutes)})`,
+        durationMins: Math.max(0, e - s),
+        bgColor: badgeInfo.timelineColor,
+        customBg: badgeInfo.timelineCustomBg,
+        isGap: false,
+      });
+      chartPointer = Math.max(chartPointer, e);
+    });
+    if (chartPointer < 17 * 60) {
+      chartSegments.push({
+        title: 'No task',
+        durationMins: 17 * 60 - chartPointer,
+        isGap: true,
+      });
+    }
 
     return (
       <div
         key={userObj.email}
-        className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-[#0d1117] p-5 shadow-sm flex flex-col justify-between"
+        className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-[#0d1117] p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-6"
       >
         <div>
           {/* Top Bar: Avatar + @username pill + Logged X:XX hrs / 8:00 hrs + Extra Hrs Badge */}
@@ -436,152 +599,337 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
           </div>
 
           {/* Column Headers: Hour slots | Work done */}
-          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[145px_1fr] gap-3 pb-2 text-xs font-semibold text-muted-foreground">
+          <div className="grid grid-cols-[115px_1fr] sm:grid-cols-[140px_1fr] gap-3 pb-2 text-xs font-bold text-muted-foreground">
             <span>Hour slots</span>
             <span>Work done</span>
           </div>
 
-          {/* Hourly Grid Container */}
-          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[145px_1fr] gap-3 relative">
-            {/* Left Column: Hour Slots (Standard 8 + Extra Hours if active) */}
-            <div className="space-y-2">
-              {activeSlots.map((slot) => (
-                <div
-                  key={slot.index}
-                  onClick={() => handleOpenAddModal(userObj, slot.start, slot.end, slot.isExtra)}
-                  style={{ height: `${SLOT_HEIGHT_PX - 8}px` }}
-                  className={`rounded-xl border p-2.5 flex flex-col justify-center cursor-pointer transition-colors ${
-                    slot.isExtra
-                      ? 'border-amber-500/40 bg-amber-500/10 hover:border-amber-500'
-                      : 'border-zinc-200 dark:border-zinc-800/90 bg-zinc-50/70 dark:bg-[#161b22]/80 hover:border-blue-500/60'
-                  }`}
-                  title={`Click to add ${slot.isExtra ? 'Extra Hours ' : ''}work for ${slot.label}`}
-                >
-                  <span
-                    className={`text-xs font-mono font-bold block ${
-                      slot.isExtra ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'
-                    }`}
-                  >
-                    {slot.label}
-                  </span>
-                  <span
-                    className={`text-[11px] block mt-0.5 ${
+          {/* Slot Rows List */}
+          <div className="space-y-2">
+            {activeSlots.map((slot) => {
+              const slotStartMins = slot.startHour * 60;
+              const slotEndMins = (slot.startHour + 1) * 60;
+
+              const slotLogs = userLogs
+                .filter((l) => {
+                  const s = parseTimeToMinutes(l.start_time);
+                  const e = parseTimeToMinutes(l.end_time);
+                  return s < slotEndMins && e > slotStartMins;
+                })
+                .sort((a, b) => parseTimeToMinutes(a.start_time) - parseTimeToMinutes(b.start_time));
+
+              // Compute segments inside this slot
+              const segments: Array<{
+                type: 'log' | 'gap';
+                log?: WorkLogItem;
+                startMins: number;
+                endMins: number;
+                durationMins: number;
+                percent: number;
+                isContinuation: boolean;
+              }> = [];
+
+              let segPointer = slotStartMins;
+              slotLogs.forEach((log) => {
+                const logStart = parseTimeToMinutes(log.start_time);
+                const logEnd = parseTimeToMinutes(log.end_time);
+                const clampedStart = Math.max(slotStartMins, logStart);
+                const clampedEnd = Math.min(slotEndMins, logEnd);
+
+                if (clampedStart > segPointer) {
+                  const gapMins = clampedStart - segPointer;
+                  segments.push({
+                    type: 'gap',
+                    startMins: segPointer,
+                    endMins: clampedStart,
+                    durationMins: gapMins,
+                    percent: (gapMins / 60) * 100,
+                    isContinuation: false,
+                  });
+                }
+
+                const durationMins = clampedEnd - clampedStart;
+                segments.push({
+                  type: 'log',
+                  log,
+                  startMins: clampedStart,
+                  endMins: clampedEnd,
+                  durationMins,
+                  percent: (durationMins / 60) * 100,
+                  isContinuation: logStart < slotStartMins,
+                });
+
+                segPointer = clampedEnd;
+              });
+
+              if (segPointer < slotEndMins) {
+                const gapMins = slotEndMins - segPointer;
+                segments.push({
+                  type: 'gap',
+                  startMins: segPointer,
+                  endMins: slotEndMins,
+                  durationMins: gapMins,
+                  percent: (gapMins / 60) * 100,
+                  isContinuation: false,
+                });
+              }
+
+              return (
+                <div key={slot.index} className="grid grid-cols-[115px_1fr] sm:grid-cols-[140px_1fr] gap-3 items-stretch">
+                  {/* Left Column: Hour slot box */}
+                  <div
+                    onClick={() => handleOpenAddModal(userObj, slot.start, slot.end, slot.isExtra)}
+                    className={`rounded-2xl border p-2.5 flex flex-col justify-center cursor-pointer transition-colors ${
                       slot.isExtra
-                        ? 'text-amber-600/90 dark:text-amber-400/90 font-bold'
-                        : 'text-muted-foreground'
+                        ? 'border-amber-500/40 bg-amber-500/10 hover:border-amber-500'
+                        : 'border-zinc-200 dark:border-zinc-800/90 bg-zinc-50/70 dark:bg-[#161b22]/80 hover:border-blue-500/60'
                     }`}
+                    title={`Click to add ${slot.isExtra ? 'Extra Hours ' : ''}work for ${slot.label}`}
                   >
-                    {slot.sub}
-                  </span>
+                    <span
+                      className={`text-xs font-mono font-bold block ${
+                        slot.isExtra ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'
+                      }`}
+                    >
+                      {slot.start} - {slot.end}
+                    </span>
+                    <span
+                      className={`text-[11px] block mt-0.5 ${
+                        slot.isExtra
+                          ? 'text-amber-600/90 dark:text-amber-400/90 font-bold'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {slot.sub}
+                    </span>
+                  </div>
+
+                  {/* Right Column: Work done in this hour slot */}
+                  <div className="flex items-stretch gap-1.5 min-h-[58px]">
+                    {segments.length === 0 ? (
+                      <div
+                        onClick={() => handleOpenAddModal(userObj, slot.start, slot.end, slot.isExtra)}
+                        className="flex-1 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800/80 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer flex items-center justify-center p-2 text-muted-foreground/50 hover:text-blue-500 text-xs"
+                      >
+                        + Click to add work
+                      </div>
+                    ) : (
+                      segments.map((seg, sIdx) => {
+                        if (seg.type === 'gap') {
+                          return (
+                            <div
+                              key={`gap-${sIdx}`}
+                              style={{ width: `${seg.percent}%` }}
+                              onClick={() => {
+                                const hStart = String(Math.floor(seg.startMins / 60)).padStart(2, '0');
+                                const mStart = String(seg.startMins % 60).padStart(2, '0');
+                                const hEnd = String(Math.floor(seg.endMins / 60)).padStart(2, '0');
+                                const mEnd = String(seg.endMins % 60).padStart(2, '0');
+                                handleOpenAddModal(userObj, `${hStart}:${mStart}`, `${hEnd}:${mEnd}`, slot.isExtra);
+                              }}
+                              className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800/70 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer flex items-center justify-center text-[10px] text-muted-foreground/40 hover:text-blue-500"
+                              title={`Empty slot: ${seg.durationMins}m free. Click to add work`}
+                            >
+                              +{seg.durationMins}m
+                            </div>
+                          );
+                        }
+
+                        const log = seg.log!;
+                        const cat = getWorkLogCategory(log);
+                        const styleInfo = getCategoryBadgeAndStyle(cat);
+                        const isUrgent = cat === 'urgent' || log.is_urgent;
+                        const displayTitle = (log.task_title || '').replace(/^\[Extra Hr\]\s*/i, '');
+
+                        return (
+                          <div
+                            key={log.id + '-' + seg.startMins}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditModal(log, userObj);
+                            }}
+                            style={{
+                              width: `${seg.percent}%`,
+                              ...(styleInfo.blockCustomBg ? { backgroundImage: styleInfo.blockCustomBg } : {}),
+                            }}
+                            className={`rounded-2xl p-2.5 flex flex-col justify-center cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 overflow-hidden ${styleInfo.blockStyle}`}
+                            title={`${log.task_title} (${formatDurationHrsShort(log.duration_minutes)} · ${log.start_time}–${log.end_time})`}
+                          >
+                            <span className="font-bold text-xs leading-tight truncate">
+                              {seg.isContinuation ? '↳ ' : ''}
+                              {displayTitle}
+                            </span>
+                            {seg.percent >= 25 ? (
+                              <span className="text-[10px] font-mono opacity-85 truncate mt-0.5">
+                                {formatDurationHrsShort(log.duration_minutes)} · {log.start_time}–{log.end_time}
+                                {isUrgent && ' · ⚡ urgent'}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono opacity-80 truncate mt-0.5">
+                                {formatDurationHrsShort(seg.durationMins)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Time chart — today */}
+          <div className="mt-8 pt-6 border-t border-zinc-200/80 dark:border-zinc-800/90 space-y-4">
+            <h4 className="text-sm font-extrabold text-foreground">Time chart — today</h4>
+
+            {/* Time Axis Ticks */}
+            <div className="relative flex justify-between text-[11px] font-mono font-semibold text-muted-foreground px-1">
+              <span>09:00</span>
+              <span>10:00</span>
+              <span>11:00</span>
+              <span>12:00</span>
+              <span>13:00</span>
+              <span>14:00</span>
+              <span>15:00</span>
+              <span>16:00</span>
+            </div>
+
+            {/* Horizontal Timeline Bar */}
+            <div className="h-8 sm:h-9 w-full rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 flex shadow-inner">
+              {chartSegments.map((cSeg, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    width: `${(cSeg.durationMins / 480) * 100}%`,
+                    ...(cSeg.customBg ? { backgroundImage: cSeg.customBg } : { backgroundColor: cSeg.bgColor }),
+                  }}
+                  className={`h-full flex items-center px-1.5 overflow-hidden transition-opacity hover:opacity-90 ${
+                    cSeg.isGap ? 'bg-zinc-100 dark:bg-zinc-800/40' : 'text-white'
+                  }`}
+                  title={cSeg.title}
+                >
+                  {!cSeg.isGap && cSeg.durationMins >= 25 && (
+                    <span className="text-[10px] sm:text-[11px] font-bold truncate leading-none">
+                      {cSeg.title.split('(')[0].trim()}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
 
-            {/* Right Column: Work Done Proportional Timeline */}
-            <div
-              className="relative rounded-xl overflow-hidden"
-              style={{ height: `${activeSlots.length * SLOT_HEIGHT_PX}px` }}
-            >
-              {/* Background Dashed Empty Slot Boxes (Click to Add Work at that Hour) */}
-              {activeSlots.map((slot, i) => (
-                <div
-                  key={slot.index}
-                  onClick={() => handleOpenAddModal(userObj, slot.start, slot.end, slot.isExtra)}
-                  style={{
-                    top: `${i * SLOT_HEIGHT_PX}px`,
-                    height: `${SLOT_HEIGHT_PX - 8}px`,
-                  }}
-                  className={`absolute inset-x-0 rounded-xl border border-dashed transition-all cursor-pointer ${
-                    slot.isExtra
-                      ? 'border-amber-500/35 bg-amber-500/5 hover:border-amber-500/60 hover:bg-amber-500/10'
-                      : 'border-zinc-200 dark:border-zinc-800/80 hover:border-blue-500/40 hover:bg-blue-500/5'
-                  }`}
-                />
-              ))}
+            {/* 6 Metric KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-[#161b22] p-4 flex flex-col justify-between">
+                <span className="text-xs text-muted-foreground font-semibold">Completed</span>
+                <span className="text-2xl font-extrabold text-foreground mt-1">
+                  {formatDurationHrsShort(kpiCompletedMins)}
+                </span>
+              </div>
 
-              {/* Rendered Work Blocks */}
-              {userLogs.map((log) => {
-                const startMins = parseTimeToMinutes(log.start_time);
-                const endMins = parseTimeToMinutes(log.end_time);
-                const isExtra = isWorkLogExtraHours(log);
-                const clampedStart = Math.max(
-                  TIMELINE_START_MINUTES,
-                  Math.min(maxTimelineMinutes - 15, startMins)
-                );
-                const clampedEnd = Math.max(
-                  clampedStart + 20,
-                  Math.min(maxTimelineMinutes + 60, endMins)
-                );
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-[#161b22] p-4 flex flex-col justify-between">
+                <span className="text-xs text-muted-foreground font-semibold">In progress</span>
+                <span className="text-2xl font-extrabold text-foreground mt-1">
+                  {formatDurationHrsShort(kpiInProgressMins)}
+                </span>
+              </div>
 
-                const topPx = ((clampedStart - TIMELINE_START_MINUTES) / 60) * SLOT_HEIGHT_PX;
-                const heightPx = Math.max(
-                  44,
-                  ((clampedEnd - clampedStart) / 60) * SLOT_HEIGHT_PX - 6
-                );
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-[#161b22] p-4 flex flex-col justify-between">
+                <span className="text-xs text-muted-foreground font-semibold">In review</span>
+                <span className="text-2xl font-extrabold text-foreground mt-1">
+                  {formatDurationHrsShort(kpiReviewMins)}
+                </span>
+              </div>
 
-                const displayTitle = (log.task_title || '').replace(/^\[Extra Hr\]\s*/i, '');
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-[#161b22] p-4 flex flex-col justify-between">
+                <span className="text-xs text-muted-foreground font-semibold">Urgent (in-between)</span>
+                <span className="text-2xl font-extrabold text-foreground mt-1">
+                  {formatDurationHrsShort(kpiUrgentMins)}
+                </span>
+              </div>
 
-                return (
-                  <div
-                    key={log.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenEditModal(log, userObj);
-                    }}
-                    style={{
-                      top: `${topPx}px`,
-                      height: `${heightPx}px`,
-                    }}
-                    className={`absolute inset-x-0 z-10 rounded-xl border p-3 shadow-md cursor-pointer transition-transform hover:scale-[1.01] flex flex-col justify-start overflow-hidden ${getBlockColorStyles(
-                      log.color
-                    )}`}
-                  >
-                    <div className="flex items-start justify-between gap-1.5">
-                      <span className="font-extrabold text-xs sm:text-sm leading-snug line-clamp-1">
-                        {displayTitle}
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {isExtra && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-400 text-black text-[9px] font-extrabold uppercase tracking-wider">
-                            <Zap className="h-2.5 w-2.5" /> Extra Hr
-                          </span>
-                        )}
-                        {log.is_auto_in_progress && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-black/25 text-[9px] font-bold uppercase tracking-wider">
-                            <Zap className="h-2.5 w-2.5" /> In Progress
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-[11px] sm:text-xs text-white/90 font-mono mt-0.5">
-                      {formatDurationHrs(log.duration_minutes)} · {log.start_time}–{log.end_time}
-                      {isExtra ? ' (Overtime)' : ''}
-                    </span>
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-[#161b22] p-4 flex flex-col justify-between">
+                <span className="text-xs text-muted-foreground font-semibold">Upcoming</span>
+                <span className="text-2xl font-extrabold text-foreground mt-1">
+                  {formatDurationHrsShort(kpiUpcomingMins)}
+                </span>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-[#161b22] p-4 flex flex-col justify-between">
+                <span className="text-xs text-muted-foreground font-semibold">Shift filled</span>
+                <div className="mt-1 space-y-1.5">
+                  <span className="text-2xl font-extrabold text-foreground block">
+                    {shiftFilledPercent}%
+                  </span>
+                  <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden flex">
+                    <div style={{ width: `${(kpiCompletedMins / 480) * 100}%` }} className="bg-emerald-500 h-full" />
+                    <div style={{ width: `${(kpiInProgressMins / 480) * 100}%` }} className="bg-blue-600 h-full" />
+                    <div style={{ width: `${(kpiReviewMins / 480) * 100}%` }} className="bg-amber-500 h-full" />
+                    <div style={{ width: `${(kpiUrgentMins / 480) * 100}%` }} className="bg-purple-600 h-full" />
+                    <div style={{ width: `${(kpiUpcomingMins / 480) * 100}%` }} className="bg-emerald-400 h-full" />
                   </div>
-                );
-              })}
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Bottom Bar: Quick Add Extra Hours / Toggle Extra Hour Slots (17:00 – 21:00) */}
-          <div className="mt-3 pt-3 border-t border-zinc-200/70 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal(userObj, '17:00', '18:00', true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs font-extrabold transition-colors"
-            >
-              <Zap className="h-3.5 w-3.5" />+ Add Worked Extra Hr (Overtime)
-            </button>
+            {/* Legend */}
+            <div className="flex items-center gap-4 flex-wrap pt-2 text-xs font-semibold text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-emerald-500 shrink-0" />
+                <span>Completed</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-blue-600 shrink-0" />
+                <span>In progress</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded bg-amber-500 shrink-0" />
+                <span>Review</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="h-3 w-3 rounded border border-purple-500 shrink-0"
+                  style={{
+                    background: 'repeating-linear-gradient(-45deg, #a855f7, #a855f7 2px, #e9d5ff 2px, #e9d5ff 5px)',
+                  }}
+                />
+                <span>Urgent (in-between)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="h-3 w-3 rounded border border-emerald-500 shrink-0"
+                  style={{
+                    background: 'repeating-linear-gradient(-45deg, #22c55e, #22c55e 2px, #bbf7d0 2px, #bbf7d0 5px)',
+                  }}
+                />
+                <span>Upcoming</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded border border-zinc-400 dark:border-zinc-600 bg-white dark:bg-zinc-800 shrink-0" />
+                <span>No task</span>
+              </div>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setShowExtraSlotsManual(!showExtraSlotsManual)}
-              className="text-[11px] font-semibold text-muted-foreground hover:text-foreground underline"
-            >
-              {showExtraGrid
-                ? 'Hide Extra Hour Slots (17:00–21:00)'
-                : 'Show Extra Hour Slots (17:00–21:00)'}
-            </button>
+            {/* Quick Action Footer */}
+            <div className="mt-4 pt-4 border-t border-zinc-200/70 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal(userObj, '17:00', '18:00', true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-400 text-xs font-extrabold transition-colors"
+              >
+                <Zap className="h-3.5 w-3.5 text-amber-500" />+ Add Worked Extra Hr (Overtime)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowExtraSlotsManual(!showExtraSlotsManual)}
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground underline"
+              >
+                {showExtraGrid
+                  ? 'Hide Extra Hour Slots (17:00–21:00)'
+                  : 'Show Extra Hour Slots (17:00–21:00)'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -599,6 +947,26 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
           (t.assignedTo || '').toLowerCase() === activeUserObj.name.toLowerCase())
     );
   }, [tasks, activeUserObj]);
+
+  const activeUserLogs = useMemo(() => {
+    if (!activeUserObj) return [];
+    return workLogs.filter(
+      (l) => l.user_email.toLowerCase() === activeUserObj.email.toLowerCase()
+    );
+  }, [workLogs, activeUserObj]);
+
+  const activeCategoryBreakdown = useMemo(() => {
+    const completed = activeUserLogs.filter((l) => getWorkLogCategory(l) === 'completed');
+    const inProgress = activeUserLogs.filter((l) => getWorkLogCategory(l) === 'in_progress');
+    const review = activeUserLogs.filter((l) => getWorkLogCategory(l) === 'review');
+    const urgent = activeUserLogs.filter((l) => getWorkLogCategory(l) === 'urgent');
+    const upcoming = activeUserLogs.filter((l) => getWorkLogCategory(l) === 'upcoming');
+
+    const totalMinutes = activeUserLogs.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
+    const freeMinutes = Math.max(0, 480 - totalMinutes);
+
+    return { completed, inProgress, review, urgent, upcoming, freeMinutes, totalMinutes };
+  }, [activeUserLogs]);
 
   if (!currentUser) return null;
 
@@ -814,29 +1182,213 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
                   Tasks In Progress (Auto-Added)
                 </span>
                 <span className="text-[11px] font-mono text-muted-foreground">
-                  {activeUserInProgressTasks.length} active
+                  {Math.max(activeUserInProgressTasks.length, activeCategoryBreakdown.inProgress.length)} active
                 </span>
               </div>
 
-              {activeUserInProgressTasks.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">
-                  Any task moved to <strong>In Progress</strong> on the Bizzy Board is automatically added to your hourly work slots.
-                </p>
-              ) : (
+              {activeCategoryBreakdown.inProgress.length > 0 ? (
+                <div className="space-y-1.5">
+                  {activeCategoryBreakdown.inProgress.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => activeUserObj && handleOpenEditModal(item, activeUserObj)}
+                      className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-blue-500/30 bg-blue-50/60 dark:bg-blue-950/20 text-xs cursor-pointer hover:border-blue-500 transition-colors"
+                    >
+                      <span className="font-bold text-blue-700 dark:text-blue-300 truncate flex items-center gap-1.5">
+                        <Zap className="h-3 w-3 text-amber-500 shrink-0" />
+                        {item.task_title}
+                      </span>
+                      <span className="text-[11px] font-mono text-muted-foreground font-semibold shrink-0">
+                        {formatDurationHrsShort(item.duration_minutes)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : activeUserInProgressTasks.length > 0 ? (
                 <div className="space-y-1.5">
                   {activeUserInProgressTasks.map((t) => (
                     <div
                       key={t._id}
                       className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-blue-500/20 bg-blue-500/5 text-xs"
                     >
-                      <span className="font-bold text-foreground truncate">{t.title}</span>
+                      <span className="font-bold text-foreground truncate flex items-center gap-1.5">
+                        <Zap className="h-3 w-3 text-amber-500 shrink-0" />
+                        {t.title}
+                      </span>
                       <span className="text-[10px] font-mono text-emerald-500 font-bold shrink-0">
                         ✓ Auto-Logged
                       </span>
                     </div>
                   ))}
                 </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Any task moved to <strong>In Progress</strong> on the Bizzy Board is automatically added to your hourly work slots.
+                </p>
               )}
+            </div>
+
+            {/* Color guide & work section (Exact match to reference mockup) */}
+            <div className="pt-4 border-t border-zinc-200/80 dark:border-zinc-800/90 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-sm text-foreground">
+                  <span>🎨</span>
+                  <span>Color guide &amp; work</span>
+                </div>
+                <span className="text-[11px] font-semibold text-muted-foreground">today</span>
+              </div>
+
+              <div className="space-y-3">
+                {/* 1. Completed */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                    <div className="flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-md bg-emerald-500 shrink-0" />
+                      <span>Completed</span>
+                    </div>
+                    <span className="text-muted-foreground font-mono text-[11px]">
+                      {activeCategoryBreakdown.completed.length} · {formatDurationHrsShort(activeCategoryBreakdown.completed.reduce((s, x) => s + (x.duration_minutes || 0), 0))}
+                    </span>
+                  </div>
+                  {activeCategoryBreakdown.completed.length > 0 && (
+                    <div className="pl-6 space-y-1">
+                      {activeCategoryBreakdown.completed.map((l) => (
+                        <div key={l.id} className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="truncate pr-2">{l.task_title}</span>
+                          <span className="font-mono shrink-0">{formatDurationHrsShort(l.duration_minutes)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. In progress */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                    <div className="flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-md bg-blue-600 shrink-0" />
+                      <span>In progress</span>
+                    </div>
+                    <span className="text-muted-foreground font-mono text-[11px]">
+                      {activeCategoryBreakdown.inProgress.length} · {formatDurationHrsShort(activeCategoryBreakdown.inProgress.reduce((s, x) => s + (x.duration_minutes || 0), 0))}
+                    </span>
+                  </div>
+                  {activeCategoryBreakdown.inProgress.length > 0 && (
+                    <div className="pl-6 space-y-1">
+                      {activeCategoryBreakdown.inProgress.map((l) => (
+                        <div key={l.id} className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="truncate pr-2">{l.task_title}</span>
+                          <span className="font-mono shrink-0">{formatDurationHrsShort(l.duration_minutes)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Review */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                    <div className="flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-md bg-amber-500 shrink-0" />
+                      <span>Review</span>
+                    </div>
+                    <span className="text-muted-foreground font-mono text-[11px]">
+                      {activeCategoryBreakdown.review.length} · {formatDurationHrsShort(activeCategoryBreakdown.review.reduce((s, x) => s + (x.duration_minutes || 0), 0))}
+                    </span>
+                  </div>
+                  {activeCategoryBreakdown.review.length > 0 && (
+                    <div className="pl-6 space-y-1">
+                      {activeCategoryBreakdown.review.map((l) => (
+                        <div key={l.id} className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="truncate pr-2">{l.task_title}</span>
+                          <span className="font-mono shrink-0">{formatDurationHrsShort(l.duration_minutes)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Urgent task (in-between) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-4 w-4 rounded-md border border-purple-500 shrink-0"
+                        style={{
+                          background: 'repeating-linear-gradient(-45deg, #a855f7, #a855f7 2px, #e9d5ff 2px, #e9d5ff 5px)',
+                        }}
+                      />
+                      <span>Urgent task (in-between)</span>
+                    </div>
+                    <span className="text-muted-foreground font-mono text-[11px]">
+                      {activeCategoryBreakdown.urgent.length} · {formatDurationHrsShort(activeCategoryBreakdown.urgent.reduce((s, x) => s + (x.duration_minutes || 0), 0))}
+                    </span>
+                  </div>
+                  {activeCategoryBreakdown.urgent.length > 0 && (
+                    <div className="pl-6 space-y-1">
+                      {activeCategoryBreakdown.urgent.map((l) => (
+                        <div key={l.id} className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="truncate pr-2">{l.task_title}</span>
+                          <span className="font-mono shrink-0">{formatDurationHrsShort(l.duration_minutes)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Upcoming */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-4 w-4 rounded-md border border-emerald-500 shrink-0"
+                        style={{
+                          background: 'repeating-linear-gradient(-45deg, #22c55e, #22c55e 2px, #bbf7d0 2px, #bbf7d0 5px)',
+                        }}
+                      />
+                      <span>Upcoming</span>
+                    </div>
+                    <span className="text-muted-foreground font-mono text-[11px]">
+                      {activeCategoryBreakdown.upcoming.length} · {formatDurationHrsShort(activeCategoryBreakdown.upcoming.reduce((s, x) => s + (x.duration_minutes || 0), 0))}
+                    </span>
+                  </div>
+                  {activeCategoryBreakdown.upcoming.length > 0 && (
+                    <div className="pl-6 space-y-1">
+                      {activeCategoryBreakdown.upcoming.map((l) => (
+                        <div key={l.id} className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="truncate pr-2">{l.task_title}</span>
+                          <span className="font-mono shrink-0">{formatDurationHrsShort(l.duration_minutes)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 6. No task */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                    <div className="flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-md border border-zinc-400 dark:border-zinc-600 bg-white dark:bg-zinc-800 shrink-0" />
+                      <span>No task</span>
+                    </div>
+                    <span className="text-muted-foreground font-mono text-[11px]">
+                      {formatDurationHrsShort(activeCategoryBreakdown.freeMinutes)}
+                    </span>
+                  </div>
+                  <p className="pl-6 text-[11px] text-muted-foreground">
+                    Free time — click a white space to add work
+                  </p>
+                </div>
+              </div>
+
+              {/* Sample Schedule Loader */}
+              <button
+                type="button"
+                onClick={() => activeUserObj && handleLoadReferenceSchedule(activeUserObj)}
+                className="w-full mt-2 py-2.5 px-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <span>✨</span> Load Sample Reference Schedule (10 Tasks)
+              </button>
             </div>
           </div>
 
@@ -1168,6 +1720,39 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
                       ))}
                   </div>
                 )}
+              </div>
+
+              {/* Category / Work Type Selector (Completed, In Progress, Review, Urgent, Upcoming) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground block">
+                  Category
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'completed', label: 'Completed', color: 'green', dot: 'bg-emerald-500' },
+                    { id: 'in_progress', label: 'In progress', color: 'blue', dot: 'bg-blue-600' },
+                    { id: 'review', label: 'Review', color: 'orange', dot: 'bg-amber-500' },
+                    { id: 'urgent', label: 'Urgent task', color: 'purple', dot: 'bg-purple-600' },
+                    { id: 'upcoming', label: 'Upcoming', color: 'green', dot: 'bg-emerald-400' },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(cat.id as WorkLogCategory);
+                        setSelectedColor(cat.color as WorkBlockColor);
+                      }}
+                      className={`flex items-center gap-2 p-2 rounded-xl border text-xs font-bold transition-all ${
+                        selectedCategory === cat.id
+                          ? 'bg-blue-500/10 border-blue-500 text-foreground ring-1 ring-blue-500'
+                          : 'bg-zinc-50 dark:bg-[#0d1117] border-zinc-200 dark:border-zinc-800 text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${cat.dot} shrink-0`} />
+                      <span className="truncate">{cat.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Worked Extra Hr (Overtime) Toggle inside Modal */}
