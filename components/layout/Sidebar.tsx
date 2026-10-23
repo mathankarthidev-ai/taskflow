@@ -241,25 +241,12 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             />
           </div>
           <div className="flex flex-col min-w-0">
-            {isAustralia ? (
-              <>
-                <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
-                  Bizy Hub
-                </span>
-                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                  Ambizcon • Brisbane HQ
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
-                  Bizy Hub<span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1">Health</span>
-                </span>
-                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
-                  Ambizcon Health • India
-                </span>
-              </>
-            )}
+            <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
+              Bizy Hub
+            </span>
+            <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+              {isAustralia ? 'Ambizcon • Brisbane HQ' : 'Ambizcon Health • India'}
+            </span>
           </div>
         </Link>
         <div className="flex items-center gap-1">
