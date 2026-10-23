@@ -33,6 +33,7 @@ import {
   Filter,
   Volume2,
   VolumeX,
+  Megaphone,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '../ui/Button';
@@ -75,6 +76,13 @@ import {
   syncMessagesFromServer,
 } from '@/lib/chat-db';
 import { toast } from 'sonner';
+import {
+  Announcement,
+  getStoredAnnouncements,
+} from '@/lib/announcements-store';
+import { AnnouncementsQuickDropdown } from '@/components/announcements/AnnouncementsQuickDropdown';
+import { AnnouncementDetailModal } from '@/components/announcements/AnnouncementDetailModal';
+import { CreateAnnouncementModal } from '@/components/announcements/CreateAnnouncementModal';
 
 interface HeaderProps {
   onMobileMenuToggle?: () => void;
@@ -105,10 +113,30 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const setSelectedCompany = useCompanyStore((s) => s.setSelectedCompany);
 
-  type ActiveMenu = 'company' | 'birthday' | 'health' | 'notif' | 'persona' | null;
+  type ActiveMenu = 'company' | 'birthday' | 'health' | 'notif' | 'persona' | 'announcements' | null;
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>(null);
   const [showBirthdaysInProfile, setShowBirthdaysInProfile] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
+
+  // Official Company Announcements state & sync
+  const [announcementsList, setAnnouncementsList] = useState<Announcement[]>([]);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [isAnnouncementDetailOpen, setIsAnnouncementDetailOpen] = useState(false);
+  const [isCreateAnnouncementOpen, setIsCreateAnnouncementOpen] = useState(false);
+
+  useEffect(() => {
+    const refreshAnnouncements = () => {
+      setAnnouncementsList(getStoredAnnouncements());
+    };
+    refreshAnnouncements();
+
+    window.addEventListener('ambizcon_announcements_updated', refreshAnnouncements);
+    window.addEventListener('storage', refreshAnnouncements);
+    return () => {
+      window.removeEventListener('ambizcon_announcements_updated', refreshAnnouncements);
+      window.removeEventListener('storage', refreshAnnouncements);
+    };
+  }, []);
 
   // Automatically sync registered members so birthdays always appear dynamically
   useEffect(() => {
@@ -1512,6 +1540,39 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           )}
         </div>
 
+        {/* Company Announcements (Speaker Option in Navbar with Real Count Badge) */}
+        <div className="relative header-dropdown-menu">
+          <button
+            onClick={() => toggleMenu('announcements')}
+            className={`relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 transition-colors ${
+              activeMenu === 'announcements'
+                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400'
+                : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/40'
+            }`}
+            title={`📢 Company Announcements (${announcementsList.length} Announcements)`}
+          >
+            <Megaphone className="h-4 w-4" />
+            {announcementsList.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full ambizcon-gradient text-white font-mono text-[9px] font-extrabold flex items-center justify-center border border-background shadow-sm">
+                {announcementsList.length}
+              </span>
+            )}
+          </button>
+
+          {activeMenu === 'announcements' && (
+            <AnnouncementsQuickDropdown
+              announcements={announcementsList}
+              onSelectAnnouncement={(ann) => {
+                setSelectedAnnouncement(ann);
+                setIsAnnouncementDetailOpen(true);
+              }}
+              onOpenCreate={() => setIsCreateAnnouncementOpen(true)}
+              onClose={() => setActiveMenu(null)}
+              isAdmin={currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin'}
+            />
+          )}
+        </div>
+
         {/* Notifications Dropdown (Silent - No Audio Chime - Live Numeric Count Badge) */}
         <div className="relative header-dropdown-menu">
           <button
@@ -2102,6 +2163,34 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
       <QrScannerModal
         isOpen={isQrScannerOpen}
         onClose={() => setIsQrScannerOpen(false)}
+      />
+
+      {/* Official Company Announcements Detail Modal */}
+      <AnnouncementDetailModal
+        announcement={selectedAnnouncement}
+        isOpen={isAnnouncementDetailOpen}
+        onClose={() => {
+          setIsAnnouncementDetailOpen(false);
+          setSelectedAnnouncement(null);
+        }}
+        onUpdate={() => {
+          const updated = getStoredAnnouncements();
+          setAnnouncementsList([...updated]);
+          if (selectedAnnouncement) {
+            const fresh = updated.find((a) => a.id === selectedAnnouncement.id);
+            if (fresh) setSelectedAnnouncement(fresh);
+          }
+        }}
+      />
+
+      {/* Admin Announcement Creator Modal */}
+      <CreateAnnouncementModal
+        isOpen={isCreateAnnouncementOpen}
+        onClose={() => setIsCreateAnnouncementOpen(false)}
+        onCreated={() => {
+          const updated = getStoredAnnouncements();
+          setAnnouncementsList([...updated]);
+        }}
       />
     </header>
   );

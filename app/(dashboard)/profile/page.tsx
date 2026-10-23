@@ -29,11 +29,13 @@ import {
   Upload,
   Hash,
   BadgeCheck,
+  Crop,
 } from 'lucide-react';
 import { EducationRecord, ExperienceRecord } from '@/types';
 import { toast } from 'sonner';
 import { formatDayMonthOnly } from '@/features/users/UserManagementTable';
 import { getEmployeeNumber } from '@/lib/utils';
+import { ProfileAvatarCropperModal } from '@/components/ui/ProfileAvatarCropperModal';
 
 import { updateUserProfileSectionAction } from '@/actions/userActions';
 import { useCompanyStore } from '@/store/useCompanyStore';
@@ -58,6 +60,8 @@ export default function ProfilePage() {
   const [bloodGroup, setBloodGroup] = useState('O+');
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string>('');
   const [education, setEducation] = useState<EducationRecord[]>([]);
   const [experience, setExperience] = useState<ExperienceRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -104,8 +108,8 @@ export default function ProfilePage() {
 
   if (!currentUser) return null;
 
-  // Profile Picture Upload Handler (Can be uploaded by Team Member, TL, or Admin)
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Profile Picture File Selector -> Opens Cropper Modal with Drag, Zoom & Rotate
+  const handleAvatarFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -114,24 +118,37 @@ export default function ProfilePage() {
       return;
     }
 
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const rawData = ev.target?.result as string;
+      if (rawData) {
+        setCropImageSrc(rawData);
+        setIsCropperOpen(true);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Save the cropped, rotated, zoomed avatar
+  const handleCroppedAvatarSave = async (croppedDataUrl: string) => {
     setIsUploadingAvatar(true);
     try {
-      const dataUrl = await compressImageFileToDataUrl(file, 280);
-      setAvatarUrl(dataUrl);
-      saveCustomUserAvatar(currentUser, dataUrl);
+      setAvatarUrl(croppedDataUrl);
+      saveCustomUserAvatar(currentUser, croppedDataUrl);
 
       const updatedUser = {
         ...currentUser,
-        avatar: dataUrl,
+        avatar: croppedDataUrl,
       };
       setCurrentUser(updatedUser);
 
       await updateUserProfileSectionAction(currentUser._id, {
         email: currentUser.email,
         name: currentUser.name,
-        avatar: dataUrl,
+        avatar: croppedDataUrl,
       }).catch(() => {});
-      toast.success('Profile picture uploaded! Now displayed in Navbar, Sidebar & Overview.');
+      toast.success('Profile picture cropped and updated! Now active across Navbar, Sidebar & Overview.');
     } catch (err) {
       toast.error('Failed to process profile picture');
     } finally {
@@ -278,7 +295,7 @@ export default function ProfilePage() {
               <input
                 type="file"
                 accept="image/*"
-                onChange={handleAvatarUpload}
+                onChange={handleAvatarFileSelected}
                 className="hidden"
               />
             </label>
@@ -290,7 +307,7 @@ export default function ProfilePage() {
               <input
                 type="file"
                 accept="image/*"
-                onChange={handleAvatarUpload}
+                onChange={handleAvatarFileSelected}
                 className="hidden"
               />
             </label>
@@ -344,19 +361,33 @@ export default function ProfilePage() {
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={handleAvatarUpload}
+                  onChange={handleAvatarFileSelected}
                   className="hidden"
                 />
               </label>
               {avatarUrl && (
-                <button
-                  type="button"
-                  onClick={handleRemoveAvatar}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-500/20 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Remove Photo</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCropImageSrc(avatarUrl);
+                      setIsCropperOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-foreground text-xs font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors shadow-xs"
+                    title="Crop, rotate, and zoom your current profile picture"
+                  >
+                    <Crop className="h-3.5 w-3.5 text-brand-500" />
+                    <span>Crop &amp; Rotate</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-500/20 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Remove Photo</span>
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -849,6 +880,15 @@ export default function ProfilePage() {
           </Button>
         </div>
       </form>
+
+      {/* Profile Picture Cropper Modal: Drag to reposition, Zoom slider/wheel, 90 deg rotation */}
+      <ProfileAvatarCropperModal
+        isOpen={isCropperOpen}
+        onClose={() => setIsCropperOpen(false)}
+        imageSrc={cropImageSrc}
+        onSave={handleCroppedAvatarSave}
+        userName={currentUser.name}
+      />
     </div>
   );
 }

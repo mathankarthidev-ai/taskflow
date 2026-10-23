@@ -1,0 +1,263 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
+import {
+  Announcement,
+  getStoredAnnouncements,
+} from '@/lib/announcements-store';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Avatar } from '@/components/ui/Avatar';
+import { AnnouncementDetailModal } from '@/components/announcements/AnnouncementDetailModal';
+import { CreateAnnouncementModal } from '@/components/announcements/CreateAnnouncementModal';
+import {
+  Megaphone,
+  Plus,
+  ThumbsUp,
+  MessageSquare,
+  Search,
+  Pin,
+  Calendar,
+  Users,
+  Building2,
+  Sparkles,
+} from 'lucide-react';
+
+export default function AnnouncementsPage() {
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<'All' | 'Pinned' | 'Development' | 'Marketing' | 'Creative'>('All');
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+
+  const loadAnnouncements = () => {
+    const list = getStoredAnnouncements();
+    setAnnouncements([...list]);
+
+    // Update selected announcement reference if modal is open
+    if (selectedAnnouncement) {
+      const refreshed = list.find((a) => a.id === selectedAnnouncement.id);
+      if (refreshed) {
+        setSelectedAnnouncement(refreshed);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadAnnouncements();
+    const handleSync = () => loadAnnouncements();
+    window.addEventListener('ambizcon_announcements_updated', handleSync);
+    return () => {
+      window.removeEventListener('ambizcon_announcements_updated', handleSync);
+    };
+  }, []);
+
+  // Filtered list
+  const filteredAnnouncements = announcements.filter((ann) => {
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = ann.title.toLowerCase().includes(q);
+      const matchAuthor = ann.authorName.toLowerCase().includes(q);
+      const matchContent = ann.content.toLowerCase().includes(q);
+      if (!matchTitle && !matchAuthor && !matchContent) return false;
+    }
+
+    // Category filter
+    if (selectedFilter === 'Pinned') {
+      return Boolean(ann.pinned);
+    }
+    if (selectedFilter !== 'All') {
+      return ann.applicableTo === 'All' || ann.applicableTo === selectedFilter;
+    }
+    return true;
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Hero Header Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border ambizcon-hero-banner p-6 glass-panel">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl ambizcon-gradient text-white shadow-glow shrink-0">
+            <Megaphone className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">
+                Organization Announcements
+              </h1>
+              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs font-mono font-extrabold px-2 py-0.5">
+                {announcements.length} Official Bulletins
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Official company updates, client onboardings, holiday schedules, and team briefings. Only Admin can post; all members can like and comment.
+            </p>
+          </div>
+        </div>
+
+        {/* Admin Create Action */}
+        {isAdmin && (
+          <Button
+            onClick={() => setIsCreateOpen(true)}
+            className="ambizcon-gradient text-white text-xs font-extrabold gap-2 shadow-glow px-4 py-2 hover:opacity-95"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create Announcement</span>
+          </Button>
+        )}
+      </div>
+
+      {/* Filter & Search Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card shadow-xs">
+        {/* Search */}
+        <div className="relative flex-1 min-w-0 sm:min-w-[260px] max-w-md">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search announcements by title, author, or content..."
+            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background focus-ring font-medium"
+          />
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0">
+          {(
+            [
+              { key: 'All', label: `All (${announcements.length})` },
+              { key: 'Pinned', label: '📌 Pinned' },
+              { key: 'Development', label: 'Development' },
+              { key: 'Marketing', label: 'Marketing' },
+              { key: 'Creative', label: 'Creative' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setSelectedFilter(tab.key)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                selectedFilter === tab.key
+                  ? 'ambizcon-gradient text-white shadow-xs'
+                  : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Announcements List (Zoho People Style matching Screenshot 3) */}
+      <div className="space-y-3">
+        {filteredAnnouncements.length === 0 ? (
+          <Card className="p-12 text-center space-y-3 border-dashed border-zinc-200 dark:border-zinc-800">
+            <Megaphone className="h-10 w-10 text-muted-foreground/40 mx-auto" />
+            <h3 className="font-bold text-sm text-foreground">No announcements found</h3>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              {searchQuery ? 'Try adjusting your search keywords.' : 'No announcements published for this filter category yet.'}
+            </p>
+          </Card>
+        ) : (
+          filteredAnnouncements.map((ann) => {
+            const hasLiked = currentUser && ann.likes.some((l) => l.userId === currentUser._id);
+
+            return (
+              <div
+                key={ann.id}
+                onClick={() => {
+                  setSelectedAnnouncement(ann);
+                  setIsDetailOpen(true);
+                }}
+                className="group p-4 sm:p-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card hover:bg-zinc-50/80 dark:hover:bg-zinc-900/60 transition-all shadow-xs hover:shadow-md hover:border-brand-500/40 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              >
+                {/* Left: Author Avatar + Title + Meta */}
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <Avatar
+                    src={ann.authorAvatar}
+                    name={ann.authorName}
+                    userId={ann.authorId}
+                    size="md"
+                    className="h-11 w-11 shrink-0 ring-2 ring-brand-500/20 group-hover:scale-105 transition-transform"
+                  />
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-sm sm:text-base text-foreground group-hover:text-brand-500 transition-colors leading-tight">
+                        {ann.title}
+                      </h3>
+                      {ann.pinned && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/30">
+                          <Pin className="h-3 w-3" /> Pinned
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                      <span className="font-semibold text-foreground/80">{ann.authorName}</span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1 font-mono text-[11px]">
+                        <Calendar className="h-3 w-3 text-brand-500" />
+                        {ann.createdAt}
+                      </span>
+                      <span>•</span>
+                      <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-semibold">
+                        Applicable: {ann.applicableTo}
+                      </Badge>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground line-clamp-1 leading-relaxed pt-0.5">
+                      {ann.content.replace(/\n+/g, ' ')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right: Thumbs Up Count & Comment Count Badges (Zoho style) */}
+                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto justify-between sm:justify-end">
+                  <div
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                      hasLiked
+                        ? 'bg-blue-600/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-muted-foreground group-hover:text-foreground'
+                    }`}
+                  >
+                    <ThumbsUp className={`h-3.5 w-3.5 ${hasLiked ? 'fill-current' : ''}`} />
+                    <span>{ann.likes.length}</span>
+                  </div>
+
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-muted-foreground group-hover:text-foreground transition-colors">
+                    <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>{ann.comments.length}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Modals */}
+      <AnnouncementDetailModal
+        announcement={selectedAnnouncement}
+        isOpen={isDetailOpen}
+        onClose={() => {
+          setIsDetailOpen(false);
+          setSelectedAnnouncement(null);
+        }}
+        onUpdate={loadAnnouncements}
+      />
+
+      <CreateAnnouncementModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreated={loadAnnouncements}
+      />
+    </div>
+  );
+}
