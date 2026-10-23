@@ -552,7 +552,7 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
     return (
       <div
         key={userObj.email}
-        className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-[#0d1117] p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-6"
+        className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-[#0d1117] p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-6 overflow-hidden w-full min-w-0"
       >
         <div>
           {/* Top Bar: Avatar + @username pill + Logged X:XX hrs / 8:00 hrs + Extra Hrs Badge */}
@@ -599,7 +599,7 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
           </div>
 
           {/* Column Headers: Hour slots | Work done */}
-          <div className="grid grid-cols-[115px_1fr] sm:grid-cols-[140px_1fr] gap-3 pb-2 text-xs font-bold text-muted-foreground">
+          <div className="grid grid-cols-[115px_minmax(0,1fr)] sm:grid-cols-[140px_minmax(0,1fr)] gap-3 pb-2 text-xs font-bold text-muted-foreground min-w-0 w-full">
             <span>Hour slots</span>
             <span>Work done</span>
           </div>
@@ -646,20 +646,23 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
                     percent: (gapMins / 60) * 100,
                     isContinuation: false,
                   });
+                  segPointer = clampedStart;
                 }
 
-                const durationMins = clampedEnd - clampedStart;
-                segments.push({
-                  type: 'log',
-                  log,
-                  startMins: clampedStart,
-                  endMins: clampedEnd,
-                  durationMins,
-                  percent: (durationMins / 60) * 100,
-                  isContinuation: logStart < slotStartMins,
-                });
-
-                segPointer = clampedEnd;
+                const effectiveStart = Math.max(segPointer, clampedStart);
+                const durationMins = Math.max(0, clampedEnd - effectiveStart);
+                if (durationMins > 0) {
+                  segments.push({
+                    type: 'log',
+                    log,
+                    startMins: effectiveStart,
+                    endMins: clampedEnd,
+                    durationMins,
+                    percent: (durationMins / 60) * 100,
+                    isContinuation: logStart < slotStartMins,
+                  });
+                  segPointer = clampedEnd;
+                }
               });
 
               if (segPointer < slotEndMins) {
@@ -675,7 +678,7 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
               }
 
               return (
-                <div key={slot.index} className="grid grid-cols-[115px_1fr] sm:grid-cols-[140px_1fr] gap-3 items-stretch">
+                <div key={slot.index} className="grid grid-cols-[115px_minmax(0,1fr)] sm:grid-cols-[140px_minmax(0,1fr)] gap-3 items-stretch min-w-0 w-full">
                   {/* Left Column: Hour slot box */}
                   <div
                     onClick={() => handleOpenAddModal(userObj, slot.start, slot.end, slot.isExtra)}
@@ -705,11 +708,11 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
                   </div>
 
                   {/* Right Column: Work done in this hour slot */}
-                  <div className="flex items-stretch gap-1.5 min-h-[58px]">
+                  <div className="flex items-stretch gap-1.5 min-h-[58px] min-w-0 w-full overflow-hidden">
                     {segments.length === 0 ? (
                       <div
                         onClick={() => handleOpenAddModal(userObj, slot.start, slot.end, slot.isExtra)}
-                        className="flex-1 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800/80 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer flex items-center justify-center p-2 text-muted-foreground/50 hover:text-blue-500 text-xs"
+                        className="flex-1 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800/80 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer flex items-center justify-center p-2 text-muted-foreground/50 hover:text-blue-500 text-xs min-w-0"
                       >
                         + Click to add work
                       </div>
@@ -719,7 +722,10 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
                           return (
                             <div
                               key={`gap-${sIdx}`}
-                              style={{ width: `${seg.percent}%` }}
+                              style={{
+                                flex: `${Math.max(1, seg.durationMins)} 1 0%`,
+                                minWidth: 0,
+                              }}
                               onClick={() => {
                                 const hStart = String(Math.floor(seg.startMins / 60)).padStart(2, '0');
                                 const mStart = String(seg.startMins % 60).padStart(2, '0');
@@ -727,10 +733,10 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
                                 const mEnd = String(seg.endMins % 60).padStart(2, '0');
                                 handleOpenAddModal(userObj, `${hStart}:${mStart}`, `${hEnd}:${mEnd}`, slot.isExtra);
                               }}
-                              className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800/70 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer flex items-center justify-center text-[10px] text-muted-foreground/40 hover:text-blue-500"
+                              className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800/70 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer flex items-center justify-center text-[10px] text-muted-foreground/40 hover:text-blue-500 min-w-0 overflow-hidden"
                               title={`Empty slot: ${seg.durationMins}m free. Click to add work`}
                             >
-                              +{seg.durationMins}m
+                              <span className="truncate px-1">+{seg.durationMins}m</span>
                             </div>
                           );
                         }
@@ -749,17 +755,18 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
                               handleOpenEditModal(log, userObj);
                             }}
                             style={{
-                              width: `${seg.percent}%`,
+                              flex: `${Math.max(1, seg.durationMins)} 1 0%`,
+                              minWidth: 0,
                               ...(styleInfo.blockCustomBg ? { backgroundImage: styleInfo.blockCustomBg } : {}),
                             }}
-                            className={`rounded-2xl p-2.5 flex flex-col justify-center cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 overflow-hidden ${styleInfo.blockStyle}`}
+                            className={`rounded-2xl p-2.5 flex flex-col justify-center cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 overflow-hidden min-w-0 ${styleInfo.blockStyle}`}
                             title={`${log.task_title} (${formatDurationHrsShort(log.duration_minutes)} · ${log.start_time}–${log.end_time})`}
                           >
                             <span className="font-bold text-xs leading-tight truncate">
                               {seg.isContinuation ? '↳ ' : ''}
                               {displayTitle}
                             </span>
-                            {seg.percent >= 25 ? (
+                            {seg.durationMins >= 25 ? (
                               <span className="text-[10px] font-mono opacity-85 truncate mt-0.5">
                                 {formatDurationHrsShort(log.duration_minutes)} · {log.start_time}–{log.end_time}
                                 {isUrgent && ' · ⚡ urgent'}
@@ -971,7 +978,7 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
   if (!currentUser) return null;
 
   return (
-    <div className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-card p-5 sm:p-6 shadow-sm space-y-5">
+    <div className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-card p-5 sm:p-6 shadow-sm space-y-5 w-full overflow-hidden">
       {/* Top Banner Notice: Under Dev and Testing */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-200 text-xs font-semibold">
         <div className="flex items-center gap-2">
@@ -1045,9 +1052,9 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
 
       {/* VIEW 1: MY TAB (USER) — Two-Column Layout ("My work" left panel + User Hourly Timeline right panel) */}
       {viewMode === 'user' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
           {/* Left Panel: "My work" Card */}
-          <div className="lg:col-span-5 rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-[#0d1117] p-6 space-y-5 shadow-sm">
+          <div className="lg:col-span-5 xl:col-span-4 rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-[#0d1117] p-6 space-y-5 shadow-sm min-w-0">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xl font-extrabold text-foreground">My work</h3>
               {activeUserObj && (
@@ -1393,7 +1400,7 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
           </div>
 
           {/* Right Panel: Selected User's Hourly Slots & Work Done */}
-          <div className="lg:col-span-7">
+          <div className="lg:col-span-7 xl:col-span-8 min-w-0 w-full">
             {activeUserObj && renderUserHourlyBoard(activeUserObj)}
           </div>
         </div>
@@ -1645,8 +1652,8 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
             <div
               className={
                 displayedAdminUsers.length === 1
-                  ? 'max-w-3xl mx-auto'
-                  : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start'
+                  ? 'w-full min-w-0'
+                  : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start w-full'
               }
             >
               {displayedAdminUsers.map((u) =>

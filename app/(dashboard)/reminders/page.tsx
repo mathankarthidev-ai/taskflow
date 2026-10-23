@@ -637,7 +637,7 @@ export default function RemindersPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Top Navigation Switcher: Reminders vs Self Reminders (Single Unified Switcher) */}
       <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 dark:border-zinc-800/80 pb-3 flex-wrap">
         <div className="inline-flex items-center p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 gap-1.5 shadow-xs">
