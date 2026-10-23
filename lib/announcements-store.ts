@@ -17,6 +17,7 @@ export interface AnnouncementLike {
   userId: string;
   userName: string;
   userAvatar?: string;
+  type?: 'heart' | 'like';
 }
 
 export interface Announcement {
@@ -32,6 +33,7 @@ export interface Announcement {
   pinned?: boolean;
   likes: AnnouncementLike[];
   comments: AnnouncementComment[];
+  readBy?: string[];
 }
 
 const STORAGE_KEY = 'ambizcon_announcements_v1';
@@ -87,11 +89,11 @@ For this client, we will be managing:
 • Social Media Strategy & Organic Posts
 • SEO Optimization & Google My Business Management`,
     likes: [
-      { userId: 'usr_1', userName: 'Anirudh Krishnakumar' },
-      { userId: 'usr_3', userName: 'Aravind Kalaivanan' },
-      { userId: 'usr_5', userName: 'Deva Priya D A' },
-      { userId: 'usr_6', userName: 'Thanikaivel Arumugam' },
-      { userId: 'usr_12', userName: 'Sathish Kumar' },
+      { userId: 'usr_1', userName: 'Anirudh Krishnakumar', type: 'heart' },
+      { userId: 'usr_3', userName: 'Aravind Kalaivanan', type: 'like' },
+      { userId: 'usr_5', userName: 'Deva Priya D A', type: 'heart' },
+      { userId: 'usr_6', userName: 'Thanikaivel Arumugam', type: 'heart' },
+      { userId: 'usr_12', userName: 'Sathish Kumar', type: 'like' },
     ],
     comments: [
       {
@@ -348,21 +350,138 @@ export function createAnnouncement(
   return newAnn;
 }
 
-export function toggleLikeAnnouncement(announcementId: string, user: User): Announcement | null {
+const READ_STORAGE_KEY_PREFIX = 'ambizcon_announcements_read_';
+
+export function getUserReadAnnouncementIds(userId: string): string[] {
+  if (typeof window === 'undefined' || !userId) return [];
+  try {
+    const raw = localStorage.getItem(`${READ_STORAGE_KEY_PREFIX}${userId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function isAnnouncementRead(announcementId: string, userId: string, announcements?: Announcement[]): boolean {
+  if (!userId) return true;
+  const userReadIds = getUserReadAnnouncementIds(userId);
+  if (userReadIds.includes(announcementId)) return true;
+
+  const list = announcements || getStoredAnnouncements();
+  const target = list.find((a) => a.id === announcementId);
+  return Boolean(target?.readBy && target.readBy.includes(userId));
+}
+
+export function markAnnouncementAsRead(announcementId: string, userId: string): boolean {
+  if (!userId || !announcementId) return false;
+  const list = getStoredAnnouncements();
+  const target = list.find((a) => a.id === announcementId);
+
+  if (target) {
+    if (!target.readBy) target.readBy = [];
+    if (!target.readBy.includes(userId)) {
+      target.readBy.push(userId);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    const userReadIds = getUserReadAnnouncementIds(userId);
+    if (!userReadIds.includes(announcementId)) {
+      userReadIds.push(announcementId);
+      localStorage.setItem(`${READ_STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(userReadIds));
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    emitAnnouncementsChanged();
+  }
+  return true;
+}
+
+export function markAnnouncementAsUnread(announcementId: string, userId: string): boolean {
+  if (!userId || !announcementId) return false;
+  const list = getStoredAnnouncements();
+  const target = list.find((a) => a.id === announcementId);
+
+  if (target && target.readBy) {
+    target.readBy = target.readBy.filter((id) => id !== userId);
+  }
+
+  if (typeof window !== 'undefined') {
+    const userReadIds = getUserReadAnnouncementIds(userId).filter((id) => id !== announcementId);
+    localStorage.setItem(`${READ_STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(userReadIds));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    emitAnnouncementsChanged();
+  }
+  return true;
+}
+
+export function markAllAnnouncementsAsRead(userId: string): void {
+  if (!userId) return;
+  const list = getStoredAnnouncements();
+  const allIds = list.map((a) => a.id);
+
+  list.forEach((a) => {
+    if (!a.readBy) a.readBy = [];
+    if (!a.readBy.includes(userId)) {
+      a.readBy.push(userId);
+    }
+  });
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`${READ_STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(allIds));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    emitAnnouncementsChanged();
+  }
+}
+
+export function getUnreadAnnouncementsCount(userId: string, announcements?: Announcement[]): number {
+  if (!userId) return 0;
+  const list = announcements || getStoredAnnouncements();
+  const userReadIds = new Set(getUserReadAnnouncementIds(userId));
+  return list.filter((a) => !userReadIds.has(a.id) && !(a.readBy && a.readBy.includes(userId))).length;
+}
+
+export function getHeartLikesCount(ann: Announcement): number {
+  return ann.likes.filter((l) => l.type === 'heart').length;
+}
+
+export function getThumbLikesCount(ann: Announcement): number {
+  return ann.likes.filter((l) => l.type !== 'heart').length;
+}
+
+export function toggleLikeAnnouncement(
+  announcementId: string,
+  user: User,
+  reactionType: 'heart' | 'like' = 'heart'
+): Announcement | null {
   const list = getStoredAnnouncements();
   const target = list.find((a) => a.id === announcementId);
   if (!target) return null;
 
   const alreadyLikedIndex = target.likes.findIndex((l) => l.userId === user._id);
   if (alreadyLikedIndex !== -1) {
-    // Unlike
-    target.likes.splice(alreadyLikedIndex, 1);
+    const existing = target.likes[alreadyLikedIndex];
+    const currentType = existing.type || 'like';
+    if (currentType === reactionType) {
+      // Toggle off if same reaction clicked
+      target.likes.splice(alreadyLikedIndex, 1);
+    } else {
+      // Switch reaction (e.g. from thumbs up to heart or vice-versa)
+      target.likes[alreadyLikedIndex] = {
+        userId: user._id,
+        userName: user.name,
+        userAvatar: user.avatar,
+        type: reactionType,
+      };
+    }
   } else {
-    // Like
+    // Like with chosen reaction
     target.likes.push({
       userId: user._id,
       userName: user.name,
       userAvatar: user.avatar,
+      type: reactionType,
     });
   }
 

@@ -5,6 +5,14 @@ import { useAuthStore } from '@/store/useAuthStore';
 import {
   Announcement,
   getStoredAnnouncements,
+  isAnnouncementRead,
+  markAnnouncementAsRead,
+  markAnnouncementAsUnread,
+  markAllAnnouncementsAsRead,
+  getUnreadAnnouncementsCount,
+  getHeartLikesCount,
+  getThumbLikesCount,
+  toggleLikeAnnouncement,
 } from '@/lib/announcements-store';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -16,6 +24,7 @@ import {
   Megaphone,
   Plus,
   ThumbsUp,
+  Heart,
   MessageSquare,
   Search,
   Pin,
@@ -23,18 +32,23 @@ import {
   Users,
   Building2,
   Sparkles,
+  Check,
+  CheckCircle2,
+  CheckCheck,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function AnnouncementsPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'All' | 'Pinned' | 'Development' | 'Marketing' | 'Creative'>('All');
+  const [selectedFilter, setSelectedFilter] = useState<'All' | 'Unread' | 'Pinned' | 'Development' | 'Marketing' | 'Creative'>('All');
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
+  const unreadCount = currentUser ? getUnreadAnnouncementsCount(currentUser._id, announcements) : 0;
 
   const loadAnnouncements = () => {
     const list = getStoredAnnouncements();
@@ -47,6 +61,31 @@ export default function AnnouncementsPage() {
         setSelectedAnnouncement(refreshed);
       }
     }
+  };
+
+  const handleMarkAllAsRead = () => {
+    if (!currentUser) return;
+    markAllAnnouncementsAsRead(currentUser._id);
+    loadAnnouncements();
+    toast.success('All announcements marked as read');
+  };
+
+  const handleToggleRead = (announcementId: string, isRead: boolean) => {
+    if (!currentUser) return;
+    if (isRead) {
+      markAnnouncementAsUnread(announcementId, currentUser._id);
+      toast.info('Marked as unread');
+    } else {
+      markAnnouncementAsRead(announcementId, currentUser._id);
+      toast.success('Marked as read');
+    }
+    loadAnnouncements();
+  };
+
+  const handleToggleReaction = (announcementId: string, type: 'heart' | 'like') => {
+    if (!currentUser) return;
+    toggleLikeAnnouncement(announcementId, currentUser, type);
+    loadAnnouncements();
   };
 
   useEffect(() => {
@@ -70,6 +109,9 @@ export default function AnnouncementsPage() {
     }
 
     // Category filter
+    if (selectedFilter === 'Unread') {
+      return currentUser ? !isAnnouncementRead(ann.id, currentUser._id, announcements) : false;
+    }
     if (selectedFilter === 'Pinned') {
       return Boolean(ann.pinned);
     }
@@ -128,30 +170,45 @@ export default function AnnouncementsPage() {
           />
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0">
-          {(
-            [
-              { key: 'All', label: `All (${announcements.length})` },
-              { key: 'Pinned', label: '📌 Pinned' },
-              { key: 'Development', label: 'Development' },
-              { key: 'Marketing', label: 'Marketing' },
-              { key: 'Creative', label: 'Creative' },
-            ] as const
-          ).map((tab) => (
+        {/* Filter Pills & Mark All Read */}
+        <div className="flex items-center justify-between gap-2 flex-wrap flex-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0">
+            {(
+              [
+                { key: 'All', label: `All (${announcements.length})` },
+                { key: 'Unread', label: `⚡ Unread (${unreadCount})` },
+                { key: 'Pinned', label: '📌 Pinned' },
+                { key: 'Development', label: 'Development' },
+                { key: 'Marketing', label: 'Marketing' },
+                { key: 'Creative', label: 'Creative' },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setSelectedFilter(tab.key)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  selectedFilter === tab.key
+                    ? 'ambizcon-gradient text-white shadow-xs'
+                    : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {currentUser && unreadCount > 0 && (
             <button
-              key={tab.key}
               type="button"
-              onClick={() => setSelectedFilter(tab.key)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                selectedFilter === tab.key
-                  ? 'ambizcon-gradient text-white shadow-xs'
-                  : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-muted-foreground hover:text-foreground'
-              }`}
+              onClick={handleMarkAllAsRead}
+              className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1.5 transition-all shadow-xs shrink-0"
+              title="Mark all announcements as read"
             >
-              {tab.label}
+              <CheckCheck className="h-3.5 w-3.5 text-amber-600" />
+              <span>Mark all as read</span>
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -167,7 +224,12 @@ export default function AnnouncementsPage() {
           </Card>
         ) : (
           filteredAnnouncements.map((ann) => {
-            const hasLiked = currentUser && ann.likes.some((l) => l.userId === currentUser._id);
+            const myLike = currentUser ? ann.likes.find((l) => l.userId === currentUser._id) : null;
+            const isHearted = myLike?.type === 'heart';
+            const isThumbLiked = myLike && myLike.type !== 'heart';
+            const heartCount = getHeartLikesCount(ann);
+            const thumbCount = getThumbLikesCount(ann);
+            const isRead = currentUser ? isAnnouncementRead(ann.id, currentUser._id, announcements) : true;
 
             return (
               <div
@@ -176,7 +238,11 @@ export default function AnnouncementsPage() {
                   setSelectedAnnouncement(ann);
                   setIsDetailOpen(true);
                 }}
-                className="group p-4 sm:p-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card hover:bg-zinc-50/80 dark:hover:bg-zinc-900/60 transition-all shadow-xs hover:shadow-md hover:border-brand-500/40 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                className={`group p-4 sm:p-5 rounded-2xl border transition-all shadow-xs hover:shadow-md cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                  !isRead
+                    ? 'border-amber-500/40 bg-amber-500/[0.03] dark:bg-amber-500/[0.05] hover:border-amber-500/60'
+                    : 'border-zinc-200/80 dark:border-zinc-800/80 bg-card hover:bg-zinc-50/80 dark:hover:bg-zinc-900/60 hover:border-brand-500/40'
+                }`}
               >
                 {/* Left: Author Avatar + Title + Meta */}
                 <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -192,6 +258,11 @@ export default function AnnouncementsPage() {
                       <h3 className="font-bold text-sm sm:text-base text-foreground group-hover:text-brand-500 transition-colors leading-tight">
                         {ann.title}
                       </h3>
+                      {!isRead && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold shadow-sm animate-pulse">
+                          Unread
+                        </span>
+                      )}
                       {ann.pinned && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/30">
                           <Pin className="h-3 w-3" /> Pinned
@@ -218,23 +289,78 @@ export default function AnnouncementsPage() {
                   </div>
                 </div>
 
-                {/* Right: Thumbs Up Count & Comment Count Badges (Zoho style) */}
-                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto justify-between sm:justify-end">
-                  <div
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-                      hasLiked
-                        ? 'bg-blue-600/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
-                        : 'bg-zinc-100 dark:bg-zinc-800 text-muted-foreground group-hover:text-foreground'
+                {/* Right: Heart Symbol + Like + Comments + Mark Read Toggle */}
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
+                  {/* Heart Symbol Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleReaction(ann.id, 'heart');
+                    }}
+                    title={isHearted ? 'Hearted by you (Click to remove)' : 'React with Heart ❤️'}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      isHearted
+                        ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/40 font-extrabold shadow-xs'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10'
                     }`}
                   >
-                    <ThumbsUp className={`h-3.5 w-3.5 ${hasLiked ? 'fill-current' : ''}`} />
-                    <span>{ann.likes.length}</span>
-                  </div>
+                    <Heart className={`h-3.5 w-3.5 ${isHearted ? 'fill-rose-500 text-rose-500' : 'text-rose-500'}`} />
+                    <span>{heartCount}</span>
+                  </button>
 
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-muted-foreground group-hover:text-foreground transition-colors">
+                  {/* Thumbs Up Like Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleReaction(ann.id, 'like');
+                    }}
+                    title={isThumbLiked ? 'Liked by you (Click to remove)' : 'React with Thumbs Up 👍'}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      isThumbLiked
+                        ? 'bg-blue-600/15 text-blue-600 dark:text-blue-400 border border-blue-500/40 font-extrabold shadow-xs'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10'
+                    }`}
+                  >
+                    <ThumbsUp className={`h-3.5 w-3.5 ${isThumbLiked ? 'fill-blue-500 text-blue-500' : 'text-blue-500'}`} />
+                    <span>{thumbCount}</span>
+                  </button>
+
+                  {/* Comment Count Badge */}
+                  <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-muted-foreground group-hover:text-foreground transition-colors">
                     <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />
                     <span>{ann.comments.length}</span>
                   </div>
+
+                  {/* Mark as Read / Unread Option */}
+                  {currentUser && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleRead(ann.id, isRead);
+                      }}
+                      title={isRead ? 'Mark as unread' : 'Mark as read'}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border ${
+                        isRead
+                          ? 'bg-transparent border-zinc-200 dark:border-zinc-800 text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                          : 'bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25 shadow-xs'
+                      }`}
+                    >
+                      {isRead ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-500" />
+                          <span className="hidden sm:inline">Read</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                          <span>Mark Read</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             );

@@ -11,10 +11,16 @@ import {
   addCommentToAnnouncement,
   deleteCommentFromAnnouncement,
   deleteAnnouncement,
+  getHeartLikesCount,
+  getThumbLikesCount,
+  isAnnouncementRead,
+  markAnnouncementAsRead,
+  markAnnouncementAsUnread,
 } from '@/lib/announcements-store';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
   ThumbsUp,
+  Heart,
   MessageSquare,
   Trash2,
   Send,
@@ -22,6 +28,8 @@ import {
   Users,
   Calendar,
   Share2,
+  Check,
+  CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -45,10 +53,39 @@ export function AnnouncementDetailModal({
   if (!announcement || !currentUser) return null;
 
   const isAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
-  const isLikedByMe = announcement.likes.some((l) => l.userId === currentUser._id);
+  const myLike = announcement.likes.find((l) => l.userId === currentUser._id);
+  const isHeartedByMe = myLike?.type === 'heart';
+  const isThumbLikedByMe = myLike && myLike.type !== 'heart';
+  const heartCount = getHeartLikesCount(announcement);
+  const thumbCount = getThumbLikesCount(announcement);
+  const isReadByMe = isAnnouncementRead(announcement.id, currentUser._id);
 
-  const handleLike = () => {
-    toggleLikeAnnouncement(announcement.id, currentUser);
+  // Auto-mark as read when modal opens
+  React.useEffect(() => {
+    if (isOpen && announcement && currentUser && !isReadByMe) {
+      markAnnouncementAsRead(announcement.id, currentUser._id);
+      onUpdate();
+    }
+  }, [isOpen, announcement?.id, currentUser?._id, isReadByMe]);
+
+  const handleHeart = () => {
+    toggleLikeAnnouncement(announcement.id, currentUser, 'heart');
+    onUpdate();
+  };
+
+  const handleThumbLike = () => {
+    toggleLikeAnnouncement(announcement.id, currentUser, 'like');
+    onUpdate();
+  };
+
+  const handleToggleRead = () => {
+    if (isReadByMe) {
+      markAnnouncementAsUnread(announcement.id, currentUser._id);
+      toast.info('Announcement marked as unread');
+    } else {
+      markAnnouncementAsRead(announcement.id, currentUser._id);
+      toast.success('Announcement marked as read');
+    }
     onUpdate();
   };
 
@@ -123,17 +160,42 @@ export function AnnouncementDetailModal({
             </div>
           </div>
 
-          {/* Admin Delete Action */}
-          {isAdmin && (
+          {/* Top Header Actions: Mark as Read Toggle + Admin Delete */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleDeleteAnnouncement}
-              className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-              title="Delete announcement (Admin only)"
+              onClick={handleToggleRead}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                isReadByMe
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20'
+                  : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 shadow-xs'
+              }`}
+              title={isReadByMe ? 'Click to mark as unread' : 'Mark announcement as read'}
             >
-              <Trash2 className="h-4 w-4" />
+              {isReadByMe ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Read</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>Mark as Read</span>
+                </>
+              )}
             </button>
-          )}
+
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleDeleteAnnouncement}
+                className="p-2 rounded-xl text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                title="Delete announcement (Admin only)"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Title */}
@@ -156,42 +218,73 @@ export function AnnouncementDetailModal({
           </span>
         </div>
 
-        {/* Action Buttons: Like + Comment */}
-        <div className="flex items-center gap-3 pt-3 border-t border-zinc-200/80 dark:border-zinc-800/80">
+        {/* Action Buttons: Heart + Like + Comment */}
+        <div className="flex items-center gap-2 sm:gap-3 pt-3 border-t border-zinc-200/80 dark:border-zinc-800/80 flex-wrap">
+          {/* Heart / Love Button */}
           <button
             type="button"
-            onClick={handleLike}
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              isLikedByMe
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-foreground'
+            onClick={handleHeart}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              isHeartedByMe
+                ? 'bg-rose-500 text-white shadow-sm ring-2 ring-rose-400/30'
+                : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-foreground hover:text-rose-500'
             }`}
+            title="Love this announcement with Heart ❤️"
           >
-            <ThumbsUp className={`h-4 w-4 ${isLikedByMe ? 'fill-white' : ''}`} />
-            <span>Like ({announcement.likes.length})</span>
+            <Heart className={`h-4 w-4 ${isHeartedByMe ? 'fill-white text-white' : 'text-rose-500'}`} />
+            <span>Heart ❤️ ({heartCount})</span>
           </button>
 
+          {/* Thumbs Up / Like Button */}
+          <button
+            type="button"
+            onClick={handleThumbLike}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              isThumbLikedByMe
+                ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400/30'
+                : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-foreground hover:text-blue-500'
+            }`}
+            title="Like this announcement with Thumbs Up 👍"
+          >
+            <ThumbsUp className={`h-4 w-4 ${isThumbLikedByMe ? 'fill-white text-white' : 'text-blue-500'}`} />
+            <span>Like 👍 ({thumbCount})</span>
+          </button>
+
+          {/* Comment Button */}
           <button
             type="button"
             onClick={() => {
               const inputEl = document.getElementById('announcement-comment-input');
               inputEl?.focus();
             }}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-foreground text-xs font-bold transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-foreground text-xs font-bold transition-colors"
           >
             <MessageSquare className="h-4 w-4 text-emerald-500" />
             <span>Comment ({announcement.comments.length})</span>
           </button>
         </div>
 
-        {/* Likers List Strip (Zoho People style) */}
+        {/* Likers List Strip (Zoho People style with Heart and Like badges) */}
         {announcement.likes.length > 0 && (
-          <div className="p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] shrink-0">
-              👍
-            </span>
-            <span className="font-semibold leading-normal">
-              {likersNames}
+          <div className="p-2.5 rounded-xl bg-zinc-100/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 text-xs text-foreground flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 shrink-0">
+              {heartCount > 0 && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold border border-rose-500/20 text-[11px]">
+                  <span>❤️</span>
+                  <span className="font-mono">{heartCount}</span>
+                </span>
+              )}
+              {thumbCount > 0 && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20 text-[11px]">
+                  <span>👍</span>
+                  <span className="font-mono">{thumbCount}</span>
+                </span>
+              )}
+            </div>
+            <span className="font-medium text-xs text-muted-foreground leading-normal">
+              {announcement.likes
+                .map((l) => `${l.userName} (${l.type === 'heart' ? '❤️' : '👍'})`)
+                .join(', ')}
             </span>
           </div>
         )}

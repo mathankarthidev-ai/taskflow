@@ -79,6 +79,7 @@ import { toast } from 'sonner';
 import {
   Announcement,
   getStoredAnnouncements,
+  getUnreadAnnouncementsCount,
 } from '@/lib/announcements-store';
 import { AnnouncementsQuickDropdown } from '@/components/announcements/AnnouncementsQuickDropdown';
 import { AnnouncementDetailModal } from '@/components/announcements/AnnouncementDetailModal';
@@ -1541,37 +1542,49 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         </div>
 
         {/* Company Announcements (Speaker Option in Navbar with Real Count Badge) */}
-        <div className="relative header-dropdown-menu">
-          <button
-            onClick={() => toggleMenu('announcements')}
-            className={`relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 transition-colors ${
-              activeMenu === 'announcements'
-                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400'
-                : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/40'
-            }`}
-            title={`📢 Company Announcements (${announcementsList.length} Announcements)`}
-          >
-            <Megaphone className="h-4 w-4" />
-            {announcementsList.length > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full ambizcon-gradient text-white font-mono text-[9px] font-extrabold flex items-center justify-center border border-background shadow-sm">
-                {announcementsList.length}
-              </span>
-            )}
-          </button>
+        {(() => {
+          const unreadAnnouncementsCount = currentUser
+            ? getUnreadAnnouncementsCount(currentUser._id, announcementsList)
+            : announcementsList.length;
 
-          {activeMenu === 'announcements' && (
-            <AnnouncementsQuickDropdown
-              announcements={announcementsList}
-              onSelectAnnouncement={(ann) => {
-                setSelectedAnnouncement(ann);
-                setIsAnnouncementDetailOpen(true);
-              }}
-              onOpenCreate={() => setIsCreateAnnouncementOpen(true)}
-              onClose={() => setActiveMenu(null)}
-              isAdmin={currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin'}
-            />
-          )}
-        </div>
+          return (
+            <div className="relative header-dropdown-menu">
+              <button
+                onClick={() => toggleMenu('announcements')}
+                className={`relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 transition-colors ${
+                  activeMenu === 'announcements'
+                    ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400'
+                    : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/40'
+                }`}
+                title={`📢 Company Announcements (${unreadAnnouncementsCount > 0 ? `${unreadAnnouncementsCount} Unread` : `${announcementsList.length} Announcements`})`}
+              >
+                <Megaphone className="h-4 w-4" />
+                {unreadAnnouncementsCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-rose-500 text-white font-mono text-[9px] font-extrabold flex items-center justify-center border border-background shadow-sm animate-pulse">
+                    {unreadAnnouncementsCount}
+                  </span>
+                ) : announcementsList.length > 0 ? (
+                  <span className="absolute -top-1 -right-1 h-3.5 min-w-3.5 px-0.5 rounded-full bg-amber-500/80 text-white font-mono text-[8px] font-bold flex items-center justify-center border border-background">
+                    {announcementsList.length}
+                  </span>
+                ) : null}
+              </button>
+
+              {activeMenu === 'announcements' && (
+                <AnnouncementsQuickDropdown
+                  announcements={announcementsList}
+                  onSelectAnnouncement={(ann) => {
+                    setSelectedAnnouncement(ann);
+                    setIsAnnouncementDetailOpen(true);
+                  }}
+                  onOpenCreate={() => setIsCreateAnnouncementOpen(true)}
+                  onClose={() => setActiveMenu(null)}
+                  isAdmin={currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin'}
+                />
+              )}
+            </div>
+          );
+        })()}
 
         {/* Notifications Dropdown (Silent - No Audio Chime - Live Numeric Count Badge) */}
         <div className="relative header-dropdown-menu">
