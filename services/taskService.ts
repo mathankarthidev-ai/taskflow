@@ -241,11 +241,14 @@ export async function createTask(input: {
   doctorName?: string;
   specialist?: string;
   reminderSettings?: any;
+  assignedReviewerId?: string;
+  assignedReviewerName?: string;
   attachments?: { name: string; url: string; type: string }[];
 }): Promise<Task> {
   const allUsers = await getAllUsers();
   const creatorUser = allUsers.find((u) => u._id === input.createdBy || u.email === input.createdBy);
   const assignedUser = input.assignedTo ? allUsers.find((u) => u._id === input.assignedTo) : undefined;
+  const reviewerUser = input.assignedReviewerId ? allUsers.find((u) => u._id === input.assignedReviewerId) : undefined;
   const raisedByUser = input.raisedBy ? allUsers.find((u) => u._id === input.raisedBy) : undefined;
   const isIncoming = input.incoming ?? (input.raisedBy ? true : false);
   const nowIso = new Date().toISOString();
@@ -267,6 +270,9 @@ export async function createTask(input: {
     createdByUser: creatorUser,
     raisedBy: raisedByUser?._id || input.raisedBy,
     raisedByUser,
+    assignedReviewerId: reviewerUser?._id || input.assignedReviewerId,
+    assignedReviewerName: reviewerUser?.name || input.assignedReviewerName,
+    reviewStatus: (reviewerUser?._id || input.assignedReviewerId) ? 'pending_review' : 'none',
     incoming: isIncoming,
     dueDate: input.dueDate,
     labels: input.labels || [],

@@ -25,6 +25,9 @@ import {
   Bell,
   Lock,
   Sparkles,
+  UserCheck,
+  Briefcase,
+  FileSearch,
 } from 'lucide-react';
 
 interface TaskEditModalProps {
@@ -59,6 +62,7 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
   const [status, setStatus] = useState<TaskStatus>('Todo');
   const [team, setTeam] = useState<TeamName>('Development');
   const [assignedTo, setAssignedTo] = useState<string>('');
+  const [assignedReviewerId, setAssignedReviewerId] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   const [clientName, setClientName] = useState<string>('');
   const [doctorName, setDoctorName] = useState<string>('');
@@ -94,6 +98,7 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
       setStatus(task.status || 'Todo');
       setTeam(task.team || 'Development');
       setAssignedTo(task.assignedTo || (task.assignedUser ? task.assignedUser._id : ''));
+      setAssignedReviewerId(task.assignedReviewerId || '');
       setDueDate(task.dueDate ? task.dueDate.split('T')[0] : '');
       setClientName(task.clientName || '');
       setDoctorName(task.doctorName || '');
@@ -152,6 +157,7 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
         ? { ...task.reminderSettings, enabled: false }
         : undefined;
 
+      const finalReviewer = users.find((u) => u._id === assignedReviewerId);
       const updates: Partial<Task> = {
         title: title.trim(),
         description: description.trim(),
@@ -159,6 +165,8 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
         status,
         team,
         assignedTo: assignedTo || undefined,
+        assignedReviewerId: assignedReviewerId || undefined,
+        assignedReviewerName: finalReviewer?.name || (assignedReviewerId ? task.assignedReviewerName : undefined),
         dueDate: dueDate ? new Date(dueDate).toISOString() : task.dueDate,
         clientName: clientName || undefined,
         doctorName: doctorName.trim() || undefined,
@@ -325,74 +333,138 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
               disabled={!canEdit}
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60"
             >
-              <option value="Todo">To Do</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Review">Review / Testing</option>
-              <option value="Done">Completed</option>
+              <option value="Todo">🟣 Created / To Do</option>
+              <option value="In Progress">🔵 Working / In Progress</option>
+              <option value="Review">🟠 Review / Testing</option>
+              <option value="Done">🟢 Completed</option>
             </select>
           </div>
         </div>
 
-        {/* Team & Assignee (Handled by TL for own team, or Admin for all teams) */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="font-bold text-foreground block mb-1">
-              Team {currentUser?.role === 'Team Lead' && <span className="text-[10px] text-blue-500 font-normal">(Your Team Only)</span>}
-            </label>
-            <select
-              value={team}
-              onChange={(e) => setTeam(e.target.value as TeamName)}
-              disabled={!canEdit || !isSuperAdmin}
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isSuperAdmin ? (
-                <>
-                  <option value="Creative">Creative</option>
-                  <option value="Marketing">Marketing</option>
-                  <option value="Development">Development</option>
-                </>
-              ) : (
-                <option value={currentUser?.team || team}>{currentUser?.team || team}</option>
-              )}
-            </select>
+        {/* Color-Differentiated Task Roles: 🟣 Creator • 🔵 Working • 🟠 Review */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-foreground">Task Roles &amp; Allocation</span>
+            <span className="text-[10px] font-mono font-bold text-muted-foreground">
+              🟣 Creator • 🔵 Working • 🟠 Review
+            </span>
           </div>
 
-          <div>
-            <label className="font-bold text-foreground block mb-1">
-              Assignee {currentUser?.role === 'Team Member' && <span className="text-[10px] text-amber-500 font-normal">(Handled by TL)</span>}
-            </label>
-            <select
-              value={assignedTo}
-              onChange={(e) => {
-                const newId = e.target.value;
-                setAssignedTo(newId);
-                if (isSuperAdmin && newId) {
-                  const chosen = users.find((u) => u._id === newId);
-                  if (chosen?.team && chosen.role !== 'Super Admin') {
-                    setTeam(chosen.team);
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* 1. CREATOR (Purple Theme) */}
+            <div className="rounded-2xl border-2 border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20 p-3 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                  <UserCheck className="h-3 w-3" />
+                  Creator
+                </span>
+                <span className="text-[9px] font-mono text-purple-600/80 dark:text-purple-400/80">Originated</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Task creator &amp; authorization owner.</p>
+              <div className="flex items-center gap-1.5 p-2 rounded-xl bg-background/80 border border-purple-500/20">
+                <div className="h-6 w-6 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-[10px] shrink-0">
+                  {creatorName.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-foreground truncate">{creatorName}</p>
+                  <p className="text-[9px] text-muted-foreground truncate">{task.createdByUser?.role || 'Creator'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. WORKING / ASSIGNEE (Blue Theme) */}
+            <div className="rounded-2xl border-2 border-blue-500/30 bg-blue-500/5 dark:bg-blue-950/20 p-3 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                  <Briefcase className="h-3 w-3" />
+                  Working
+                </span>
+                <span className="text-[9px] font-mono text-blue-600/80 dark:text-blue-400/80">Doing Work</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Assignee doing the work.</p>
+              <select
+                value={assignedTo}
+                onChange={(e) => {
+                  const newId = e.target.value;
+                  setAssignedTo(newId);
+                  if (isSuperAdmin && newId) {
+                    const chosen = users.find((u) => u._id === newId);
+                    if (chosen?.team && chosen.role !== 'Super Admin') {
+                      setTeam(chosen.team);
+                    }
                   }
-                }
-              }}
-              disabled={!canEdit || (currentUser?.role !== 'Super Admin' && currentUser?.role !== 'Admin' && currentUser?.role !== 'Team Lead')}
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <option value="">Unassigned</option>
-              {users
-                .filter((u) => {
-                  if (!isUserInCompany(u, activeCompanyScope)) return false;
-                  if (isSuperAdmin) return true;
-                  if (currentUser?.role === 'Team Lead') {
-                    return u.team === currentUser.team && u.role !== 'Super Admin';
-                  }
-                  return u._id === assignedTo || u._id === currentUser?._id;
-                })
-                .map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name} ({u.team} • {u.role})
-                  </option>
-                ))}
-            </select>
+                }}
+                disabled={!canEdit || (currentUser?.role !== 'Super Admin' && currentUser?.role !== 'Admin' && currentUser?.role !== 'Team Lead')}
+                className="w-full rounded-xl border border-blue-300 dark:border-blue-800 bg-background px-2.5 py-1.5 text-xs font-bold text-blue-700 dark:text-blue-300 focus-ring disabled:opacity-60 cursor-pointer"
+              >
+                <option value="">Unassigned</option>
+                {users
+                  .filter((u) => {
+                    if (!isUserInCompany(u, activeCompanyScope)) return false;
+                    if (isSuperAdmin) return true;
+                    if (currentUser?.role === 'Team Lead') {
+                      return u.team === currentUser.team && u.role !== 'Super Admin';
+                    }
+                    return u._id === assignedTo || u._id === currentUser?._id;
+                  })
+                  .map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.name} ({u.team} • {u.role})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* 3. REVIEW / REVIEWER (Amber Theme) */}
+            <div className="rounded-2xl border-2 border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 p-3 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  <FileSearch className="h-3 w-3" />
+                  Review
+                </span>
+                <span className="text-[9px] font-mono text-amber-600/80 dark:text-amber-400/80">Sign-off</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Team Lead / QA reviewing output.</p>
+              <select
+                value={assignedReviewerId}
+                onChange={(e) => setAssignedReviewerId(e.target.value)}
+                disabled={!canEdit}
+                className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-background px-2.5 py-1.5 text-xs font-bold text-amber-700 dark:text-amber-300 focus-ring cursor-pointer disabled:opacity-60"
+              >
+                <option value="">-- Select Reviewer / TL --</option>
+                {users
+                  .filter((u) => isUserInCompany(u, activeCompanyScope))
+                  .map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.name} ({u.role}{u.role === 'Team Lead' || u.role === 'Super Admin' ? ' 🌟' : ''})
+                    </option>
+                  ))}
+              </select>
+            </div>
           </div>
+        </div>
+
+        {/* Team */}
+        <div>
+          <label className="font-bold text-foreground block mb-1">
+            Team {currentUser?.role === 'Team Lead' && <span className="text-[10px] text-blue-500 font-normal">(Your Team Only)</span>}
+          </label>
+          <select
+            value={team}
+            onChange={(e) => setTeam(e.target.value as TeamName)}
+            disabled={!canEdit || !isSuperAdmin}
+            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-medium focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isSuperAdmin ? (
+              <>
+                <option value="Creative">Creative</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Development">Development</option>
+              </>
+            ) : (
+              <option value={currentUser?.team || team}>{currentUser?.team || team}</option>
+            )}
+          </select>
         </div>
 
         {/* Due Date & Client */}

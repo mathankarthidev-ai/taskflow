@@ -64,7 +64,7 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
               <th className="py-3 px-3 min-w-[100px]">Team</th>
               <th className="py-3 px-3 min-w-[100px]">Priority</th>
               <th className="py-3 px-3 min-w-[120px]">Due Date</th>
-              <th className="py-3 px-3 min-w-[140px]">Assignee</th>
+              <th className="py-3 px-3 min-w-[200px]">Roles (🟣 Creator • 🔵 Working • 🟠 Review)</th>
               <th className="py-3 px-3 text-right min-w-[80px]">Actions</th>
             </tr>
           </thead>
@@ -167,19 +167,29 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
                       </div>
                     </td>
 
-                    {/* Assignee */}
+                    {/* Color-Differentiated Roles: 🟣 Creator • 🔵 Working • 🟠 Review */}
                     <td className="py-3 px-3">
-                      <div className="flex items-center gap-2">
-                        <Avatar
-                          src={task.assignedUser?.avatar}
-                          name={task.assignedUser?.name || 'Unassigned'}
-                          userId={task.assignedUser?._id || task.assignedTo}
-                          email={task.assignedUser?.email}
-                          size="sm"
-                        />
-                        <span className="truncate max-w-[100px] text-xs font-medium text-foreground">
-                          {task.assignedUser?.name || 'Unassigned'}
-                        </span>
+                      <div className="flex flex-col gap-1 min-w-[170px]">
+                        {/* Working (Blue) */}
+                        <div className="flex items-center gap-1.5" title={`Working: ${task.assignedUser?.name || 'Unassigned'}`}>
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[8.5px] font-extrabold uppercase bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 shrink-0">
+                            Working
+                          </span>
+                          <span className="text-xs font-bold text-foreground truncate max-w-[130px]">
+                            {task.assignedUser?.name || 'Unassigned'}
+                          </span>
+                        </div>
+                        {/* Creator (Purple) & Review (Amber) */}
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <span className="inline-flex items-center gap-0.5 text-purple-600 dark:text-purple-400 font-semibold truncate" title={`Creator: ${creatorName}`}>
+                            <span className="text-[8px] font-extrabold uppercase bg-purple-500/15 px-1 py-0.2 rounded border border-purple-500/25">By</span>
+                            {creatorName}
+                          </span>
+                          <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400 font-semibold truncate" title={`Review: ${task.assignedReviewerName || 'None'}`}>
+                            <span className="text-[8px] font-extrabold uppercase bg-amber-500/15 px-1 py-0.2 rounded border border-amber-500/25">Rev</span>
+                            {task.assignedReviewerName || 'None'}
+                          </span>
+                        </div>
                       </div>
                     </td>
 
@@ -242,6 +252,18 @@ export function TaskListView({ tasks, onStatusChange, onDelete, onOpenModal }: T
 
                         {/* Details Chips */}
                         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                          {/* 🟣 Creator */}
+                          <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 dark:text-purple-300">
+                            👤 Creator: {creatorName}
+                          </span>
+                          {/* 🔵 Working */}
+                          <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 dark:text-blue-300">
+                            💼 Working: {task.assignedUser?.name || 'Unassigned'}
+                          </span>
+                          {/* 🟠 Review */}
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                            🔍 Review: {task.assignedReviewerName || 'Unassigned'}
+                          </span>
                           {task.clientName && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800 bg-card px-2.5 py-0.5 text-[11px] font-medium text-foreground">
                               <Building2 className="h-3 w-3 text-brand-500" /> Client: {task.clientName}

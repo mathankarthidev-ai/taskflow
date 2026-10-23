@@ -20,7 +20,7 @@ import { fetchCommentsAction, addCommentAction, deleteCommentAction } from '@/ac
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
 import { getPriorityBadgeColor, getStatusBadgeColor, formatDate, formatTimeAgo, normalizeUrl } from '@/lib/utils';
-import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3, Zap, Footprints, ArrowRight, Link2 } from 'lucide-react';
+import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3, Zap, Footprints, ArrowRight, Link2, Briefcase, FileSearch } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { SEED_CLIENTS_FULL } from '@/lib/seed-data';
@@ -1261,10 +1261,53 @@ export function TaskDetailModal() {
                 </select>
               </div>
 
+              {/* Color-Differentiated Task Ownership: 🟣 Creator • 🔵 Working • 🟠 Review */}
+              <div className="space-y-1.5 p-3 rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80">
+                <div className="flex items-center justify-between text-[10px] font-bold">
+                  <span className="uppercase tracking-wider text-muted-foreground">Task Roles</span>
+                  <span className="font-mono text-muted-foreground">🟣 Creator • 🔵 Working • 🟠 Review</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                  {/* Creator */}
+                  <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/25 space-y-0.5">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                      <UserCheck className="h-3 w-3" /> Creator
+                    </span>
+                    <p className="text-xs font-bold text-foreground truncate" title={creatorName}>{creatorName}</p>
+                    <p className="text-[9px] text-muted-foreground truncate">{selectedTask.createdByUser?.role || 'Author'}</p>
+                  </div>
+
+                  {/* Working */}
+                  <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/25 space-y-0.5">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                      <Briefcase className="h-3 w-3" /> Working
+                    </span>
+                    <p className="text-xs font-bold text-foreground truncate" title={selectedTask.assignedUser?.name || 'Unassigned'}>
+                      {selectedTask.assignedUser?.name || 'Unassigned'}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground truncate">{selectedTask.team} Team</p>
+                  </div>
+
+                  {/* Review */}
+                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-0.5">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                      <FileSearch className="h-3 w-3" /> Review
+                    </span>
+                    <p className="text-xs font-bold text-foreground truncate" title={selectedTask.assignedReviewerName || 'Unassigned'}>
+                      {selectedTask.assignedReviewerName || 'Unassigned'}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground truncate">
+                      {selectedTask.reviewStatus === 'approved' ? 'Approved' : 'Sign-off'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                    ASSIGNEE
+                    ASSIGNEE (WORKING)
                   </label>
                   {currentUser.role === 'Super Admin' || currentUser.role === 'Admin' ? (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">

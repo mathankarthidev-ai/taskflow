@@ -24,6 +24,8 @@ export async function createTaskAction(data: {
   doctorName?: string;
   specialist?: string;
   reminderSettings?: any;
+  assignedReviewerId?: string;
+  assignedReviewerName?: string;
   attachments?: { name: string; url: string; type: string }[];
   links?: { title?: string; url: string }[];
 }) {

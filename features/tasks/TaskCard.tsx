@@ -24,6 +24,9 @@ import {
   CheckCircle2,
   RotateCcw,
   Users,
+  UserCheck,
+  Briefcase,
+  FileSearch,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { canEditTaskOrReminder, getTaskCreatorName } from '@/lib/permissions';
@@ -165,45 +168,53 @@ export function TaskCard({ task, users, onDelete }: TaskCardProps) {
         </div>
       </div>
 
-      {/* Member ("Mem") & Team Banner - Always Visible */}
-      <div className="mt-2.5 flex items-center justify-between gap-2 p-1.5 px-2.5 rounded-xl bg-zinc-100/80 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-700/60">
-        {/* Member Assigned / Working */}
-        <div className="flex items-center gap-1.5 min-w-0 flex-1" title={`Assigned Member: ${assignedName}`}>
-          <Avatar
-            src={assignedUser?.avatar}
-            name={assignedName}
-            userId={assignedUser?._id || task.assignedTo}
-            email={assignedUser?.email}
-            size="xs"
-            className="h-5 w-5 shrink-0 ring-1 ring-brand-500/30"
-          />
-          <div className="flex items-center gap-1 min-w-0 truncate">
-            <span className="text-[10px] text-muted-foreground font-semibold shrink-0">Mem:</span>
+      {/* Color-Differentiated Task Roles: 🟣 Creator • 🔵 Working • 🟠 Review */}
+      <div className="mt-2.5 space-y-1.5 p-2 rounded-xl bg-zinc-100/70 dark:bg-zinc-800/50 border border-zinc-200/70 dark:border-zinc-700/60">
+        {/* Row 1: Working (Assignee) & Team */}
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1" title={`Working: ${assignedName}`}>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 shrink-0">
+              <Briefcase className="h-2.5 w-2.5" />
+              Working
+            </span>
             <span className="text-[11px] font-bold text-foreground truncate">
               {assignedName}
             </span>
-            {task.status === 'In Progress' ? (
-              <span className="shrink-0 text-[8.5px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/15 px-1 py-0.2 rounded border border-blue-500/30 animate-pulse">
-                Working
-              </span>
-            ) : task.status === 'Review' ? (
-              <span className="shrink-0 text-[8.5px] font-extrabold text-purple-600 dark:text-purple-400 bg-purple-500/15 px-1 py-0.2 rounded border border-purple-500/30">
-                Review
-              </span>
-            ) : null}
           </div>
-        </div>
 
-        {/* Team Name */}
-        <div className="shrink-0 flex items-center gap-1" title={`Team: ${task.team || 'General'}`}>
-          <span className="text-[10px] text-muted-foreground font-semibold">Team:</span>
+          {/* Team Name */}
           <span
-            className={`text-[10px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${getTeamBadgeColor(
+            className={`text-[9.5px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-md border shrink-0 ${getTeamBadgeColor(
               task.team
             )}`}
           >
             {task.team || 'General'}
           </span>
+        </div>
+
+        {/* Row 2: Creator & Reviewer */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200/50 dark:border-zinc-700/40 text-[10px]">
+          {/* Creator (Purple) */}
+          <div className="flex items-center gap-1 min-w-0 truncate" title={`Creator: ${creatorName}`}>
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[8.5px] font-extrabold uppercase tracking-wide bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/25 shrink-0">
+              <UserCheck className="h-2.5 w-2.5" />
+              Creator
+            </span>
+            <span className="font-semibold text-muted-foreground truncate">
+              {creatorName}
+            </span>
+          </div>
+
+          {/* Review (Amber) */}
+          <div className="flex items-center gap-1 min-w-0 truncate justify-end" title={`Review: ${task.assignedReviewerName || 'Unassigned'}`}>
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[8.5px] font-extrabold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 shrink-0">
+              <FileSearch className="h-2.5 w-2.5" />
+              Review
+            </span>
+            <span className="font-semibold text-muted-foreground truncate">
+              {task.assignedReviewerName || (task.status === 'Review' ? 'Team Lead' : 'None')}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -213,6 +224,30 @@ export function TaskCard({ task, users, onDelete }: TaskCardProps) {
           <Badge className={`${getPriorityBadgeColor(task.priority)} text-[9px] py-0 px-1.5 font-bold`}>
             {task.priority}
           </Badge>
+          {task.status === 'In Progress' && (
+            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 flex items-center gap-1 animate-pulse">
+              <Briefcase className="h-2.5 w-2.5" />
+              Working
+            </span>
+          )}
+          {task.status === 'Review' && (
+            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1">
+              <FileSearch className="h-2.5 w-2.5" />
+              Review
+            </span>
+          )}
+          {task.status === 'Todo' && (
+            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 flex items-center gap-1">
+              <UserCheck className="h-2.5 w-2.5" />
+              Created
+            </span>
+          )}
+          {task.status === 'Done' && (
+            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+              <CheckCircle2 className="h-2.5 w-2.5" />
+              Done
+            </span>
+          )}
           {task.clientName && (
             <span className="text-[9px] font-semibold text-brand-500 truncate max-w-[110px]" title={task.clientName}>
               🏢 {task.clientName}

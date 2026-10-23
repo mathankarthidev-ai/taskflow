@@ -12,7 +12,24 @@ import { fetchAllUsersAction } from '@/actions/userActions';
 import { toast } from 'sonner';
 
 import { getStoredClients, addClient } from '@/lib/client-db';
-import { Paperclip, Plus, Building2, UploadCloud, AlertCircle, Trash2, Sparkles, CheckSquare, Link2, ExternalLink, Globe } from 'lucide-react';
+import {
+  Paperclip,
+  Plus,
+  Building2,
+  UploadCloud,
+  AlertCircle,
+  Trash2,
+  Sparkles,
+  CheckSquare,
+  Link2,
+  ExternalLink,
+  Globe,
+  UserCheck,
+  Briefcase,
+  FileSearch,
+  ShieldCheck,
+  User as UserIcon,
+} from 'lucide-react';
 import { normalizeUrl } from '@/lib/utils';
 
 import { SEED_TASK_TYPES, SEED_PROJECTS } from '@/lib/seed-data';
@@ -57,6 +74,8 @@ export function TaskCreateModal() {
   const [status, setStatus] = useState<TaskStatus>('Todo');
   const [targetTeam, setTargetTeam] = useState<TeamName>('Creative');
   const [assignedTo, setAssignedTo] = useState<string>('');
+  const [creatorId, setCreatorId] = useState<string>('');
+  const [assignedReviewerId, setAssignedReviewerId] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>(new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0]);
   const [labelsInput, setLabelsInput] = useState('UI/UX, SaaS');
   const [isCrossTeam, setIsCrossTeam] = useState(false);
@@ -99,8 +118,20 @@ export function TaskCreateModal() {
   useEffect(() => {
     if (currentUser) {
       setTargetTeam(currentUser.team);
+      setCreatorId(currentUser._id);
     }
-    fetchAllUsersAction().then(setUsers);
+    fetchAllUsersAction().then((uList) => {
+      setUsers(uList);
+      if (currentUser && !assignedReviewerId) {
+        // Auto-suggest TL or Admin as reviewer
+        const tl = uList.find(
+          (u) => (u.team === currentUser.team && u.role === 'Team Lead') || u.role === 'Super Admin'
+        );
+        if (tl && tl._id !== currentUser._id) {
+          setAssignedReviewerId(tl._id);
+        }
+      }
+    });
     setClients(getStoredClients());
     setCustomTemplates(getStoredCustomTemplates());
   }, [currentUser, isCreateModalOpen]);
@@ -290,6 +321,8 @@ export function TaskCreateModal() {
 
       const isIncoming = isCrossTeam || targetTeam !== currentUser.team;
       const approvalStatus = currentUser.role === 'Team Member' ? 'pending_approval' : 'approved';
+      const finalCreator = users.find((u) => u._id === creatorId) || currentUser;
+      const finalReviewer = users.find((u) => u._id === assignedReviewerId);
 
       const createdTask: any = await createTaskAction({
         title,
@@ -298,8 +331,10 @@ export function TaskCreateModal() {
         status,
         team: targetTeam,
         assignedTo: isIncoming ? undefined : (assignedTo || currentUser._id),
-        createdBy: currentUser._id,
+        createdBy: finalCreator._id,
         raisedBy: isIncoming ? currentUser._id : undefined,
+        assignedReviewerId: finalReviewer?._id || undefined,
+        assignedReviewerName: finalReviewer?.name || undefined,
         incoming: isIncoming,
         dueDate: new Date(dueDate).toISOString(),
         labels,
@@ -315,6 +350,10 @@ export function TaskCreateModal() {
 
       const fullTask = {
         ...createdTask,
+        assignedReviewerId: finalReviewer?._id || undefined,
+        assignedReviewerName: finalReviewer?.name || undefined,
+        reviewStatus: finalReviewer ? 'pending_review' : 'none',
+        createdByUser: finalCreator,
         links: taskLinks,
         clientName: selectedClient,
         doctorName: doctorName.trim() || undefined,
@@ -324,7 +363,7 @@ export function TaskCreateModal() {
         history: [
           {
             id: `hist_${Date.now()}`,
-            action: `Task created by ${currentUser.name} (${currentUser.role})`,
+            action: `Task created by ${finalCreator.name} (${finalCreator.role})`,
             performedBy: currentUser.name,
             performedRole: currentUser.role,
             timestamp: new Date().toISOString(),
@@ -796,76 +835,149 @@ export function TaskCreateModal() {
           />
         </div>
 
-        {/* Team & Assignee Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-semibold text-foreground">
-              Assigned Team {!isSuperAdmin && !isCrossTeam && <span className="text-[10px] text-blue-500 font-normal">(Your Team)</span>}
-            </label>
-            <select
-              value={targetTeam}
-              onChange={(e) => {
-                const nextTeam = e.target.value as TeamName;
-                setTargetTeam(nextTeam);
-                setAssignedTo('');
-              }}
-              disabled={!isSuperAdmin && !isCrossTeam}
-              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {(isSuperAdmin || isCrossTeam) ? (
-                <>
-                  <option value="Creative">Creative Team</option>
-                  <option value="Marketing">Marketing Team</option>
-                  <option value="Development">Development Team</option>
-                </>
-              ) : (
-                <option value={currentUser.team}>{currentUser.team} Team</option>
-              )}
-            </select>
+        {/* Assigned Team */}
+        <div>
+          <label className="text-xs font-semibold text-foreground">
+            Assigned Team {!isSuperAdmin && !isCrossTeam && <span className="text-[10px] text-blue-500 font-normal">(Your Team)</span>}
+          </label>
+          <select
+            value={targetTeam}
+            onChange={(e) => {
+              const nextTeam = e.target.value as TeamName;
+              setTargetTeam(nextTeam);
+              setAssignedTo('');
+            }}
+            disabled={!isSuperAdmin && !isCrossTeam}
+            className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {(isSuperAdmin || isCrossTeam) ? (
+              <>
+                <option value="Creative">Creative Team</option>
+                <option value="Marketing">Marketing Team</option>
+                <option value="Development">Development Team</option>
+              </>
+            ) : (
+              <option value={currentUser.team}>{currentUser.team} Team</option>
+            )}
+          </select>
+        </div>
+
+        {/* Color-Differentiated Task Roles: 🟣 Creator • 🔵 Working • 🟠 Review */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-foreground">Task Roles &amp; Allocation</span>
+            <span className="text-[10px] font-mono font-bold text-muted-foreground">
+              🟣 Creator • 🔵 Working • 🟠 Review
+            </span>
           </div>
 
-          <div>
-            <label className="text-xs font-semibold text-foreground">
-              {isCrossTeam
-                ? 'Assigned User (Lead Review)'
-                : currentUser.role === 'Team Member'
-                ? 'Assigned Member (Handled by TL)'
-                : 'Assigned Member'}
-            </label>
-            <select
-              value={currentUser.role === 'Team Member' && !isCrossTeam ? currentUser._id : assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              disabled={isCrossTeam || currentUser.role === 'Team Member'}
-              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {currentUser.role === 'Team Member' && !isCrossTeam ? (
-                <option value={currentUser._id}>
-                  {currentUser.name} ({currentUser.role})
-                </option>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* 1. CREATOR (Purple Theme) */}
+            <div className="rounded-2xl border-2 border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20 p-3 space-y-1.5 transition-all hover:border-purple-500/50">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                  <UserCheck className="h-3 w-3" />
+                  Creator
+                </span>
+                <span className="text-[9px] font-mono text-purple-600/80 dark:text-purple-400/80">Originated</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Person creating &amp; authorizing this task.</p>
+              {isSuperAdmin ? (
+                <select
+                  value={creatorId || currentUser._id}
+                  onChange={(e) => setCreatorId(e.target.value)}
+                  className="w-full rounded-xl border border-purple-300 dark:border-purple-800 bg-background px-2.5 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 focus-ring cursor-pointer"
+                >
+                  {users.map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.name} ({u.role})
+                    </option>
+                  ))}
+                </select>
               ) : (
-                <>
-                  <option value="">-- Auto-assign / Unassigned --</option>
-                  {users
-                    .filter((u) => {
-                      if (!isUserInCompany(u, activeCompanyScope)) return false;
-                      if (isSuperAdmin) return u.team === targetTeam || u.role === 'Super Admin';
-                      if (currentUser.role === 'Team Lead') {
-                        return u.team === currentUser.team && u.role !== 'Super Admin';
-                      }
-                      return u._id === currentUser._id;
-                    })
-                    .map((u) => (
-                      <option key={u._id} value={u._id}>
-                        {u.name} ({u.role})
-                      </option>
-                    ))}
-                </>
+                <div className="flex items-center gap-1.5 p-2 rounded-xl bg-background/80 border border-purple-500/20">
+                  <div className="h-6 w-6 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-[10px] shrink-0">
+                    {currentUser.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-foreground truncate">{currentUser.name}</p>
+                    <p className="text-[9px] text-muted-foreground truncate">{currentUser.role}</p>
+                  </div>
+                </div>
               )}
-            </select>
+            </div>
+
+            {/* 2. WORKING / ASSIGNEE (Blue Theme) */}
+            <div className="rounded-2xl border-2 border-blue-500/30 bg-blue-500/5 dark:bg-blue-950/20 p-3 space-y-1.5 transition-all hover:border-blue-500/50">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                  <Briefcase className="h-3 w-3" />
+                  Working
+                </span>
+                <span className="text-[9px] font-mono text-blue-600/80 dark:text-blue-400/80">Doing Work</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Team member responsible for task execution.</p>
+              <select
+                value={currentUser.role === 'Team Member' && !isCrossTeam ? currentUser._id : assignedTo}
+                onChange={(e) => setAssignedTo(e.target.value)}
+                disabled={isCrossTeam || (currentUser.role === 'Team Member' && !isCrossTeam)}
+                className="w-full rounded-xl border border-blue-300 dark:border-blue-800 bg-background px-2.5 py-1.5 text-xs font-bold text-blue-700 dark:text-blue-300 focus-ring cursor-pointer disabled:opacity-60"
+              >
+                {currentUser.role === 'Team Member' && !isCrossTeam ? (
+                  <option value={currentUser._id}>
+                    {currentUser.name} ({currentUser.role})
+                  </option>
+                ) : (
+                  <>
+                    <option value="">-- Auto-assign / Unassigned --</option>
+                    {users
+                      .filter((u) => {
+                        if (!isUserInCompany(u, activeCompanyScope)) return false;
+                        if (isSuperAdmin) return u.team === targetTeam || u.role === 'Super Admin';
+                        if (currentUser.role === 'Team Lead') {
+                          return u.team === currentUser.team && u.role !== 'Super Admin';
+                        }
+                        return u._id === currentUser._id;
+                      })
+                      .map((u) => (
+                        <option key={u._id} value={u._id}>
+                          {u.name} ({u.role})
+                        </option>
+                      ))}
+                  </>
+                )}
+              </select>
+            </div>
+
+            {/* 3. REVIEW / REVIEWER (Amber Theme) */}
+            <div className="rounded-2xl border-2 border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 p-3 space-y-1.5 transition-all hover:border-amber-500/50">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  <FileSearch className="h-3 w-3" />
+                  Review
+                </span>
+                <span className="text-[9px] font-mono text-amber-600/80 dark:text-amber-400/80">Sign-off</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Team Lead / QA reviewing output &amp; approval.</p>
+              <select
+                value={assignedReviewerId}
+                onChange={(e) => setAssignedReviewerId(e.target.value)}
+                className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-background px-2.5 py-1.5 text-xs font-bold text-amber-700 dark:text-amber-300 focus-ring cursor-pointer"
+              >
+                <option value="">-- Select Reviewer / TL --</option>
+                {users
+                  .filter((u) => isUserInCompany(u, activeCompanyScope))
+                  .map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.name} ({u.role}{u.role === 'Team Lead' || u.role === 'Super Admin' ? ' 🌟' : ''})
+                    </option>
+                  ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Priority, Status, Due Date */}
+        {/* Priority, Workflow Stage, Due Date */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-semibold text-foreground">Priority</label>
@@ -882,17 +994,17 @@ export function TaskCreateModal() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-foreground">Status</label>
+            <label className="text-xs font-semibold text-foreground">Workflow Stage</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as TaskStatus)}
-              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring"
+              className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-sm focus-ring font-semibold"
             >
-              <option value="Todo">To Do</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Review">Review</option>
+              <option value="Todo">🟣 Created / To Do</option>
+              <option value="In Progress">🔵 Working / In Progress</option>
+              <option value="Review">🟠 Review / QA</option>
               <option value="Support">Support</option>
-              <option value="Done">Done</option>
+              <option value="Done">🟢 Done / Completed</option>
             </select>
           </div>
 
