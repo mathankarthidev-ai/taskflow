@@ -34,6 +34,7 @@ import {
   Volume2,
   VolumeX,
   Megaphone,
+  Trash2,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '../ui/Button';
@@ -220,6 +221,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const rawPopupAlerts = useNotificationStore((s) => s.popupAlerts);
   const markAllReadStore = useNotificationStore((s) => s.markAllRead);
   const markAsReadStore = useNotificationStore((s) => s.markAsRead);
+  const deleteNotificationStore = useNotificationStore((s) => s.deleteNotification);
+  const clearAllStore = useNotificationStore((s) => s.clearAll);
   const dismissPopupAlert = useNotificationStore((s) => s.dismissPopupAlert);
   const dismissAllPopupAlerts = useNotificationStore((s) => s.dismissAllPopupAlerts);
 
@@ -233,6 +236,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
   // User-persisted read tracking for total unified notifications (task reminders, self-reminders, wellness, etc.)
   const [readUnifiedNotificationIds, setReadUnifiedNotificationIds] = useState<Set<string>>(new Set());
+  // User-persisted deleted tracking for total unified notifications
+  const [deletedNotificationIds, setDeletedNotificationIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!currentUser?._id) return;
@@ -246,12 +251,36 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     }
   }, [currentUser?._id]);
 
+  useEffect(() => {
+    if (!currentUser?._id) return;
+    try {
+      const saved = localStorage.getItem(`taskflow_deleted_notifications_${currentUser._id}`);
+      if (saved) {
+        setDeletedNotificationIds(new Set(JSON.parse(saved)));
+      }
+    } catch {
+      // fallback
+    }
+  }, [currentUser?._id]);
+
   const persistReadIds = (newSet: Set<string>) => {
     setReadUnifiedNotificationIds(newSet);
     if (typeof window !== 'undefined' && currentUser?._id) {
       try {
         localStorage.setItem(
           `taskflow_read_notifications_${currentUser._id}`,
+          JSON.stringify(Array.from(newSet))
+        );
+      } catch (_) {}
+    }
+  };
+
+  const persistDeletedIds = (newSet: Set<string>) => {
+    setDeletedNotificationIds(newSet);
+    if (typeof window !== 'undefined' && currentUser?._id) {
+      try {
+        localStorage.setItem(
+          `taskflow_deleted_notifications_${currentUser._id}`,
           JSON.stringify(Array.from(newSet))
         );
       } catch (_) {}
@@ -462,12 +491,14 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
       });
     }
 
-    // Apply readUnifiedNotificationIds check across total unified items
-    return items.map((item) => ({
-      ...item,
-      unread: readUnifiedNotificationIds.has(item.id) ? false : item.unread,
-    }));
-  }, [notificationsList, tasks, userSelfReminders, currentUser, currentHabit, healthIntervalMins, healthCompletedItems, readUnifiedNotificationIds]);
+    // Apply deletedNotificationIds and readUnifiedNotificationIds check across total unified items
+    return items
+      .filter((item) => item && !deletedNotificationIds.has(item.id))
+      .map((item) => ({
+        ...item,
+        unread: readUnifiedNotificationIds.has(item.id) ? false : item.unread,
+      }));
+  }, [notificationsList, tasks, userSelfReminders, currentUser, currentHabit, healthIntervalMins, healthCompletedItems, readUnifiedNotificationIds, deletedNotificationIds]);
 
   // Filtered Notifications based on user-selected dropdown category
   const filteredNotifications = useMemo(() => {
@@ -1011,6 +1042,29 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     toast.success('Total notifications marked as read');
   };
 
+  const handleDeleteNotification = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    deleteNotificationStore(id);
+    dismissPopupAlert(id);
+    const updated = new Set(deletedNotificationIds);
+    updated.add(id);
+    persistDeletedIds(updated);
+    toast.info('Notification deleted');
+  };
+
+  const handleClearAllNotifications = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    stopReminderAlarmSound();
+    clearAllStore();
+    dismissAllPopupAlerts();
+    const updated = new Set(deletedNotificationIds);
+    for (const n of allUnifiedNotifications) {
+      updated.add(n.id);
+    }
+    persistDeletedIds(updated);
+    toast.success('All notifications cleared');
+  };
+
   const handleNotificationClick = (notif: any) => {
     stopReminderAlarmSound();
     markAsReadStore(notif.id);
@@ -1462,17 +1516,30 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                   )}
                 </div>
 
-                {totalUnreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleMarkAllRead}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all shadow-xs"
-                    title="Mark all notifications as read (Total)"
-                  >
-                    <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>Mark all as read</span>
-                  </button>
-                )}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {totalUnreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllRead}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all shadow-xs"
+                      title="Mark all notifications as read (Total)"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
+                      <span>Mark all read</span>
+                    </button>
+                  )}
+                  {filteredNotifications.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllNotifications}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-extrabold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all shadow-xs"
+                      title="Clear and delete all notifications"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                      <span>Clear all</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Category Filter Dropdown - Default: All Notifications */}
@@ -1528,7 +1595,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-1">
                             <p className="font-bold text-foreground text-xs truncate">{notif.title}</p>
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center gap-1 shrink-0">
                               <span className="text-[10px] text-zinc-400 font-mono">{notif.time}</span>
                               {notif.unread && (
                                 <button
@@ -1541,11 +1608,19 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                                     persistReadIds(updated);
                                   }}
                                   title="Mark as read"
-                                  className="p-1 rounded-md text-zinc-400 hover:text-emerald-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                  className="p-1 rounded-md text-zinc-400 hover:text-emerald-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
                                 >
                                   <Check className="h-3 w-3" />
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteNotification(notif.id, e)}
+                                title="Delete notification"
+                                className="p-1 rounded-md text-zinc-400 hover:text-rose-500 hover:bg-rose-500/15 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
                             </div>
                           </div>
                           <div className="mt-0.5">

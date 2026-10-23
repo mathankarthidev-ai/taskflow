@@ -18,7 +18,6 @@ import {
   Bell,
   BellRing,
   MessageSquare,
-  Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -26,7 +25,6 @@ import { useCompanyStore } from '@/store/useCompanyStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { getNewChatMessageCount, markChannelMessagesAsRead, extractDmParticipantIds } from '@/lib/chat-db';
 import { getCachedActiveSelfReminderCount, fetchSelfReminders } from '@/lib/self-reminders-store';
-import { getAnnouncementsCount } from '@/lib/announcements-store';
 import { Badge } from '../ui/Badge';
 
 interface SidebarProps {
@@ -41,7 +39,6 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   const notifications = useNotificationStore((s) => s.notifications);
   const [chatDbUnreadCount, setChatDbUnreadCount] = useState(0);
   const [selfReminderCount, setSelfReminderCount] = useState(0);
-  const [announcementsCount, setAnnouncementsCount] = useState(0);
 
   useEffect(() => {
     const refreshChatCount = () => {
@@ -66,13 +63,8 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
       setSelfReminderCount(getCachedActiveSelfReminderCount(currentUser.email));
     };
 
-    const refreshAnnouncements = () => {
-      setAnnouncementsCount(getAnnouncementsCount());
-    };
-
     refreshChatCount();
     refreshSelfReminders();
-    refreshAnnouncements();
     if (currentUser) {
       fetchSelfReminders(currentUser._id, currentUser.email, currentUser.name).then((list) => {
         setSelfReminderCount(list.filter((r) => !r.is_completed && r.is_active).length);
@@ -83,18 +75,14 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     window.addEventListener('taskflow_chat_message_sent', refreshChatCount);
     window.addEventListener('taskflow_chat_message_deleted', refreshChatCount);
     window.addEventListener('ambizcon_self_reminders_updated', refreshSelfReminders);
-    window.addEventListener('ambizcon_announcements_updated', refreshAnnouncements);
     window.addEventListener('storage', refreshChatCount);
-    window.addEventListener('storage', refreshAnnouncements);
 
     return () => {
       window.removeEventListener('taskflow_chat_unread_updated', refreshChatCount);
       window.removeEventListener('taskflow_chat_message_sent', refreshChatCount);
       window.removeEventListener('taskflow_chat_message_deleted', refreshChatCount);
       window.removeEventListener('ambizcon_self_reminders_updated', refreshSelfReminders);
-      window.removeEventListener('ambizcon_announcements_updated', refreshAnnouncements);
       window.removeEventListener('storage', refreshChatCount);
-      window.removeEventListener('storage', refreshAnnouncements);
     };
   }, [currentUser, pathname]);
 
@@ -155,12 +143,6 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     ? [
         { label: 'Attendance & Kiosk', href: '/attendance', icon: Clock, badge: 'Kiosk' },
         {
-          label: 'Announcements',
-          href: '/announcements',
-          icon: Megaphone,
-          badge: announcementsCount > 0 ? `${announcementsCount}` : undefined,
-        },
-        {
           label: 'Reminders',
           href: '/reminders',
           icon: Bell,
@@ -170,12 +152,6 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     : [
         { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
         { label: 'Bizzy Board', href: '/kanban', icon: KanbanSquare },
-        {
-          label: 'Announcements',
-          href: '/announcements',
-          icon: Megaphone,
-          badge: announcementsCount > 0 ? `${announcementsCount}` : undefined,
-        },
         {
           label: 'Reminders',
           href: '/reminders',

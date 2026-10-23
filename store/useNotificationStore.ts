@@ -53,6 +53,7 @@ interface NotificationState {
   notifications: AppNotification[];
   popupAlerts: AppNotification[];
   addNotification: (notif: Omit<AppNotification, 'id' | 'time' | 'unread'> & { id?: string }) => void;
+  deleteNotification: (id: string) => void;
   dismissPopupAlert: (id: string) => void;
   dismissAllPopupAlerts: () => void;
   markAllRead: () => void;
@@ -98,6 +99,15 @@ export const useNotificationStore = create<NotificationState>()(
             popupAlerts: existsInPopups ? currentPopups : [newEntry, ...currentPopups].slice(0, 6),
           };
         }),
+      deleteNotification: (id) =>
+        set((state) => ({
+          notifications: (Array.isArray(state.notifications) ? state.notifications : []).filter(
+            (n) => n && n.id !== id
+          ),
+          popupAlerts: (Array.isArray(state.popupAlerts) ? state.popupAlerts : []).filter(
+            (p) => p && p.id !== id
+          ),
+        })),
       dismissPopupAlert: (id) =>
         set((state) => ({
           popupAlerts: (Array.isArray(state.popupAlerts) ? state.popupAlerts : []).filter(
