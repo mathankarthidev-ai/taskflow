@@ -36,6 +36,8 @@ import {
   Link2,
   Globe,
   ExternalLink,
+  Copy,
+  Video,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportToCSV, normalizeUrl } from '@/lib/utils';
@@ -767,22 +769,84 @@ export function SelfRemindersSection() {
                       <p className="text-xs text-muted-foreground">{item.note}</p>
                     )}
 
-                    {/* Attached Link */}
+                    {/* Attached Meeting / Resource Link */}
                     {item.link && (
-                      <div className="pt-0.5">
-                        <a
-                          href={item.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors max-w-full truncate"
-                          title={item.link}
-                        >
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                          <span className="truncate">
-                            {item.link.replace(/^https?:\/\//i, '')}
-                          </span>
-                        </a>
+                      <div className="p-3 rounded-2xl border border-brand-500/30 bg-brand-500/[0.06] dark:bg-brand-950/30 flex flex-wrap items-center justify-between gap-3 max-w-xl">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className="h-8 w-8 rounded-xl bg-brand-500/15 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0 border border-brand-500/30">
+                            {item.link.includes('meet.google') || item.link.includes('zoom') || item.link.includes('teams') ? (
+                              <Video className="h-4 w-4" />
+                            ) : (
+                              <Globe className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-brand-700 dark:text-brand-300 block">
+                              {item.link.includes('meet.google') || item.link.includes('zoom') ? '📹 Meeting Video Call Link' : '🔗 Attached Resource Link'}
+                            </span>
+                            <a
+                              href={item.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs font-bold text-foreground hover:text-brand-600 dark:hover:text-brand-400 underline truncate block"
+                              title={item.link}
+                            >
+                              {item.link}
+                            </a>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(item.link!);
+                              toast.success('Meeting link copied to clipboard! 📋');
+                            }}
+                            className="h-7 px-2.5 text-xs font-bold gap-1 border-brand-500/30 text-brand-700 dark:text-brand-300 hover:bg-brand-500/10"
+                          >
+                            <Copy className="h-3 w-3" />
+                            Copy Link
+                          </Button>
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold ambizcon-gradient text-white shadow-glow hover:opacity-90 transition-opacity"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Open Link
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Reminder Audit & History Log (Similar to Tasks) */}
+                    {item.history && item.history.length > 0 && (
+                      <div className="pt-1.5 space-y-1">
+                        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                          <Clock className="h-3 w-3 text-emerald-500 shrink-0" />
+                          <span>Reminder Audit Log:</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {item.history.slice(-3).map((h) => (
+                            <span
+                              key={h.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800/80 text-[10px] font-bold text-foreground/90"
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              <span>{h.action}</span>
+                              <span className="text-[9px] font-mono text-muted-foreground ml-0.5">
+                                ({new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
 

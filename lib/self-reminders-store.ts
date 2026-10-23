@@ -9,6 +9,12 @@ export type SelfReminderRepeat =
   | 'Yearly'
   | 'Custom Days';
 
+export interface SelfReminderHistoryLog {
+  id: string;
+  action: string;
+  timestamp: string;
+}
+
 export interface SelfReminder {
   id: string;
   user_id: string;
@@ -23,6 +29,7 @@ export interface SelfReminder {
   custom_days?: string; // e.g. "Mon, Wed, Fri"
   link?: string; // Attached reference, doc or meeting link
   links?: { title?: string; url: string }[];
+  history?: SelfReminderHistoryLog[];
   is_completed: boolean;
   is_active: boolean;
   created_at?: string;
@@ -94,6 +101,18 @@ export async function fetchSelfReminders(
   const emailLower = userEmail.toLowerCase();
   const storageKey = `${STORAGE_PREFIX}${emailLower}`;
 
+  // Read cached localStorage items to preserve local links & history
+  let cachedMap = new Map<string, SelfReminder>();
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(storageKey);
+    if (cached) {
+      try {
+        const list: SelfReminder[] = JSON.parse(cached);
+        list.forEach((item) => cachedMap.set(item.id, item));
+      } catch (e) {}
+    }
+  }
+
   try {
     const { data, error } = await supabase
       .from('self_reminders')
@@ -117,22 +136,41 @@ export async function fetchSelfReminders(
 
       const nonDemoRows = data.filter((row: any) => !demoIds.includes(row.id));
 
-      const mapped: SelfReminder[] = nonDemoRows.map((row: any) => ({
-        id: row.id,
-        user_id: row.user_id || userId,
-        user_email: row.user_email || emailLower,
-        user_name: row.user_name || userName,
-        title: row.title,
-        note: row.note || '',
-        reminder_date: row.reminder_date,
-        day_name: row.day_name || getDayOfWeekFromDate(row.reminder_date),
-        reminder_time: row.reminder_time || '09:30 AM',
-        repeat_type: (row.repeat_type || 'Daily') as SelfReminderRepeat,
-        custom_days: row.custom_days || '',
-        is_completed: Boolean(row.is_completed),
-        is_active: row.is_active !== false,
-        created_at: row.created_at,
-      }));
+      const mapped: SelfReminder[] = nonDemoRows.map((row: any) => {
+        const rawNote = row.note || '';
+        const linkMatch = rawNote.match(/\[RESOURCE_LINK\]:([^\s\n]+)/);
+        const cleanNote = rawNote.replace(/\n?\[RESOURCE_LINK\]:[^\s\n]+/g, '').trim();
+        const cachedItem = cachedMap.get(row.id);
+        const resolvedLink = linkMatch ? linkMatch[1] : (row.link || cachedItem?.link || undefined);
+        const resolvedHistory = cachedItem?.history && cachedItem.history.length > 0
+          ? cachedItem.history
+          : [
+              {
+                id: `hist_${row.id}`,
+                action: resolvedLink ? `Created self reminder with link (${resolvedLink})` : 'Created self reminder',
+                timestamp: row.created_at || new Date().toISOString(),
+              },
+            ];
+
+        return {
+          id: row.id,
+          user_id: row.user_id || userId,
+          user_email: row.user_email || emailLower,
+          user_name: row.user_name || userName,
+          title: row.title,
+          note: cleanNote,
+          link: resolvedLink,
+          history: resolvedHistory,
+          reminder_date: row.reminder_date,
+          day_name: row.day_name || getDayOfWeekFromDate(row.reminder_date),
+          reminder_time: row.reminder_time || '09:30 AM',
+          repeat_type: (row.repeat_type || 'Daily') as SelfReminderRepeat,
+          custom_days: row.custom_days || '',
+          is_completed: Boolean(row.is_completed),
+          is_active: row.is_active !== false,
+          created_at: row.created_at,
+        };
+      });
 
       if (typeof window !== 'undefined') {
         localStorage.setItem(storageKey, JSON.stringify(mapped));
@@ -183,22 +221,61 @@ export async function createSelfReminder(
 
   const emailLower = payload.user_email.toLowerCase();
   const storageKey = `${STORAGE_PREFIX}${emailLower}`;
+  const nowIso = new Date().toISOString();
+
+  const initHistory: SelfReminderHistoryLog[] = [
+    {
+      id: `hist_${Date.now()}_create`,
+      action: payload.link
+        ? `Created self reminder with meeting link (${payload.link})`
+        : 'Created self reminder',
+      timestamp: nowIso,
+    },
+  ];
+
   const newItem: SelfReminder = {
     ...payload,
     id: `SR-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     user_email: emailLower,
     reminder_time: formatTime12Hour(payload.reminder_time),
-    created_at: new Date().toISOString(),
+    history: payload.history && payload.history.length > 0 ? payload.history : initHistory,
+    created_at: nowIso,
+  };
+
+  // Safe Supabase payload (encodes link in note so Postgres schema cache does not error on unknown column)
+  const dbPayload = {
+    id: newItem.id,
+    user_id: newItem.user_id,
+    user_email: newItem.user_email,
+    user_name: newItem.user_name,
+    title: newItem.title,
+    note: newItem.link
+      ? `${newItem.note || ''}\n[RESOURCE_LINK]:${newItem.link}`.trim()
+      : (newItem.note || ''),
+    reminder_date: newItem.reminder_date,
+    day_name: newItem.day_name,
+    reminder_time: newItem.reminder_time,
+    repeat_type: newItem.repeat_type,
+    custom_days: newItem.custom_days || '',
+    is_completed: newItem.is_completed,
+    is_active: newItem.is_active,
+    created_at: newItem.created_at,
   };
 
   try {
-    await supabase.from('self_reminders').upsert(newItem, { onConflict: 'id' });
+    await supabase.from('self_reminders').upsert(dbPayload, { onConflict: 'id' });
   } catch (e) {}
 
   if (typeof window !== 'undefined') {
-    const current = await fetchSelfReminders(payload.user_id, emailLower, payload.user_name);
-    const exists = current.some((i) => i.id === newItem.id);
-    const updated = exists ? current : [newItem, ...current];
+    let current: SelfReminder[] = [];
+    const cached = localStorage.getItem(storageKey);
+    if (cached) {
+      try {
+        current = JSON.parse(cached);
+      } catch (e) {}
+    }
+    const filtered = current.filter((i) => i.id !== newItem.id);
+    const updated = [newItem, ...filtered];
     localStorage.setItem(storageKey, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent('ambizcon_self_reminders_updated'));
   }
@@ -213,14 +290,7 @@ export async function updateSelfReminder(
 ): Promise<SelfReminder | null> {
   const emailLower = userEmail.toLowerCase();
   const storageKey = `${STORAGE_PREFIX}${emailLower}`;
-  const formattedUpdates = {
-    ...updates,
-    ...(updates.reminder_time ? { reminder_time: formatTime12Hour(updates.reminder_time) } : {}),
-  };
-
-  try {
-    await supabase.from('self_reminders').update(formattedUpdates).eq('id', id);
-  } catch (e) {}
+  const nowIso = new Date().toISOString();
 
   let updatedItem: SelfReminder | null = null;
   if (typeof window !== 'undefined') {
@@ -230,7 +300,28 @@ export async function updateSelfReminder(
         const list: SelfReminder[] = JSON.parse(cached);
         const nextList = list.map((item) => {
           if (item.id === id) {
-            updatedItem = { ...item, ...formattedUpdates };
+            const historyAction =
+              updates.is_completed !== undefined
+                ? (updates.is_completed ? 'Marked as completed' : 'Marked as active alert')
+                : updates.link !== undefined
+                ? (updates.link ? `Updated meeting/resource link (${updates.link})` : 'Removed meeting link')
+                : 'Updated reminder details';
+
+            const nextHistory: SelfReminderHistoryLog[] = [
+              ...(item.history || []),
+              {
+                id: `hist_${Date.now()}`,
+                action: historyAction,
+                timestamp: nowIso,
+              },
+            ];
+
+            updatedItem = {
+              ...item,
+              ...updates,
+              ...(updates.reminder_time ? { reminder_time: formatTime12Hour(updates.reminder_time) } : {}),
+              history: nextHistory,
+            };
             return updatedItem;
           }
           return item;
@@ -240,6 +331,26 @@ export async function updateSelfReminder(
     }
     window.dispatchEvent(new CustomEvent('ambizcon_self_reminders_updated'));
   }
+
+  // Safe Supabase update without unmapped columns
+  const dbUpdates: any = {
+    ...(updates.title !== undefined ? { title: updates.title } : {}),
+    ...(updates.reminder_date !== undefined ? { reminder_date: updates.reminder_date } : {}),
+    ...(updates.day_name !== undefined ? { day_name: updates.day_name } : {}),
+    ...(updates.reminder_time !== undefined ? { reminder_time: formatTime12Hour(updates.reminder_time) } : {}),
+    ...(updates.repeat_type !== undefined ? { repeat_type: updates.repeat_type } : {}),
+    ...(updates.custom_days !== undefined ? { custom_days: updates.custom_days } : {}),
+    ...(updates.is_completed !== undefined ? { is_completed: updates.is_completed } : {}),
+    ...(updates.is_active !== undefined ? { is_active: updates.is_active } : {}),
+  };
+
+  const finalLink = updates.link !== undefined ? updates.link : (updatedItem ? (updatedItem as SelfReminder).link : undefined);
+  const finalNote = updates.note !== undefined ? updates.note : (updatedItem ? (updatedItem as SelfReminder).note : '');
+  dbUpdates.note = finalLink ? `${finalNote}\n[RESOURCE_LINK]:${finalLink}`.trim() : finalNote;
+
+  try {
+    await supabase.from('self_reminders').update(dbUpdates).eq('id', id);
+  } catch (e) {}
 
   return updatedItem;
 }
