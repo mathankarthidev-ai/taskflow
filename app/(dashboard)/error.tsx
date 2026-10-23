@@ -30,14 +30,28 @@ export default function DashboardErrorBoundary({
         </div>
         <div className="flex items-center justify-center gap-3 pt-1">
           <button
-            onClick={() => reset()}
+            onClick={() => {
+              try {
+                if (typeof window !== 'undefined' && window.location.pathname.includes('announcement')) {
+                  localStorage.removeItem('ambizcon_announcements_v1');
+                }
+              } catch {}
+              reset();
+            }}
             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-bold text-white shadow-sm transition-all cursor-pointer"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Retry Section
           </button>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              try {
+                if (typeof window !== 'undefined' && window.location.pathname.includes('announcement')) {
+                  localStorage.removeItem('ambizcon_announcements_v1');
+                }
+              } catch {}
+              window.location.reload();
+            }}
             className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-4 py-2 text-xs font-semibold text-foreground transition-all cursor-pointer"
           >
             <LayoutDashboard className="h-3.5 w-3.5" />

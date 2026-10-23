@@ -50,7 +50,18 @@ export function AnnouncementDetailModal({
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
-  if (!announcement || !currentUser) return null;
+  // ALL HOOKS MUST RUN UNCONDITIONALLY AT THE TOP LEVEL (Rules of Hooks)
+  React.useEffect(() => {
+    if (isOpen && announcement && currentUser) {
+      const isRead = isAnnouncementRead(announcement.id, currentUser._id);
+      if (!isRead) {
+        markAnnouncementAsRead(announcement.id, currentUser._id);
+        onUpdate();
+      }
+    }
+  }, [isOpen, announcement?.id, currentUser?._id, onUpdate]);
+
+  if (!isOpen || !announcement || !currentUser) return null;
 
   const roleLower = (currentUser.role || '').toLowerCase().trim();
   const isAdmin =
@@ -60,20 +71,15 @@ export function AnnouncementDetailModal({
     currentUser.email === 'anirudh@ambizcon.com' ||
     currentUser.email === 'mathan@ambizcon.com' ||
     roleLower === 'director';
-  const myLike = announcement.likes.find((l) => l.userId === currentUser._id);
+
+  const likes = Array.isArray(announcement.likes) ? announcement.likes : [];
+  const comments = Array.isArray(announcement.comments) ? announcement.comments : [];
+  const myLike = currentUser ? likes.find((l) => l && l.userId === currentUser._id) : null;
   const isHeartedByMe = myLike?.type === 'heart';
   const isThumbLikedByMe = myLike && myLike.type !== 'heart';
   const heartCount = getHeartLikesCount(announcement);
   const thumbCount = getThumbLikesCount(announcement);
   const isReadByMe = isAnnouncementRead(announcement.id, currentUser._id);
-
-  // Auto-mark as read when modal opens
-  React.useEffect(() => {
-    if (isOpen && announcement && currentUser && !isReadByMe) {
-      markAnnouncementAsRead(announcement.id, currentUser._id);
-      onUpdate();
-    }
-  }, [isOpen, announcement?.id, currentUser?._id, isReadByMe]);
 
   const handleHeart = () => {
     toggleLikeAnnouncement(announcement.id, currentUser, 'heart');
@@ -127,7 +133,7 @@ export function AnnouncementDetailModal({
   };
 
   // Build formatted likers list text
-  const likersNames = announcement.likes.map((l) => l.userName).join(', ');
+  const likersNames = likes.map((l) => l?.userName || 'Team Member').join(', ');
 
   return (
     <Modal
@@ -267,12 +273,12 @@ export function AnnouncementDetailModal({
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-foreground text-xs font-bold transition-colors"
           >
             <MessageSquare className="h-4 w-4 text-emerald-500" />
-            <span>Comment ({announcement.comments.length})</span>
+            <span>Comment ({comments.length})</span>
           </button>
         </div>
 
         {/* Likers List Strip (Zoho People style with Heart and Like badges) */}
-        {announcement.likes.length > 0 && (
+        {likes.length > 0 && (
           <div className="p-2.5 rounded-xl bg-zinc-100/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 text-xs text-foreground flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1 shrink-0">
               {heartCount > 0 && (
@@ -289,7 +295,7 @@ export function AnnouncementDetailModal({
               )}
             </div>
             <span className="font-medium text-xs text-muted-foreground leading-normal">
-              {announcement.likes
+              {likes
                 .map((l) => `${l.userName} (${l.type === 'heart' ? '❤️' : '👍'})`)
                 .join(', ')}
             </span>
@@ -300,18 +306,18 @@ export function AnnouncementDetailModal({
         <div className="pt-3 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold text-foreground uppercase tracking-wider">
-              Displaying all {announcement.comments.length} comment(s)
+              Displaying all {comments.length} comment(s)
             </span>
           </div>
 
           {/* Comments List */}
           <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-            {announcement.comments.length === 0 ? (
+            {comments.length === 0 ? (
               <p className="text-xs text-muted-foreground italic py-3 text-center">
                 No comments yet. Be the first to share your thoughts!
               </p>
             ) : (
-              announcement.comments.map((comm) => (
+              comments.map((comm) => (
                 <div
                   key={comm.id}
                   className="flex items-start gap-3 p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 group/comment"

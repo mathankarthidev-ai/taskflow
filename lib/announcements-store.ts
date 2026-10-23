@@ -274,6 +274,72 @@ For this client, we will be managing:
   },
 ];
 
+/**
+ * Defensive sanitizer ensuring every announcement has required fields and valid arrays
+ */
+export function sanitizeAnnouncement(raw: any): Announcement {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      id: `ann_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      title: 'Company Announcement',
+      content: '',
+      authorId: 'usr_1',
+      authorName: 'Anirudh Krishnakumar',
+      authorRole: 'Director',
+      applicableTo: 'All',
+      createdAt: 'Just now',
+      likes: [],
+      comments: [],
+    };
+  }
+
+  const safeLikes: AnnouncementLike[] = Array.isArray(raw.likes)
+    ? raw.likes
+        .filter((l: any) => l && typeof l === 'object' && l.userId)
+        .map((l: any) => ({
+          userId: String(l.userId),
+          userName: String(l.userName || 'Team Member'),
+          userAvatar: l.userAvatar ? String(l.userAvatar) : undefined,
+          type: l.type === 'heart' ? 'heart' : 'like',
+        }))
+    : [];
+
+  const safeComments: AnnouncementComment[] = Array.isArray(raw.comments)
+    ? raw.comments
+        .filter((c: any) => c && typeof c === 'object' && c.id)
+        .map((c: any) => ({
+          id: String(c.id),
+          authorId: String(c.authorId || 'usr_1'),
+          authorName: String(c.authorName || 'Team Member'),
+          authorRole: c.authorRole ? String(c.authorRole) : undefined,
+          authorAvatar: c.authorAvatar ? String(c.authorAvatar) : undefined,
+          text: String(c.text || ''),
+          createdAt: String(c.createdAt || 'Just now'),
+          likesCount: typeof c.likesCount === 'number' ? c.likesCount : 0,
+        }))
+    : [];
+
+  const safeReadBy: string[] = Array.isArray(raw.readBy)
+    ? raw.readBy.filter((id: any) => typeof id === 'string')
+    : [];
+
+  return {
+    id: String(raw.id || `ann_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`),
+    title: String(raw.title || 'Company Announcement'),
+    content: String(raw.content || ''),
+    authorId: String(raw.authorId || 'usr_1'),
+    authorName: String(raw.authorName || 'Anirudh Krishnakumar'),
+    authorRole: String(raw.authorRole || 'Director'),
+    authorAvatar: raw.authorAvatar ? String(raw.authorAvatar) : undefined,
+    applicableTo: raw.applicableTo || 'All',
+    createdAt: String(raw.createdAt || 'Just now'),
+    pinned: Boolean(raw.pinned),
+    likes: safeLikes,
+    comments: safeComments,
+    readBy: safeReadBy,
+  };
+}
+
 // Helper to notify other components/tabs
 function emitAnnouncementsChanged() {
   if (typeof window === 'undefined') return;
@@ -283,43 +349,39 @@ function emitAnnouncementsChanged() {
 }
 
 export function getStoredAnnouncements(): Announcement[] {
-  if (typeof window === 'undefined') return SEED_ANNOUNCEMENTS;
+  if (typeof window === 'undefined') return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ANNOUNCEMENTS));
-      return SEED_ANNOUNCEMENTS;
+      return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
+      const sanitized = parsed.map(sanitizeAnnouncement);
       // Ensure all seed announcements are guaranteed to exist even if local cache is partial
-      const existingIds = new Set(parsed.map((p: any) => p.id));
-      const missingSeeds = SEED_ANNOUNCEMENTS.filter((s) => !existingIds.has(s.id));
+      const existingIds = new Set(sanitized.map((p) => p.id));
+      const missingSeeds = SEED_ANNOUNCEMENTS.filter((s) => !existingIds.has(s.id)).map(sanitizeAnnouncement);
 
-      const synced = parsed.map((item: Announcement) => {
-        const seedMatch = SEED_ANNOUNCEMENTS.find((s) => s.id === item.id);
-        if (seedMatch) {
-          return {
-            ...item,
-            applicableTo: seedMatch.applicableTo,
-            title: item.title || seedMatch.title,
-            content: item.content || seedMatch.content,
-          };
-        }
-        return item;
-      });
-
-      const merged = [...synced, ...missingSeeds];
+      const merged = [...sanitized, ...missingSeeds];
       if (missingSeeds.length > 0) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       }
       return merged;
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ANNOUNCEMENTS));
-    return SEED_ANNOUNCEMENTS;
+    return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
   } catch {
-    return SEED_ANNOUNCEMENTS;
+    return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
   }
+}
+
+export function resetAnnouncementsToDefaults(): Announcement[] {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ANNOUNCEMENTS));
+    emitAnnouncementsChanged();
+  }
+  return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
 }
 
 /**
@@ -331,7 +393,9 @@ export function getVisibleAnnouncementsForUser(
   announcements: Announcement[],
   user: User | null
 ): Announcement[] {
-  if (!user) return announcements;
+  if (!Array.isArray(announcements)) return [];
+  const safeList = announcements.filter(Boolean).map(sanitizeAnnouncement);
+  if (!user) return safeList;
   const roleLower = (user.role || '').toLowerCase().trim();
   const isAdmin =
     roleLower === 'super admin' ||
@@ -341,13 +405,13 @@ export function getVisibleAnnouncementsForUser(
     user.email === 'mathan@ambizcon.com' ||
     roleLower === 'director';
 
-  if (isAdmin) return announcements;
+  if (isAdmin) return safeList;
 
   const rawUserTeam = (user.team || '').toLowerCase().trim();
   // Normalize team: "development team" -> "development"
   const cleanUserTeam = rawUserTeam.replace(/\s*team\s*/i, '').trim();
 
-  return announcements.filter((ann) => {
+  return safeList.filter((ann) => {
     // 1. All-company broadcasts are visible to all members
     const target = (ann.applicableTo || 'All').toLowerCase().trim();
     if (
@@ -400,10 +464,10 @@ export function createAnnouncement(
     minute: '2-digit',
   });
 
-  const newAnn: Announcement = {
+  const newAnn: Announcement = sanitizeAnnouncement({
     id: `ann_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    title: data.title.trim(),
-    content: data.content.trim(),
+    title: (data.title || '').trim(),
+    content: (data.content || '').trim(),
     authorId: adminUser._id,
     authorName: adminUser.name,
     authorRole: adminUser.role === 'Super Admin' ? 'Director' : adminUser.role,
@@ -413,7 +477,7 @@ export function createAnnouncement(
     pinned: Boolean(data.pinned),
     likes: [],
     comments: [],
-  };
+  });
 
   const updated = [newAnn, ...list];
   if (typeof window !== 'undefined') {
@@ -438,22 +502,22 @@ export function getUserReadAnnouncementIds(userId: string): string[] {
 }
 
 export function isAnnouncementRead(announcementId: string, userId: string, announcements?: Announcement[]): boolean {
-  if (!userId) return true;
+  if (!userId || !announcementId) return true;
   const userReadIds = getUserReadAnnouncementIds(userId);
   if (userReadIds.includes(announcementId)) return true;
 
   const list = announcements || getStoredAnnouncements();
-  const target = list.find((a) => a.id === announcementId);
-  return Boolean(target?.readBy && target.readBy.includes(userId));
+  const target = list.find((a) => a && a.id === announcementId);
+  return Boolean(target?.readBy && Array.isArray(target.readBy) && target.readBy.includes(userId));
 }
 
 export function markAnnouncementAsRead(announcementId: string, userId: string): boolean {
   if (!userId || !announcementId) return false;
   const list = getStoredAnnouncements();
-  const target = list.find((a) => a.id === announcementId);
+  const target = list.find((a) => a && a.id === announcementId);
 
   if (target) {
-    if (!target.readBy) target.readBy = [];
+    if (!Array.isArray(target.readBy)) target.readBy = [];
     if (!target.readBy.includes(userId)) {
       target.readBy.push(userId);
     }
@@ -474,9 +538,9 @@ export function markAnnouncementAsRead(announcementId: string, userId: string): 
 export function markAnnouncementAsUnread(announcementId: string, userId: string): boolean {
   if (!userId || !announcementId) return false;
   const list = getStoredAnnouncements();
-  const target = list.find((a) => a.id === announcementId);
+  const target = list.find((a) => a && a.id === announcementId);
 
-  if (target && target.readBy) {
+  if (target && Array.isArray(target.readBy)) {
     target.readBy = target.readBy.filter((id) => id !== userId);
   }
 
@@ -495,7 +559,7 @@ export function markAllAnnouncementsAsRead(userId: string): void {
   const allIds = list.map((a) => a.id);
 
   list.forEach((a) => {
-    if (!a.readBy) a.readBy = [];
+    if (!Array.isArray(a.readBy)) a.readBy = [];
     if (!a.readBy.includes(userId)) {
       a.readBy.push(userId);
     }
@@ -524,18 +588,20 @@ export function getUnreadAnnouncementsCount(
     announcements = maybeAnnouncements;
   }
 
-  const rawList = announcements || getStoredAnnouncements();
+  const rawList = Array.isArray(announcements) ? announcements : getStoredAnnouncements();
   const visible = user ? getVisibleAnnouncementsForUser(rawList, user) : rawList;
   const userReadIds = new Set(getUserReadAnnouncementIds(userId));
-  return visible.filter((a) => !userReadIds.has(a.id) && !(a.readBy && a.readBy.includes(userId))).length;
+  return visible.filter((a) => a && !userReadIds.has(a.id) && !(Array.isArray(a.readBy) && a.readBy.includes(userId))).length;
 }
 
-export function getHeartLikesCount(ann: Announcement): number {
-  return ann.likes.filter((l) => l.type === 'heart').length;
+export function getHeartLikesCount(ann?: Announcement | null): number {
+  if (!ann || !Array.isArray(ann.likes)) return 0;
+  return ann.likes.filter((l) => l && l.type === 'heart').length;
 }
 
-export function getThumbLikesCount(ann: Announcement): number {
-  return ann.likes.filter((l) => l.type !== 'heart').length;
+export function getThumbLikesCount(ann?: Announcement | null): number {
+  if (!ann || !Array.isArray(ann.likes)) return 0;
+  return ann.likes.filter((l) => l && l.type !== 'heart').length;
 }
 
 export function toggleLikeAnnouncement(
@@ -544,13 +610,17 @@ export function toggleLikeAnnouncement(
   reactionType: 'heart' | 'like' = 'heart'
 ): Announcement | null {
   const list = getStoredAnnouncements();
-  const target = list.find((a) => a.id === announcementId);
+  const target = list.find((a) => a && a.id === announcementId);
   if (!target) return null;
 
-  const alreadyLikedIndex = target.likes.findIndex((l) => l.userId === user._id);
+  if (!Array.isArray(target.likes)) {
+    target.likes = [];
+  }
+
+  const alreadyLikedIndex = target.likes.findIndex((l) => l && l.userId === user._id);
   if (alreadyLikedIndex !== -1) {
     const existing = target.likes[alreadyLikedIndex];
-    const currentType = existing.type || 'like';
+    const currentType = existing?.type || 'like';
     if (currentType === reactionType) {
       // Toggle off if same reaction clicked
       target.likes.splice(alreadyLikedIndex, 1);
@@ -587,8 +657,12 @@ export function addCommentToAnnouncement(
 ): AnnouncementComment | null {
   if (!commentText.trim()) return null;
   const list = getStoredAnnouncements();
-  const target = list.find((a) => a.id === announcementId);
+  const target = list.find((a) => a && a.id === announcementId);
   if (!target) return null;
+
+  if (!Array.isArray(target.comments)) {
+    target.comments = [];
+  }
 
   const now = new Date();
   const dateFormatted = now.toLocaleDateString('en-GB', {
@@ -625,10 +699,10 @@ export function deleteCommentFromAnnouncement(
   isAdmin: boolean
 ): boolean {
   const list = getStoredAnnouncements();
-  const target = list.find((a) => a.id === announcementId);
-  if (!target) return false;
+  const target = list.find((a) => a && a.id === announcementId);
+  if (!target || !Array.isArray(target.comments)) return false;
 
-  const commentIndex = target.comments.findIndex((c) => c.id === commentId);
+  const commentIndex = target.comments.findIndex((c) => c && c.id === commentId);
   if (commentIndex === -1) return false;
 
   // Only comment author or admin can delete

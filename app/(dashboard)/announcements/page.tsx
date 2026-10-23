@@ -14,6 +14,8 @@ import {
   getHeartLikesCount,
   getThumbLikesCount,
   toggleLikeAnnouncement,
+  resetAnnouncementsToDefaults,
+  sanitizeAnnouncement,
 } from '@/lib/announcements-store';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -36,12 +38,14 @@ import {
   Check,
   CheckCircle2,
   CheckCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AnnouncementsPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
-  const [announcements, setAnnouncements] = useState<Announcement[]>(() => getStoredAnnouncements());
+  const [isMounted, setIsMounted] = useState(false);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
@@ -59,14 +63,47 @@ export default function AnnouncementsPage() {
 
   const userTeam = (currentUser?.team || 'Development').replace(/\s*team\s*/i, '').trim();
 
+  const loadAnnouncements = () => {
+    try {
+      const list = getStoredAnnouncements();
+      setAnnouncements([...list]);
+
+      // Update selected announcement reference if modal is open
+      if (selectedAnnouncement) {
+        const refreshed = list.find((a) => a && a.id === selectedAnnouncement.id);
+        if (refreshed) {
+          setSelectedAnnouncement(refreshed);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load announcements:', e);
+    }
+  };
+
+  useEffect(() => {
+    setIsMounted(true);
+    loadAnnouncements();
+    const handleSync = () => loadAnnouncements();
+    window.addEventListener('ambizcon_announcements_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('ambizcon_announcements_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
+
   // Base list of announcements visible to this user
   // Admin: can see all announcements across all teams
   // Mem and TL: can only see 'All' and their own team, not other teams
   const visibleAnnouncements = useMemo(() => {
+    if (!isMounted) return [];
     return getVisibleAnnouncementsForUser(announcements, currentUser);
-  }, [announcements, currentUser]);
+  }, [announcements, currentUser, isMounted]);
 
-  const unreadCount = currentUser ? getUnreadAnnouncementsCount(currentUser._id, currentUser, visibleAnnouncements) : 0;
+  const unreadCount = useMemo(() => {
+    if (!currentUser || !isMounted) return 0;
+    return getUnreadAnnouncementsCount(currentUser._id, currentUser, visibleAnnouncements);
+  }, [currentUser, isMounted, visibleAnnouncements]);
 
   // Filter tabs:
   // Admin has all options: All, Unread, Pinned, Development, Marketing, Creative, Sales, HR
@@ -102,19 +139,6 @@ export default function AnnouncementsPage() {
     }
   }, [availableFilterTabs, selectedFilter]);
 
-  const loadAnnouncements = () => {
-    const list = getStoredAnnouncements();
-    setAnnouncements([...list]);
-
-    // Update selected announcement reference if modal is open
-    if (selectedAnnouncement) {
-      const refreshed = list.find((a) => a.id === selectedAnnouncement.id);
-      if (refreshed) {
-        setSelectedAnnouncement(refreshed);
-      }
-    }
-  };
-
   const handleMarkAllAsRead = () => {
     if (!currentUser) return;
     markAllAnnouncementsAsRead(currentUser._id);
@@ -140,40 +164,53 @@ export default function AnnouncementsPage() {
     loadAnnouncements();
   };
 
-  useEffect(() => {
-    loadAnnouncements();
-    const handleSync = () => loadAnnouncements();
-    window.addEventListener('ambizcon_announcements_updated', handleSync);
-    return () => {
-      window.removeEventListener('ambizcon_announcements_updated', handleSync);
-    };
-  }, []);
+  const handleResetDefaults = () => {
+    const reset = resetAnnouncementsToDefaults();
+    setAnnouncements([...reset]);
+    toast.success('Official announcements synchronized to standard roster');
+  };
 
   // Filtered list derived from visibleAnnouncements
-  const filteredAnnouncements = visibleAnnouncements.filter((ann) => {
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = ann.title.toLowerCase().includes(q);
-      const matchAuthor = ann.authorName.toLowerCase().includes(q);
-      const matchContent = ann.content.toLowerCase().includes(q);
-      if (!matchTitle && !matchAuthor && !matchContent) return false;
-    }
+  const filteredAnnouncements = useMemo(() => {
+    return visibleAnnouncements.filter((ann) => {
+      if (!ann) return false;
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = (ann.title || '').toLowerCase().includes(q);
+        const matchAuthor = (ann.authorName || '').toLowerCase().includes(q);
+        const matchContent = (ann.content || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchAuthor && !matchContent) return false;
+      }
 
-    // Category / Team filter
-    if (selectedFilter === 'Unread') {
-      return currentUser ? !isAnnouncementRead(ann.id, currentUser._id, visibleAnnouncements) : false;
-    }
-    if (selectedFilter === 'Pinned') {
-      return Boolean(ann.pinned);
-    }
-    if (selectedFilter !== 'All') {
-      const cleanFilter = selectedFilter.toLowerCase().replace(/\s*team\s*/i, '').trim();
-      const cleanAnn = (ann.applicableTo || '').toLowerCase().replace(/\s*team\s*/i, '').trim();
-      return cleanAnn === cleanFilter;
-    }
-    return true;
-  });
+      // Category / Team filter
+      if (selectedFilter === 'Unread') {
+        return currentUser ? !isAnnouncementRead(ann.id, currentUser._id, visibleAnnouncements) : false;
+      }
+      if (selectedFilter === 'Pinned') {
+        return Boolean(ann.pinned);
+      }
+      if (selectedFilter !== 'All') {
+        const cleanFilter = selectedFilter.toLowerCase().replace(/\s*team\s*/i, '').trim();
+        const cleanAnn = (ann.applicableTo || '').toLowerCase().replace(/\s*team\s*/i, '').trim();
+        return cleanAnn === cleanFilter;
+      }
+      return true;
+    });
+  }, [visibleAnnouncements, searchQuery, selectedFilter, currentUser]);
+
+  if (!isMounted) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-28 rounded-3xl bg-zinc-100 dark:bg-zinc-800/50" />
+        <div className="h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800/50" />
+        <div className="space-y-3">
+          <div className="h-24 rounded-2xl bg-zinc-100 dark:bg-zinc-800/50" />
+          <div className="h-24 rounded-2xl bg-zinc-100 dark:bg-zinc-800/50" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -200,16 +237,32 @@ export default function AnnouncementsPage() {
           </div>
         </div>
 
-        {/* Admin Create Action */}
-        {isAdmin && (
-          <Button
-            onClick={() => setIsCreateOpen(true)}
-            className="ambizcon-gradient text-white text-xs font-extrabold gap-2 shadow-glow px-4 py-2 hover:opacity-95"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Create Announcement</span>
-          </Button>
-        )}
+        {/* Admin Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleResetDefaults}
+              className="text-xs font-bold gap-1.5 border-zinc-200 dark:border-zinc-700 bg-background/80 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              title="Reset official announcements list to latest company standard"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-brand-500" />
+              <span>Sync Standard Bulletins</span>
+            </Button>
+          )}
+
+          {isAdmin && (
+            <Button
+              onClick={() => setIsCreateOpen(true)}
+              className="ambizcon-gradient text-white text-xs font-extrabold gap-2 shadow-glow px-4 py-2 hover:opacity-95"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create Announcement</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filter & Search Toolbar */}
@@ -271,12 +324,16 @@ export default function AnnouncementsPage() {
           </Card>
         ) : (
           filteredAnnouncements.map((ann) => {
-            const myLike = currentUser ? ann.likes.find((l) => l.userId === currentUser._id) : null;
+            if (!ann) return null;
+            const likes = Array.isArray(ann.likes) ? ann.likes : [];
+            const comments = Array.isArray(ann.comments) ? ann.comments : [];
+            const myLike = currentUser ? likes.find((l) => l && l.userId === currentUser._id) : null;
             const isHearted = myLike?.type === 'heart';
             const isThumbLiked = myLike && myLike.type !== 'heart';
             const heartCount = getHeartLikesCount(ann);
             const thumbCount = getThumbLikesCount(ann);
             const isRead = currentUser ? isAnnouncementRead(ann.id, currentUser._id, visibleAnnouncements) : true;
+            const safeContent = ann.content || '';
 
             return (
               <div
@@ -295,7 +352,7 @@ export default function AnnouncementsPage() {
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <Avatar
                     src={ann.authorAvatar}
-                    name={ann.authorName}
+                    name={ann.authorName || 'Ambizcon Member'}
                     userId={ann.authorId}
                     size="md"
                     className="h-11 w-11 shrink-0 ring-2 ring-brand-500/20 group-hover:scale-105 transition-transform"
@@ -303,7 +360,7 @@ export default function AnnouncementsPage() {
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-bold text-sm sm:text-base text-foreground group-hover:text-brand-500 transition-colors leading-tight">
-                        {ann.title}
+                        {ann.title || 'Company Announcement'}
                       </h3>
                       {!isRead && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold shadow-sm animate-pulse">
@@ -318,20 +375,20 @@ export default function AnnouncementsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                      <span className="font-semibold text-foreground/80">{ann.authorName}</span>
+                      <span className="font-semibold text-foreground/80">{ann.authorName || 'Ambizcon Team'}</span>
                       <span>•</span>
                       <span className="flex items-center gap-1 font-mono text-[11px]">
                         <Calendar className="h-3 w-3 text-brand-500" />
-                        {ann.createdAt}
+                        {ann.createdAt || 'Recent'}
                       </span>
                       <span>•</span>
                       <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-semibold">
-                        Applicable: {ann.applicableTo}
+                        Applicable: {ann.applicableTo || 'All'}
                       </Badge>
                     </div>
 
                     <p className="text-xs text-muted-foreground line-clamp-1 leading-relaxed pt-0.5">
-                      {ann.content.replace(/\n+/g, ' ')}
+                      {safeContent.replace(/\n+/g, ' ')}
                     </p>
                   </div>
                 </div>
@@ -377,7 +434,7 @@ export default function AnnouncementsPage() {
                   {/* Comment Count Badge */}
                   <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-muted-foreground group-hover:text-foreground transition-colors">
                     <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>{ann.comments.length}</span>
+                    <span>{comments.length}</span>
                   </div>
 
                   {/* Mark as Read / Unread Option */}
