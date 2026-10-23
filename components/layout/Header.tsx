@@ -587,9 +587,26 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         const elapsed = now - Number(lastCheckStr);
         if (elapsed >= INTERVAL_MS) {
           localStorage.setItem(storageKeyLast, now.toString());
-          toast('🧘 Quick Health Check', {
-            description: 'Take 60 seconds to reset posture, stretch muscles, and hydrate.',
-            duration: 5000,
+          // Visual popup alert (strictly silent, NO alarm sound played)
+          setActiveReminderAlert({
+            id: `health_${now}`,
+            type: 'health_check',
+            title: '🧘 Hourly Workspace Wellness Check',
+            description: `${currentHabit.title}: ${currentHabit.description}`,
+            time: `Every ${healthIntervalMins}m`,
+            badge: currentHabit.badge || 'Workspace Wellness',
+            habitGif: currentHabit.gif,
+            habitGoal: currentHabit.goal,
+            link: '#health',
+            startedAt: now,
+          });
+          // Silent toast notification with direct shortcut to open Quick Health Check
+          toast.info('🧘 Time for your Workspace Wellness Check!', {
+            description: 'Take 60 seconds to reset posture, stretch, and hydrate.',
+            action: {
+              label: 'Open Check',
+              onClick: () => setActiveMenu('health'),
+            },
           });
         }
       } else {
@@ -1361,70 +1378,281 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-emerald-500' : ''}`} />
         </button>
 
-        {/* Quick Health Check - Small Notification Popover */}
+        {/* Quick Health & Ergonomics Check Dropdown */}
         <div className="relative header-dropdown-menu">
           <button
             onClick={() => toggleMenu('health')}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 transition-colors ${
+            className={`flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 transition-colors relative group ${
               activeMenu === 'health'
                 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
                 : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/40'
             }`}
-            title="🧘 Quick Health Check"
+            title="👨‍💻 Quick Health Check (Hourly Workspace Wellness)"
           >
-            <HeartPulse className="h-4 w-4" />
+            <HeartPulse className="h-4 w-4 animate-pulse" />
+            <span className="absolute -top-1 -right-1 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
           </button>
 
           {activeMenu === 'health' && (
-            <div className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 shadow-xl glass-panel z-50 animate-fade space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                    <HeartPulse className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-foreground">Quick Health Check</h4>
-                    <span className="text-[10px] text-muted-foreground font-mono">Hourly Workspace Wellness</span>
+            <div className="absolute right-0 mt-2 w-[360px] sm:w-[420px] max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 shadow-2xl glass-panel z-50 animate-fade space-y-3.5">
+              {/* Top Header */}
+              <div className="space-y-1.5 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+                    <HeartPulse className="h-3 w-3 text-emerald-500 animate-pulse" />
+                    Hourly Workspace Wellness
+                  </Badge>
+                  <select
+                    value={healthIntervalMins}
+                    onChange={(e) => {
+                      const mins = Number(e.target.value);
+                      setHealthIntervalMins(mins);
+                      toast.info(`Wellness reminder set to every ${mins} minutes`);
+                    }}
+                    className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-bold text-foreground cursor-pointer focus:outline-none"
+                  >
+                    {INTERVAL_OPTIONS.map((opt) => (
+                      <option key={opt.minutes} value={opt.minutes}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-0.5">
+                  <h3 className="text-base font-black text-foreground flex items-center gap-1.5">
+                    👨‍💻 Quick Health Check
+                  </h3>
+                  <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-200/60 dark:border-zinc-700/60">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idx = DAILY_WELLNESS_HABITS.findIndex((h) => h.category === 'stretch');
+                        if (idx !== -1) setCurrentHabitIndex(idx);
+                      }}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                        currentHabit.category === 'stretch'
+                          ? 'bg-white dark:bg-zinc-700 text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Activity className="h-3 w-3 text-emerald-500" />
+                      Stretches
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idx = DAILY_WELLNESS_HABITS.findIndex((h) => h.category === 'water');
+                        if (idx !== -1) setCurrentHabitIndex(idx);
+                      }}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                        currentHabit.category === 'water'
+                          ? 'bg-white dark:bg-zinc-700 text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Droplets className="h-3 w-3 text-blue-500" />
+                      Hydration
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleShuffleHabit}
+                      title="Daily Shuffle inside task & exercises"
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-extrabold bg-brand-500/15 text-brand-600 dark:text-brand-300 hover:bg-brand-500/25 transition-all"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      Shuffle
+                    </button>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveMenu(null)}
-                  className="p-1 rounded-md text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Take 60 seconds to reset your posture, stretch muscles, and rest your eyes before continuing your tasks.
+                </p>
               </div>
 
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Take a quick 60-second break to reset your posture, stretch your muscles, rest your eyes, and drink some water.
-              </p>
+              {/* Ergonomic Habit Builder Banner with Daily Shuffle */}
+              <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-gradient-to-br from-emerald-500/5 via-brand-500/5 to-purple-500/5 p-3 flex items-center gap-3 relative">
+                <img
+                  src={currentHabit.gif}
+                  alt={currentHabit.title}
+                  className="h-16 w-20 rounded-lg object-cover border border-zinc-200/60 dark:border-zinc-700/60 shrink-0 bg-zinc-900"
+                />
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 truncate">
+                      <Sparkles className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{currentHabit.badge}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleShuffleHabit}
+                      className="text-[9px] font-extrabold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-0.5 shrink-0"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      Shuffle Task
+                    </button>
+                  </div>
+                  <h4 className="text-xs font-bold text-foreground truncate">
+                    {currentHabit.title}
+                  </h4>
+                  <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
+                    {currentHabit.description}
+                  </p>
+                  <div className="flex items-center justify-between pt-0.5">
+                    <span className="text-[9px] font-mono text-muted-foreground bg-background/80 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800">
+                      {currentHabit.goal}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHealthCompletedItems(HEALTH_CHECKLIST.map((h) => h.id));
+                        toast.success('All 10 health checkpoints marked as done!');
+                      }}
+                      className="text-[10px] font-bold text-brand-600 dark:text-brand-400 hover:underline"
+                    >
+                      Mark all done
+                    </button>
+                  </div>
+                </div>
+              </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setActiveMenu(null)}
-                  className="text-xs flex-1 h-8 rounded-xl"
+              {/* Dropdown Selector to Choose from 10 Health Checkpoints */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>10 Health Checkpoints</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">(Daily Shuffled)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      {healthCompletedItems.length} of {HEALTH_CHECKLIST.length} completed
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleShuffleHabit}
+                      title="Shuffle checkpoint list order"
+                      className="text-[10px] font-extrabold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      Shuffle
+                    </button>
+                  </div>
+                </div>
+
+                {/* Select Dropdown to Choose Checkpoint */}
+                <select
+                  value={selectedHealthCheckpoint}
+                  onChange={(e) => setSelectedHealthCheckpoint(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                 >
-                  Dismiss
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => {
-                    if (currentUser) {
-                      localStorage.setItem(`ambizcon_last_health_check_${currentUser._id}`, Date.now().toString());
-                    }
-                    setActiveMenu(null);
-                    toast.success('Done! Refreshed & ready to work. 🧘');
-                  }}
-                  className="ambizcon-gradient text-white text-xs flex-1 h-8 rounded-xl shadow-glow gap-1 font-bold"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Done
-                </Button>
+                  <option value="all">📋 Show All 10 Health Checkpoints (Choose below)</option>
+                  {shuffledCheckpoints.map((item) => (
+                    <option key={item.id} value={String(item.id)}>
+                      {item.id}. {item.emoji} {item.title} {healthCompletedItems.includes(item.id) ? '✓' : ''}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Filtered Checkpoint List */}
+                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                  {shuffledCheckpoints.filter(
+                    (item) => selectedHealthCheckpoint === 'all' || String(item.id) === selectedHealthCheckpoint
+                  ).map((item) => {
+                    const isChecked = healthCompletedItems.includes(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() =>
+                          setHealthCompletedItems((prev) =>
+                            prev.includes(item.id) ? prev.filter((i) => i !== item.id) : [...prev, item.id]
+                          )
+                        }
+                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          isChecked
+                            ? 'border-emerald-500/40 bg-emerald-500/5 text-foreground'
+                            : 'border-zinc-200/70 dark:border-zinc-800/70 bg-card hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
+                        }`}
+                      >
+                        <span className="text-base shrink-0 pt-0.5">{item.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-mono font-bold text-muted-foreground">
+                              {item.id}.
+                            </span>
+                            <h4
+                              className={`text-xs font-bold ${
+                                isChecked ? 'line-through text-muted-foreground' : 'text-foreground'
+                              }`}
+                            >
+                              {item.title}
+                            </h4>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                            {item.description}
+                          </p>
+                        </div>
+                        <div
+                          className={`h-4 w-4 rounded flex items-center justify-center shrink-0 border mt-0.5 ${
+                            isChecked
+                              ? 'bg-emerald-500 border-emerald-500 text-white'
+                              : 'border-zinc-300 dark:border-zinc-700 bg-background'
+                          }`}
+                        >
+                          {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3 text-brand-500" />
+                    Next automatic alert in <strong>{healthIntervalMins} minutes</strong>
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    Navbar Quick Wellness
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={closeAllMenus}
+                    className="text-xs flex-1"
+                  >
+                    Remind Later
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      if (currentUser) {
+                        localStorage.setItem(
+                          `ambizcon_last_health_check_${currentUser._id}`,
+                          Date.now().toString()
+                        );
+                      }
+                      closeAllMenus();
+                      toast.success('Health Check Complete! 🎉', {
+                        description: `Awesome job refreshing your body and eyes. Next check in ${healthIntervalMins} minutes.`,
+                      });
+                    }}
+                    className="flex-[2] ambizcon-gradient text-white font-extrabold text-xs shadow-glow gap-1.5"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Done (I&apos;m Refreshed &amp; Ready)</span>
+                  </Button>
+                </div>
               </div>
             </div>
           )}
