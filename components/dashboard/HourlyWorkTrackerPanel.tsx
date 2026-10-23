@@ -30,6 +30,7 @@ import {
   Building2,
   ChevronDown,
   X,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -603,9 +604,25 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
 
   return (
     <div className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/90 bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      {/* Top Banner Notice: Under Dev and Testing */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-200 text-xs font-semibold">
+        <div className="flex items-center gap-2">
+          <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+          <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30">
+            Notice
+          </span>
+          <span className="font-bold">
+            (its under dev and testing - data may vary )
+          </span>
+        </div>
+        <span className="text-[11px] text-amber-700/80 dark:text-amber-300/80 hidden sm:inline">
+          Hourly Timesheet &amp; Task Work Tracker
+        </span>
+      </div>
+
       {/* Top Bar: Mode Switcher ("Admin view" / "Team Lead view" | "My tab (user)") + Date Picker */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           {canViewTeamOrAdmin && (
             <button
               type="button"
@@ -631,6 +648,12 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
           >
             My tab (user)
           </button>
+
+          {/* Inline Top Mention Badge */}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold">
+            <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <span>(its under dev and testing - data may vary )</span>
+          </span>
         </div>
 
         {/* Right Controls: Auto-Sync Indicator + Date Selector */}
