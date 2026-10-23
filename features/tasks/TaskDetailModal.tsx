@@ -310,23 +310,65 @@ export function TaskDetailModal() {
     setIsReviewerModalOpen(false);
   };
 
+  const isWorkerOnSelectedTask = Boolean(
+    currentUser &&
+      selectedTask &&
+      ((selectedTask.assignedTo &&
+        (String(selectedTask.assignedTo).toLowerCase() === String(currentUser._id || '').toLowerCase() ||
+          String(selectedTask.assignedTo).toLowerCase() === String(currentUser.email || '').toLowerCase())) ||
+        (selectedTask.assignedUser?.email &&
+          String(selectedTask.assignedUser.email).toLowerCase() === String(currentUser.email || '').toLowerCase()) ||
+        (selectedTask.assignedUser?._id &&
+          String(selectedTask.assignedUser._id).toLowerCase() === String(currentUser._id || '').toLowerCase()) ||
+        (selectedTask.assignedUser?.name &&
+          currentUser.name &&
+          String(selectedTask.assignedUser.name).toLowerCase() === String(currentUser.name).toLowerCase()) ||
+        (selectedTask.createdBy &&
+          (String(selectedTask.createdBy).toLowerCase() === String(currentUser._id || '').toLowerCase() ||
+            String(selectedTask.createdBy).toLowerCase() === String(currentUser.email || '').toLowerCase())))
+  );
+
   const handleStatusChange = async (newStatus: TaskStatus) => {
-    if (newStatus === 'Done' && !isTLOrAdmin) {
-      toast.error(
-        'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
-      );
-      setIsReviewerModalOpen(true);
-      return;
-    }
+    if (!selectedTask || selectedTask.status === newStatus) return;
 
-    if (newStatus === 'Review') {
-      setIsReviewerModalOpen(true);
-      return;
-    }
+    if (!isTLOrAdmin) {
+      if (!isWorkerOnSelectedTask) {
+        toast.error('Permission Restricted: You can only update tasks you are assigned to / working on.');
+        return;
+      }
 
-    if (newStatus === 'Done' && isTLOrAdmin) {
-      await handleApproveReview();
-      return;
+      if (selectedTask.status === 'Review') {
+        toast.error('Permission Restricted: This task is currently under Review. Only Team Lead or Admin can review or update status.');
+        return;
+      }
+
+      if (selectedTask.status === 'Done') {
+        toast.error('Permission Restricted: This task is already Completed. Only Team Lead or Admin can reopen it.');
+        return;
+      }
+
+      if (newStatus === 'Done') {
+        toast.error(
+          'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
+        );
+        setIsReviewerModalOpen(true);
+        return;
+      }
+
+      if (newStatus === 'Review') {
+        setIsReviewerModalOpen(true);
+        return;
+      }
+    } else {
+      if (newStatus === 'Review') {
+        setIsReviewerModalOpen(true);
+        return;
+      }
+
+      if (newStatus === 'Done') {
+        await handleApproveReview();
+        return;
+      }
     }
 
     const newHistory = [
@@ -477,10 +519,7 @@ export function TaskDetailModal() {
     toast.success('Comment removed');
   };
 
-  const canChangeStatus =
-    currentUser.role === 'Super Admin' ||
-    currentUser.role === 'Team Lead' ||
-    selectedTask.assignedTo === currentUser._id;
+  const canChangeStatus = isTLOrAdmin || isWorkerOnSelectedTask;
 
   const canDelete =
     currentUser.role === 'Super Admin' ||
@@ -1261,11 +1300,14 @@ export function TaskDetailModal() {
                 <select
                   value={selectedTask.status}
                   onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
-                  className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-background px-3 py-2 text-xs font-bold text-foreground focus-ring"
+                  disabled={!canChangeStatus || (!isTLOrAdmin && (selectedTask.status === 'Review' || selectedTask.status === 'Done'))}
+                  className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-background px-3 py-2 text-xs font-bold text-foreground focus-ring disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <option value="Todo">To Do</option>
                   <option value="In Progress">In Progress</option>
-                  <option value="Review">Review / Testing (Submit to TL)</option>
+                  <option value="Review" disabled={!isTLOrAdmin && selectedTask.status === 'Review'}>
+                    Review / Testing (Submit to TL)
+                  </option>
                   <option value="Done" disabled={!isTLOrAdmin && selectedTask.status !== 'Done'}>
                     {isTLOrAdmin ? 'Completed (Approve to Done)' : 'Completed (TL / Admin Only 🔒)'}
                   </option>

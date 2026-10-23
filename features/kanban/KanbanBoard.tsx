@@ -176,6 +176,30 @@ function KanbanBoardContent() {
     e.preventDefault();
   };
 
+  // Check if current user is actively working on / assigned to this task
+  const isWorkerOnTask = (t: Task): boolean => {
+    if (!currentUser) return false;
+    const currentId = String(currentUser._id || (currentUser as any).id || '').toLowerCase();
+    const currentEmail = String(currentUser.email || '').toLowerCase();
+    const currentName = String(currentUser.name || '').toLowerCase();
+
+    const assignedTo = String(t.assignedTo || '').toLowerCase();
+    const assignedEmail = String(t.assignedUser?.email || '').toLowerCase();
+    const assignedId = String(t.assignedUser?._id || (t.assignedUser as any)?.id || '').toLowerCase();
+    const assignedName = String(t.assignedUser?.name || '').toLowerCase();
+    const createdBy = String(t.createdBy || '').toLowerCase();
+
+    return Boolean(
+      (currentId && assignedTo === currentId) ||
+      (currentEmail && assignedTo === currentEmail) ||
+      (currentEmail && assignedEmail === currentEmail) ||
+      (currentId && assignedId === currentId) ||
+      (currentName && assignedName === currentName) ||
+      (currentId && createdBy === currentId) ||
+      (currentEmail && createdBy === currentEmail)
+    );
+  };
+
   const handleDrop = async (e: React.DragEvent, targetStatus: TaskStatus) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('text/plain');
@@ -183,32 +207,56 @@ function KanbanBoardContent() {
 
     const task = tasks.find((t) => t._id === taskId);
     if (task && task.status !== targetStatus) {
-      const canMove =
-        currentUser?.role === 'Super Admin' ||
-        currentUser?.role === 'Admin' ||
-        currentUser?.role === 'Team Lead' ||
-        task.assignedTo === currentUser?._id ||
-        task.createdBy === currentUser?._id;
+      const isTL = isTeamLead; // Super Admin, Admin, or Team Lead
+      const isWorker = isWorkerOnTask(task);
 
-      if (!canMove) {
-        toast.error('Permission Restricted: Only Team Lead, Admin, or assigned member can move task status.');
-        return;
-      }
+      // Workflow Permission Rule:
+      // If member or TL working on the task -> can move between To Do and In Progress (vice versa).
+      // Review and Complete are done by TL and Admin.
+      if (!isTL) {
+        // Regular member can only move tasks they are working on
+        if (!isWorker) {
+          toast.error('Permission Restricted: You can only move tasks that you are assigned to / working on.');
+          return;
+        }
 
-      // Strict Rule: Only TL or Admin can approve a task to be Done (Completed)
-      if (targetStatus === 'Done' && !isTeamLead) {
-        toast.error(
-          'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
-        );
-        setReviewTaskTarget(task);
-        setIsReviewerModalOpen(true);
-        return;
-      }
+        // If task is in Review, regular member cannot move it
+        if (task.status === 'Review') {
+          toast.error('Permission Restricted: This task is currently under Review. Only Team Lead or Admin can review or update status.');
+          return;
+        }
 
-      if (targetStatus === 'Review') {
-        setReviewTaskTarget(task);
-        setIsReviewerModalOpen(true);
-        return;
+        // If task is already Done, regular member cannot move it
+        if (task.status === 'Done') {
+          toast.error('Permission Restricted: This task is already Completed. Only Team Lead or Admin can reopen it.');
+          return;
+        }
+
+        // Moving to Done requires TL/Admin approval; prompt submission for review
+        if (targetStatus === 'Done') {
+          toast.error(
+            'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
+          );
+          setReviewTaskTarget(task);
+          setIsReviewerModalOpen(true);
+          return;
+        }
+
+        // Moving to Review opens reviewer modal
+        if (targetStatus === 'Review') {
+          setReviewTaskTarget(task);
+          setIsReviewerModalOpen(true);
+          return;
+        }
+
+        // Moving between Todo <-> In Progress is fully allowed for assigned worker!
+      } else {
+        // TL or Admin: Moving to Review opens reviewer modal
+        if (targetStatus === 'Review') {
+          setReviewTaskTarget(task);
+          setIsReviewerModalOpen(true);
+          return;
+        }
       }
 
       // Record History item
@@ -430,21 +478,47 @@ function KanbanBoardContent() {
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     const targetTask = tasks.find((t) => t._id === taskId);
-    if (!targetTask) return;
+    if (!targetTask || targetTask.status === newStatus) return;
 
-    if (newStatus === 'Done' && !isTeamLead) {
-      toast.error(
-        'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
-      );
-      setReviewTaskTarget(targetTask);
-      setIsReviewerModalOpen(true);
-      return;
-    }
+    const isTL = isTeamLead;
+    const isWorker = isWorkerOnTask(targetTask);
 
-    if (newStatus === 'Review') {
-      setReviewTaskTarget(targetTask);
-      setIsReviewerModalOpen(true);
-      return;
+    if (!isTL) {
+      if (!isWorker) {
+        toast.error('Permission Restricted: You can only update tasks that you are assigned to / working on.');
+        return;
+      }
+
+      if (targetTask.status === 'Review') {
+        toast.error('Permission Restricted: This task is currently under Review. Only Team Lead or Admin can review or update status.');
+        return;
+      }
+
+      if (targetTask.status === 'Done') {
+        toast.error('Permission Restricted: This task is already Completed. Only Team Lead or Admin can reopen it.');
+        return;
+      }
+
+      if (newStatus === 'Done') {
+        toast.error(
+          'Only Team Lead or Admin can approve a task to be Done (Completed). Please submit to TL for Review.'
+        );
+        setReviewTaskTarget(targetTask);
+        setIsReviewerModalOpen(true);
+        return;
+      }
+
+      if (newStatus === 'Review') {
+        setReviewTaskTarget(targetTask);
+        setIsReviewerModalOpen(true);
+        return;
+      }
+    } else {
+      if (newStatus === 'Review') {
+        setReviewTaskTarget(targetTask);
+        setIsReviewerModalOpen(true);
+        return;
+      }
     }
 
     const newHistory = [
@@ -867,11 +941,22 @@ function KanbanBoardContent() {
                     <>
                       {visibleColumnTasks.map((task) => {
                         if (!task || !task._id) return null;
+                        const isWorker = isWorkerOnTask(task);
+                        // TL/Admin can drag any task. Member working on task can drag between Todo <-> In Progress (and submit to Review)
+                        const canDrag = isTeamLead || (isWorker && task.status !== 'Review' && task.status !== 'Done');
+
                         return (
                           <div
                             key={task._id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, task._id)}
+                            draggable={canDrag}
+                            onDragStart={(e) => {
+                              if (!canDrag) {
+                                e.preventDefault();
+                                return;
+                              }
+                              handleDragStart(e, task._id);
+                            }}
+                            className={canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
                           >
                             <TaskCard task={task} users={users} onDelete={handleDeleteTask} />
                           </div>
