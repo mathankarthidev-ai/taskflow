@@ -17,6 +17,7 @@ import {
   saveWorkLogItem,
   deleteWorkLogItem,
   syncInProgressTasksToWorkLogs,
+  resetUserReferenceSchedule,
   parseTimeToMinutes,
   formatDurationHrs,
   isWorkLogExtraHours,
@@ -35,6 +36,10 @@ import {
   ChevronDown,
   X,
   AlertCircle,
+  RotateCcw,
+  CheckCircle2,
+  Clock,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -363,6 +368,11 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
   // Load sample reference schedule for active user
   const handleLoadReferenceSchedule = async (targetUser: User) => {
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(
+          `ambizcon_ref_schedule_cleared_${targetUser.email.toLowerCase()}_${workDate}`
+        );
+      }
       const refLogs = generateReferenceWorkLogs(workDate, targetUser);
       for (const item of refLogs) {
         await saveWorkLogItem(
@@ -378,9 +388,25 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
         );
         return [...withoutTarget, ...refLogs];
       });
-      toast.success(`Loaded 10 reference tasks for ${targetUser.name} matching reference image!`);
+      toast.success(`Loaded 10 reference sample tasks for ${targetUser.name}!`);
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load reference schedule');
+    }
+  };
+
+  // Reset/Clear sample reference schedule and restore user's original tasks
+  const handleResetToOriginalTasks = async (targetUser: User) => {
+    try {
+      const updated = await resetUserReferenceSchedule(
+        workDate,
+        targetUser.email,
+        tasks,
+        allUsers
+      );
+      setWorkLogs(updated);
+      toast.success(`Reset schedule to original tasks for ${targetUser.name}!`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to reset schedule');
     }
   };
 
@@ -955,12 +981,29 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
     );
   }, [tasks, activeUserObj]);
 
+  // User's all assigned workspace tasks ("show original task also here")
+  const activeUserAssignedTasks = useMemo(() => {
+    if (!activeUserObj) return [];
+    return (tasks || []).filter(
+      (t) =>
+        t &&
+        (t.assignedTo === activeUserObj._id ||
+          (t.assignedTo || '').toLowerCase() === activeUserObj.email.toLowerCase() ||
+          (t.assignedTo || '').toLowerCase() === activeUserObj.name.toLowerCase())
+    );
+  }, [tasks, activeUserObj]);
+
   const activeUserLogs = useMemo(() => {
     if (!activeUserObj) return [];
     return workLogs.filter(
       (l) => l.user_email.toLowerCase() === activeUserObj.email.toLowerCase()
     );
   }, [workLogs, activeUserObj]);
+
+  // Check if sample reference schedule is currently active for this user
+  const isSampleScheduleActive = useMemo(() => {
+    return activeUserLogs.some((l) => l.id.startsWith('WL-REF-') || l.id.includes('-REF-'));
+  }, [activeUserLogs]);
 
   const activeCategoryBreakdown = useMemo(() => {
     const completed = activeUserLogs.filter((l) => getWorkLogCategory(l) === 'completed');
@@ -1388,14 +1431,161 @@ export function HourlyWorkTrackerPanel({ tasks }: HourlyWorkTrackerPanelProps) {
                 </div>
               </div>
 
-              {/* Sample Schedule Loader */}
-              <button
-                type="button"
-                onClick={() => activeUserObj && handleLoadReferenceSchedule(activeUserObj)}
-                className="w-full mt-2 py-2.5 px-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs"
-              >
-                <span>✨</span> Load Sample Reference Schedule (10 Tasks)
-              </button>
+              {/* Schedule Controls: Sample Schedule & Reset to Original Tasks */}
+              <div className="pt-2 space-y-2">
+                {isSampleScheduleActive ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-xs">
+                      <span className="font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                        <span>✨</span> Sample Reference Schedule (10 Tasks Active)
+                      </span>
+                      <span className="text-[10px] uppercase font-black px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-700 dark:text-purple-300">
+                        Demo
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => activeUserObj && handleResetToOriginalTasks(activeUserObj)}
+                        className="w-full py-2.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                        title="Clear sample demo tasks and return to your original assigned workspace tasks"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Reset to Original Tasks
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => activeUserObj && handleLoadReferenceSchedule(activeUserObj)}
+                        className="w-full py-2.5 px-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <span>✨</span> Reload Sample (10 Tasks)
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs">
+                      <span className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Original Workspace Schedule Active
+                      </span>
+                      <span className="text-[10px] uppercase font-black px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                        Live
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => activeUserObj && handleLoadReferenceSchedule(activeUserObj)}
+                        className="w-full py-2.5 px-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <span>✨</span> Load Sample (10 Tasks)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => activeUserObj && handleResetToOriginalTasks(activeUserObj)}
+                        className="w-full py-2.5 px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700/80 border border-zinc-300/80 dark:border-zinc-700 text-foreground text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                        title="Re-sync and reset work slots to your real workspace tasks"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+                        Reset Schedule
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Original Assigned Workspace Tasks Section ("show original task also here") */}
+              <div className="pt-4 border-t border-zinc-200/80 dark:border-zinc-800/90 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                    <Clock className="h-3.5 w-3.5 text-blue-500" />
+                    <span>Original Workspace Tasks</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-muted-foreground font-semibold">
+                    {activeUserAssignedTasks.length} assigned
+                  </span>
+                </div>
+
+                {activeUserAssignedTasks.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground italic">
+                    No assigned tasks found for {activeUserObj?.name || 'this user'}.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                    {activeUserAssignedTasks.map((t) => {
+                      const isLogged = activeUserLogs.some(
+                        (l) => l.task_id === t._id || l.task_title?.toLowerCase() === t.title?.toLowerCase()
+                      );
+                      const statusColor =
+                        t.status === 'Done'
+                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                          : t.status === 'In Progress'
+                          ? 'bg-blue-500/10 text-blue-600 border-blue-500/30'
+                          : t.status === 'Review'
+                          ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-muted-foreground border-zinc-300 dark:border-zinc-700';
+
+                      return (
+                        <div
+                          key={t._id}
+                          className="p-2 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-[#161b22]/70 flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold text-foreground truncate block text-xs">
+                              {t.title}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md border ${statusColor}`}>
+                                {t.status}
+                              </span>
+                              {t.priority && (
+                                <span className="text-[10px] text-muted-foreground font-medium">
+                                  {t.priority}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            {isLogged ? (
+                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg flex items-center gap-1">
+                                <Check className="h-3 w-3" /> In Slots
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (activeUserObj) {
+                                    handleOpenAddModal(activeUserObj, '09:00', '10:00', false);
+                                    setTaskInput(t.title);
+                                    setSelectedCategory(
+                                      t.status === 'Done'
+                                        ? 'completed'
+                                        : t.status === 'In Progress'
+                                        ? 'in_progress'
+                                        : t.status === 'Review'
+                                        ? 'review'
+                                        : 'upcoming'
+                                    );
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-600 px-2 py-1 rounded-lg border border-blue-500/30 transition-all flex items-center gap-1 cursor-pointer"
+                                title="Click to log work for this original task"
+                              >
+                                <Plus className="h-3 w-3" /> Log
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

@@ -270,9 +270,12 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
         };
       });
 
-      // Ensure Thanikaivel's reference schedule from screenshot is present
+      // Ensure Thanikaivel's reference schedule from screenshot is present unless cleared
+      const isClearedThanikaivel =
+        typeof window !== 'undefined' &&
+        localStorage.getItem(`ambizcon_ref_schedule_cleared_thanikaivel@ambizcon.com_${workDate}`);
       const hasThanikaivel = mapped.some((m) => m.user_email?.toLowerCase() === 'thanikaivel@ambizcon.com');
-      if (!hasThanikaivel) {
+      if (!hasThanikaivel && !isClearedThanikaivel) {
         mapped = [...mapped, ...defaultThanikaivelLogs];
       }
 
@@ -288,8 +291,11 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
     if (cached) {
       try {
         let list: WorkLogItem[] = JSON.parse(cached);
+        const isClearedThanikaivel =
+          typeof window !== 'undefined' &&
+          localStorage.getItem(`ambizcon_ref_schedule_cleared_thanikaivel@ambizcon.com_${workDate}`);
         const hasThanikaivel = list.some((m) => m.user_email?.toLowerCase() === 'thanikaivel@ambizcon.com');
-        if (!hasThanikaivel) {
+        if (!hasThanikaivel && !isClearedThanikaivel) {
           const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
           list = [...list, ...generateReferenceWorkLogs(workDate, seedUser as any)];
           localStorage.setItem(storageKey, JSON.stringify(list));
@@ -299,8 +305,14 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
     }
   }
 
-  const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
-  return generateReferenceWorkLogs(workDate, seedUser as any);
+  const isClearedThanikaivel =
+    typeof window !== 'undefined' &&
+    localStorage.getItem(`ambizcon_ref_schedule_cleared_thanikaivel@ambizcon.com_${workDate}`);
+  if (!isClearedThanikaivel) {
+    const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
+    return generateReferenceWorkLogs(workDate, seedUser as any);
+  }
+  return [];
 }
 
 export async function saveWorkLogItem(
@@ -509,4 +521,58 @@ export async function syncInProgressTasksToWorkLogs(
   }
 
   return existingLogs;
+}
+
+/**
+ * Resets/clears any sample demo reference schedule for a specific user,
+ * restores their real assigned/in-progress workspace tasks, and prevents auto-reinjecting demo tasks.
+ */
+export async function resetUserReferenceSchedule(
+  workDate: string,
+  userEmail: string,
+  tasks: Task[] = [],
+  usersList: User[] = SEED_USERS as any
+): Promise<WorkLogItem[]> {
+  const targetEmail = userEmail.toLowerCase();
+  const storageKey = `${STORAGE_KEY_PREFIX}${workDate}`;
+
+  // Record that user deliberately cleared/reset reference schedule for this date
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`ambizcon_ref_schedule_cleared_${targetEmail}_${workDate}`, 'true');
+  }
+
+  // Delete from Supabase if stored
+  try {
+    await supabase
+      .from('work_logs')
+      .delete()
+      .eq('work_date', workDate)
+      .eq('user_email', targetEmail)
+      .like('id', 'WL-REF-%');
+  } catch (e) {}
+
+  // Remove reference logs from localStorage
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(storageKey);
+    if (cached) {
+      try {
+        const list: WorkLogItem[] = JSON.parse(cached);
+        const filtered = list.filter(
+          (l) =>
+            !(
+              (l.user_email || '').toLowerCase() === targetEmail &&
+              (l.id.startsWith('WL-REF-') || l.id.includes('-REF-'))
+            )
+        );
+        localStorage.setItem(storageKey, JSON.stringify(filtered));
+      } catch (e) {}
+    }
+  }
+
+  // Re-sync with actual workspace tasks
+  const synced = await syncInProgressTasksToWorkLogs(tasks, workDate, usersList);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ambizcon_work_logs_updated'));
+  }
+  return synced;
 }
