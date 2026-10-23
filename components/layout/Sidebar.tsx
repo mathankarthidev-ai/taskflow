@@ -161,10 +161,10 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           badge: announcementsCount > 0 ? `${announcementsCount}` : undefined,
         },
         {
-          label: 'Self Reminders',
-          href: '/self-reminders',
-          icon: BellRing,
-          badge: selfReminderCount > 0 ? `${selfReminderCount} Active` : 'Simple',
+          label: 'Reminders',
+          href: '/reminders',
+          icon: Bell,
+          badge: selfReminderCount > 0 ? `${selfReminderCount} Alerts` : 'Alerts',
         },
       ]
     : [
@@ -176,12 +176,11 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           icon: Megaphone,
           badge: announcementsCount > 0 ? `${announcementsCount}` : undefined,
         },
-        { label: 'Reminders', href: '/reminders', icon: Bell, badge: 'Alerts' },
         {
-          label: 'Self Reminders',
-          href: '/self-reminders',
-          icon: BellRing,
-          badge: selfReminderCount > 0 ? `${selfReminderCount} Active` : 'Simple',
+          label: 'Reminders',
+          href: '/reminders',
+          icon: Bell,
+          badge: selfReminderCount > 0 ? `${selfReminderCount} Alerts` : 'Alerts',
         },
         {
           label: 'Team Chat',

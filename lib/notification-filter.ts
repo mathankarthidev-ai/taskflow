@@ -67,7 +67,10 @@ export function isNotificationVisibleForUser(
   if (
     n.category === 'Self Reminder Completed' ||
     n.category === 'Self Reminder' ||
-    n.link === '/self-reminders'
+    n.category === 'Self Reminder Alert' ||
+    n.category === 'Self Reminder Scheduled' ||
+    n.link === '/self-reminders' ||
+    Boolean(n.link && n.link.includes('tab=self'))
   ) {
     if (isAdminUser) return true;
     if (n.assignedUserId && n.assignedUserId === currentId) return true;

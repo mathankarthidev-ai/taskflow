@@ -8,6 +8,7 @@ import { Task, ReminderSettings } from '@/types';
 import { fetchTasksAction } from '@/actions/taskActions';
 import { TaskDetailModal } from '@/features/tasks/TaskDetailModal';
 import { ReminderCreateModal } from '@/components/tasks/ReminderCreateModal';
+import { SelfRemindersSection } from '@/components/reminders/SelfRemindersSection';
 import { getPriorityBadgeColor, getStatusBadgeColor } from '@/lib/utils';
 import {
   fetchSelfReminders,
@@ -78,6 +79,16 @@ export default function RemindersPage() {
   const [dismissedReminders, setDismissedReminders] = useState<Record<string, boolean>>({});
   const [editingReminderTask, setEditingReminderTask] = useState<Task | null>(null);
   const [selfReminderCount, setSelfReminderCount] = useState<number>(0);
+  const [activeMainTab, setActiveMainTab] = useState<'team' | 'self'>('team');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'self') {
+        setActiveMainTab('self');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -627,12 +638,22 @@ export default function RemindersPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Top Navigation Switcher: Reminders vs Self Reminders */}
+      {/* Top Navigation Switcher: Reminders vs Self Reminders (Single Unified Switcher) */}
       <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 dark:border-zinc-800/80 pb-3 flex-wrap">
         <div className="inline-flex items-center p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 gap-1.5 shadow-xs">
           <button
             type="button"
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-white dark:bg-zinc-800 text-foreground shadow-sm border border-zinc-200/80 dark:border-zinc-700"
+            onClick={() => {
+              setActiveMainTab('team');
+              if (typeof window !== 'undefined' && window.history.replaceState) {
+                window.history.replaceState(null, '', '/reminders');
+              }
+            }}
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeMainTab === 'team'
+                ? 'bg-white dark:bg-zinc-800 text-foreground shadow-sm border border-zinc-200/80 dark:border-zinc-700'
+                : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60'
+            }`}
           >
             <BellRing className="h-3.5 w-3.5 text-brand-500" />
             <span>Scheduled &amp; Team Reminders</span>
@@ -641,10 +662,19 @@ export default function RemindersPage() {
             </span>
           </button>
 
-          <Link
-            href="/self-reminders"
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 transition-all cursor-pointer"
-            title="Switch to Personal Self Reminders Page"
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMainTab('self');
+              if (typeof window !== 'undefined' && window.history.replaceState) {
+                window.history.replaceState(null, '', '/reminders?tab=self');
+              }
+            }}
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeMainTab === 'self'
+                ? 'bg-white dark:bg-zinc-800 text-foreground shadow-sm border border-zinc-200/80 dark:border-zinc-700'
+                : 'text-muted-foreground hover:text-foreground hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60'
+            }`}
           >
             <Clock className="h-3.5 w-3.5 text-purple-500" />
             <span>Personal Self Reminders</span>
@@ -653,122 +683,61 @@ export default function RemindersPage() {
                 {selfReminderCount} Active
               </span>
             )}
-          </Link>
-        </div>
-
-        <Link
-          href="/self-reminders"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
-        >
-          <span>Open My Self Reminders</span>
-          <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center shrink-0 shadow-sm border border-brand-500/20">
-            <BellRing className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-              Reminders &amp; Recurrence
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              Manage automated in-app alerts, renewal notifications, and recurring task schedules.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
-          {/* Quick Jump to Self Reminders Page Button */}
-          <Link href="/self-reminders">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5 font-bold text-xs rounded-xl border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 shadow-xs"
-              title="Open Personal Self Reminders Page"
-            >
-              <Clock className="h-4 w-4 text-purple-500" />
-              <span>Self Reminders</span>
-              {selfReminderCount > 0 && (
-                <span className="h-4 min-w-4 px-1 rounded-full bg-purple-500 text-white font-mono text-[9px] font-extrabold flex items-center justify-center">
-                  {selfReminderCount}
-                </span>
-              )}
-            </Button>
-          </Link>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleExportRemindersCSV}
-            className="gap-1.5 font-bold text-xs rounded-xl border-zinc-200 dark:border-zinc-800"
-            title="Download full reminders schedule to CSV"
-          >
-            <Download className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            Export Reminders CSV
-          </Button>
-
-          {isTeamLeadOrAdmin ? (
-            <Button
-              onClick={() => handleOpenReminderModal()}
-              className="ambizcon-gradient text-white gap-2 font-bold shadow-glow text-xs sm:text-sm rounded-xl"
-            >
-              <Plus className="h-4 w-4" />
-              Create Reminder Task
-            </Button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold px-3 py-1.5 text-xs flex items-center gap-1.5">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
-                View-Only Mode (TL &amp; Admin Created)
-              </Badge>
-            </div>
-          )}
+          </button>
         </div>
       </div>
 
-      {/* Top Banner Card: Clickable Self Reminder Quick Link */}
-      <Link
-        href="/self-reminders"
-        className="group block rounded-2xl border-2 border-purple-500/30 dark:border-purple-500/20 bg-gradient-to-r from-purple-500/10 via-brand-500/5 to-pink-500/10 p-3.5 sm:p-4 transition-all hover:border-purple-500/60 hover:shadow-md cursor-pointer"
-        title="Click to open Personal Self Reminders"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/30 group-hover:scale-105 transition-transform shadow-xs">
-              <Clock className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-xs sm:text-sm font-black text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                  ⏰ Personal Self Reminders
-                </h3>
-                <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[9px] sm:text-[10px] font-bold">
-                  Personal &amp; Sound Alarm
-                </Badge>
-                {selfReminderCount > 0 && (
-                  <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[9px] sm:text-[10px] font-mono font-bold">
-                    {selfReminderCount} Active
-                  </Badge>
-                )}
+      {activeMainTab === 'self' ? (
+        <SelfRemindersSection />
+      ) : (
+        <>
+          {/* Page Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center shrink-0 shadow-sm border border-brand-500/20">
+                <BellRing className="h-6 w-6" />
               </div>
-              <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
-                Need personal alerts? Click here to manage your private daily routines, custom day reminders, and sound alarms.
-              </p>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+                  Reminders &amp; Recurrence
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                  Manage automated in-app alerts, renewal notifications, and recurring task schedules.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleExportRemindersCSV}
+                className="gap-1.5 font-bold text-xs rounded-xl border-zinc-200 dark:border-zinc-800"
+                title="Download full reminders schedule to CSV"
+              >
+                <Download className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                Export Reminders CSV
+              </Button>
+
+              {isTeamLeadOrAdmin ? (
+                <Button
+                  onClick={() => handleOpenReminderModal()}
+                  className="ambizcon-gradient text-white gap-2 font-bold shadow-glow text-xs sm:text-sm rounded-xl"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Reminder Task
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold px-3 py-1.5 text-xs flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+                    View-Only Mode (TL &amp; Admin Created)
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400 shrink-0 group-hover:translate-x-1 transition-transform">
-            <span className="hidden sm:inline">Go to Self Reminders</span>
-            <span className="sm:hidden">Open</span>
-            <ChevronRight className="h-4 w-4" />
-          </div>
-        </div>
-      </Link>
 
       {/* DUE NOTIFICATIONS SCHEDULE: 5 Interactive Frequency Cards */}
       <div className="rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-5 sm:p-6 space-y-4 shadow-sm glass-panel">
@@ -1273,6 +1242,8 @@ export default function RemindersPage() {
           )}
         </div>
       )}
+    </>
+  )}
 
       {/* Modals for Dedicated Reminder Creation & Task Edit */}
       <ReminderCreateModal

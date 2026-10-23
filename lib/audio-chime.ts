@@ -219,7 +219,7 @@ export function resolveNotificationSoundType(input?: {
   if (type === 'chat_message' || cat.includes('chat') || link.startsWith('/chat')) {
     return 'chat';
   }
-  if (cat.includes('self reminder') || link.startsWith('/self-reminders')) {
+  if (cat.includes('self reminder') || link.startsWith('/self-reminders') || link.includes('tab=self')) {
     return 'self_reminder';
   }
   if (

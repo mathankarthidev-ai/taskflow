@@ -377,6 +377,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         catLower.includes('wellness') ||
         catLower.includes('health') ||
         n.link === '/reminders' ||
+        n.link?.startsWith('/reminders') ||
         n.link === '/self-reminders';
 
       items.push({
@@ -436,7 +437,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           time: r.reminder_date || 'Personal',
           unread: !r.is_completed,
           color: r.is_completed ? 'bg-emerald-500' : 'bg-purple-500',
-          link: '/self-reminders',
+          link: '/reminders?tab=self',
           isReminder: true,
         });
       }
@@ -892,7 +893,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                     description: `${rem.note || rem.title} • Scheduled at ${rem.reminder_time} (${rem.repeat_type})`,
                     time: rem.reminder_time,
                     badge: `${rem.repeat_type} Reminder`,
-                    link: '/self-reminders',
+                    link: '/reminders?tab=self',
                     startedAt: Date.now(),
                   });
                   playReminderAlarmSound(30);
@@ -905,7 +906,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                     : `🔔 Self Reminder Due: ${rem.title}`,
                   text: `${rem.note || rem.title} • Scheduled at ${rem.reminder_time} (${rem.repeat_type})`,
                   color: rem.is_completed ? 'bg-emerald-500' : 'bg-amber-500',
-                  link: '/self-reminders',
+                  link: '/reminders?tab=self',
                   senderName: currentUser.name,
                   senderRole: currentUser.role,
                   targetRoles: ['Super Admin', 'Admin', 'Team Lead', 'Team Member', 'Reception Staff'],
