@@ -1683,29 +1683,55 @@ export default function ReimbursementsPage() {
           setIsSubmitModalOpen(false);
           setEditingClaim(null);
         }}
-        title={editingClaim ? `Edit Claim (${editingClaim.claimNo})` : "Submit Reimbursement Claim"}
-        description={
-          editingClaim
-            ? "Update expense items, amounts, or receipts before approval."
-            : "Add line items. For any expense item above ₹200, attaching a document/receipt is mandatory."
-        }
         maxWidth="2xl"
+        customHeader={
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-[#115e59] to-[#042f2e] text-white flex items-center justify-center shadow-sm shrink-0 border border-teal-500/20">
+              <Receipt className="h-5 w-5 text-teal-200" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-foreground tracking-tight">
+                {editingClaim ? `Edit Claim (${editingClaim.claimNo})` : "Submit Reimbursement Claim"}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {editingClaim ? (
+                  "Update expense items, amounts, or receipts before approval."
+                ) : (
+                  <>
+                    Add your line items. For any expense above{" "}
+                    <span className="font-bold text-[#0d9488] dark:text-[#2dd4bf]">₹200</span>, a receipt or document is{" "}
+                    <span className="font-bold text-foreground">mandatory</span>.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        }
       >
-        <form className="space-y-4 pt-2">
+        <form className="space-y-4 pt-1">
           {items.map((item, idx) => {
             const isAmountOver200 = (Number(item.amount) || 0) > 200;
 
             return (
-              <div key={idx} className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 space-y-3">
+              <div
+                key={idx}
+                className="p-5 rounded-2xl border border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 space-y-4 shadow-xs"
+              >
+                {/* Line Item Header */}
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-brand-600 dark:text-brand-400 uppercase tracking-wider">
-                    Expense Line Item #{idx + 1}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="h-6 w-6 rounded-full bg-[#0d5c63] text-white flex items-center justify-center text-xs font-bold shrink-0">
+                      {idx + 1}
+                    </span>
+                    <span className="text-xs font-bold text-[#0d5c63] dark:text-[#2dd4bf] uppercase tracking-wider">
+                      EXPENSE LINE ITEM #{idx + 1}
+                    </span>
+                  </div>
                   {items.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveItem(idx)}
-                      className="text-xs text-rose-500 hover:text-rose-600 font-semibold flex items-center gap-1"
+                      className="text-xs text-rose-500 hover:text-rose-600 font-semibold flex items-center gap-1 transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       Remove
@@ -1713,13 +1739,16 @@ export default function ReimbursementsPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Grid Row 1: Category | Amount | Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   <div>
-                    <label className="text-[11px] font-semibold text-foreground">Expense Category *</label>
+                    <label className="text-xs font-bold text-foreground">
+                      Expense Category <span className="text-rose-500">*</span>
+                    </label>
                     <select
                       value={item.category}
                       onChange={(e) => handleItemChange(idx, 'category', e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+                      className="mt-1.5 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-background px-3 py-2 text-xs font-medium focus-ring shadow-2xs"
                     >
                       {categoriesList.map((cat) => (
                         <option key={cat} value={cat}>
@@ -1735,95 +1764,103 @@ export default function ReimbursementsPage() {
                         value={item.customCategoryName || ''}
                         onChange={(e) => handleItemChange(idx, 'customCategoryName', e.target.value)}
                         placeholder="Type custom category..."
-                        className="mt-1.5 w-full rounded-xl border border-brand-500/50 bg-background px-3 py-1 text-xs focus-ring"
+                        className="mt-1.5 w-full rounded-xl border border-brand-500/50 bg-background px-3 py-1.5 text-xs focus-ring shadow-2xs"
                         required
                       />
                     )}
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-semibold text-foreground flex items-center gap-1">
-                        <IndianRupee className="h-3 w-3 text-muted-foreground" />
-                        Amount (INR ₹) *
-                      </label>
-                      {isAmountOver200 && (
-                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
-                          &gt; ₹200 (Receipt Required)
-                        </span>
-                      )}
-                    </div>
-                    <div className="relative mt-1">
-                      <IndianRupee className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <label className="text-xs font-bold text-foreground">
+                      Amount (INR) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative mt-1.5">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-[#0d5c63] dark:text-[#2dd4bf] text-sm pointer-events-none">
+                        ₹
+                      </span>
                       <input
                         type="number"
                         value={item.amount}
                         onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
                         placeholder="e.g. 350"
-                        className={`w-full rounded-xl border pl-8 ${
-                          isAmountOver200 ? 'border-amber-500/60' : 'border-zinc-200 dark:border-zinc-800'
-                        } bg-background pr-3 py-1.5 text-xs focus-ring`}
+                        className={`w-full rounded-xl border pl-7 pr-3 py-2 text-xs font-medium focus-ring shadow-2xs bg-background ${
+                          isAmountOver200 ? 'border-amber-500/60' : 'border-zinc-200 dark:border-zinc-700'
+                        }`}
                         required
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-foreground">Expense Date *</label>
+                    <label className="text-xs font-bold text-foreground">
+                      Expense Date <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="date"
                       value={item.date}
                       onChange={(e) => handleItemChange(idx, 'date', e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+                      className="mt-1.5 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-background px-3 py-2 text-xs font-medium focus-ring shadow-2xs"
                       required
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold text-foreground flex items-center justify-between">
-                      <span>Document / Receipt Upload {isAmountOver200 ? '*' : '(Optional)'}</span>
-                      <span className="text-[10px] text-brand-600 dark:text-brand-400 font-bold">PDF, Images &amp; Docs (Max 5MB)</span>
-                    </label>
-                    <div className="mt-1 flex items-center gap-2">
-                      <label
-                        htmlFor={`file_upload_${idx}`}
-                        className={`flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl border ${
-                          isAmountOver200 && !item.receiptName.trim()
-                            ? 'border-rose-500 bg-rose-500/5'
-                            : 'border-zinc-200 dark:border-zinc-800 bg-background'
-                        } cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors`}
+                {/* Grid Row 2: Receipt Dropzone | Business Rationale */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
+                  <div className="sm:col-span-7">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-foreground">Receipt / Document</label>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isAmountOver200
+                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
+                        }`}
                       >
-                        <Paperclip className="h-3.5 w-3.5 text-brand-500 shrink-0" />
-                        <span className="text-xs text-foreground truncate flex-1 font-mono">
-                          {item.receiptName ? item.receiptName : 'Click to Upload Receipt / Document...'}
-                        </span>
-                        <span className="bg-brand-500/10 text-brand-600 dark:text-brand-400 text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0">
-                          Upload File
-                        </span>
-                      </label>
-                      <input
-                        id={`file_upload_${idx}`}
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,application/pdf,image/*"
-                        onChange={(e) => handleFileUpload(idx, e)}
-                        className="hidden"
-                      />
+                        {isAmountOver200 ? 'Required' : 'Optional'}
+                      </span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                      Supports PDF, PNG, JPG, WEBP, DOC, DOCX, XLS, XLSX (Max 5 MB)
-                    </span>
+
+                    <label
+                      htmlFor={`file_upload_${idx}`}
+                      className={`mt-1.5 flex items-center justify-between px-3.5 py-2 rounded-xl border border-dashed transition-colors cursor-pointer ${
+                        isAmountOver200 && !item.receiptName.trim()
+                          ? 'border-rose-400 bg-rose-500/5'
+                          : 'border-teal-300 dark:border-teal-700/80 bg-zinc-50/50 dark:bg-zinc-800/30 hover:bg-teal-50/40 dark:hover:bg-teal-950/20'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate pr-2">
+                        <Paperclip className="h-4 w-4 text-zinc-400 shrink-0 rotate-45" />
+                        <span className="text-xs text-zinc-600 dark:text-zinc-300 truncate font-mono">
+                          {item.receiptName ? item.receiptName : 'Click or drop a receipt here'}
+                        </span>
+                      </div>
+                      <span className="px-3 py-1 rounded-lg bg-[#e6f4f1] dark:bg-teal-950/60 text-[#0d5c63] dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-bold shrink-0 shadow-2xs">
+                        Upload
+                      </span>
+                    </label>
+                    <input
+                      id={`file_upload_${idx}`}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,application/pdf,image/*"
+                      onChange={(e) => handleFileUpload(idx, e)}
+                      className="hidden"
+                    />
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 font-medium">
+                      PDF, PNG, JPG, WEBP, DOC, XLS • Max 5 MB
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-foreground">Business Rationale *</label>
+                  <div className="sm:col-span-5">
+                    <label className="text-xs font-bold text-foreground">
+                      Business Rationale <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="text"
                       value={item.description}
                       onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                      placeholder="State rationale for expense..."
-                      className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+                      placeholder="Why was this expense needed?"
+                      className="mt-1.5 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-background px-3.5 py-2 text-xs font-medium focus-ring shadow-2xs placeholder:text-zinc-400"
                       required
                     />
                   </div>
@@ -1832,41 +1869,59 @@ export default function ReimbursementsPage() {
             );
           })}
 
-          <div className="flex items-center justify-between pt-2">
-            <Button type="button" variant="outline" onClick={handleAddItem} size="sm" className="gap-1.5 text-xs">
+          {/* Add Another Line Item Button (Matches screenshot dashed pill) */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={handleAddItem}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-dashed border-[#0d5c63]/50 dark:border-teal-500/50 bg-[#e6f4f1]/40 dark:bg-teal-950/20 text-[#0d5c63] dark:text-teal-300 hover:bg-[#e6f4f1]/80 dark:hover:bg-teal-950/40 text-xs font-bold transition-all"
+            >
               <Plus className="h-3.5 w-3.5" />
-              Add Another Line Item
-            </Button>
+              <span>+ Add Another Line Item</span>
+            </button>
+          </div>
 
-            <div className="text-right">
-              <span className="text-xs text-muted-foreground font-semibold block">Total Claim Amount</span>
-              <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
+          {/* Modal Footer: Total Claim Amount on left, Action buttons on right */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-zinc-200/80 dark:border-zinc-800">
+            <div>
+              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
+                TOTAL CLAIM AMOUNT
+              </span>
+              <span className="text-2xl font-black text-[#0d7857] dark:text-emerald-400 leading-tight mt-0.5">
                 ₹{totalCalculatedAmount.toLocaleString('en-IN')}
               </span>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <Button type="button" variant="outline" onClick={() => { setIsSubmitModalOpen(false); setEditingClaim(null); }}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isSubmitting}
-              onClick={(e) => handleSubmitOrDraft(e, true)}
-              className="border-zinc-300 dark:border-zinc-700"
-            >
-              Save as Draft
-            </Button>
-            <Button
-              type="button"
-              disabled={isSubmitting}
-              onClick={(e) => handleSubmitOrDraft(e, false)}
-              className="ambizcon-gradient text-white shadow-glow"
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Claim'}
-            </Button>
+            <div className="flex items-center gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsSubmitModalOpen(false);
+                  setEditingClaim(null);
+                }}
+                className="rounded-xl px-5 py-2 text-xs font-bold border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSubmitting}
+                onClick={(e) => handleSubmitOrDraft(e, true)}
+                className="rounded-xl px-5 py-2 text-xs font-bold border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Save as Draft
+              </Button>
+              <Button
+                type="button"
+                disabled={isSubmitting}
+                onClick={(e) => handleSubmitOrDraft(e, false)}
+                className="rounded-xl bg-[#0d5c63] hover:bg-[#0a464c] text-white font-bold px-6 py-2.5 text-xs shadow-md transition-all"
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Claim'}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>

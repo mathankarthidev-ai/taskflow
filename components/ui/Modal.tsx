@@ -11,6 +11,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   description?: string;
+  customHeader?: React.ReactNode;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl';
 }
@@ -20,6 +21,7 @@ export function Modal({
   onClose,
   title,
   description,
+  customHeader,
   children,
   maxWidth = 'lg',
 }: ModalProps) {
@@ -77,18 +79,34 @@ export function Modal({
               widthClass
             )}
           >
-            <div className="flex items-start justify-between pb-4">
-              <div>
-                {title && <h2 className="text-xl font-semibold tracking-tight">{title}</h2>}
-                {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+            {customHeader ? (
+              <div className="flex items-start justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800/80 mb-4">
+                <div className="flex-1 min-w-0 pr-2">{customHeader}</div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground transition-colors shrink-0"
+                  title="Close modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <button
-                onClick={onClose}
-                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+            ) : (
+              (title || description) ? (
+                <div className="flex items-start justify-between pb-4">
+                  <div>
+                    {title && <h2 className="text-xl font-semibold tracking-tight">{title}</h2>}
+                    {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+                  </div>
+                  <button
+                    onClick={onClose}
+                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              ) : null
+            )}
 
             <div className="max-h-[calc(100dvh-120px)] sm:max-h-[80vh] overflow-y-auto pr-1">{children}</div>
           </motion.div>
