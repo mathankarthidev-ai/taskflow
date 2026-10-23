@@ -22,6 +22,9 @@ import {
   markChannelMessagesAsRead,
   resolveDirectChannelForUser,
   syncMessagesFromServer,
+  BIZY_HUB_TOP_EMOJIS,
+  WORK_QUICK_EMOJIS,
+  toggleChatMessageReaction,
 } from '@/lib/chat-db';
 import { playNotificationChime } from '@/lib/audio-chime';
 import { fetchAllUsersAction } from '@/actions/userActions';
@@ -58,6 +61,7 @@ import {
   Award,
   Sparkles,
   Download,
+  Smile,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportToCSV, formatDate } from '@/lib/utils';
@@ -78,6 +82,8 @@ export default function TeamChatPage() {
   const [linkInput, setLinkInput] = useState('');
   const [showLinkField, setShowLinkField] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; url: string; size?: string; type?: string } | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
 
   // Reply & Mention State
   const [replyingTo, setReplyingTo] = useState<{ id: string; senderName: string; text: string } | null>(null);
@@ -384,8 +390,16 @@ export default function TeamChatPage() {
       )
       .subscribe();
 
+    const handleReactionSync = (e: any) => {
+      const { channelId } = e.detail || {};
+      if (!channelId || channelId === activeChannelId) {
+        setMessages(getStoredMessages(activeChannelId));
+      }
+    };
+
     window.addEventListener('taskflow_chat_message_sent', handleRemoteMessage);
     window.addEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+    window.addEventListener('taskflow_chat_reaction_updated', handleReactionSync);
     window.addEventListener('taskflow_chat_channel_created', handleChannelChange);
     window.addEventListener('taskflow_chat_channel_deleted', handleChannelChange);
     window.addEventListener('taskflow_chat_synced', handleSyncedFromServer);
@@ -394,6 +408,7 @@ export default function TeamChatPage() {
     return () => {
       window.removeEventListener('taskflow_chat_message_sent', handleRemoteMessage);
       window.removeEventListener('taskflow_chat_message_deleted', handleDeletedMessage);
+      window.removeEventListener('taskflow_chat_reaction_updated', handleReactionSync);
       window.removeEventListener('taskflow_chat_channel_created', handleChannelChange);
       window.removeEventListener('taskflow_chat_channel_deleted', handleChannelChange);
       window.removeEventListener('taskflow_chat_synced', handleSyncedFromServer);
@@ -512,6 +527,22 @@ export default function TeamChatPage() {
     } else {
       toast.info('Referenced message is earlier in chat history');
     }
+  };
+
+  const handleToggleReaction = (messageId: string, emoji: string) => {
+    if (!currentUser) return;
+    const updated = toggleChatMessageReaction(activeChannelId, messageId, emoji, currentUser.name);
+    if (updated) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, reactions: updated.reactions } : m))
+      );
+    }
+    setActiveReactionMsgId(null);
+  };
+
+  const handleInsertEmoji = (emoji: string) => {
+    setMessageText((prev) => prev + emoji);
+    inputRef.current?.focus();
   };
 
   const renderFormattedText = (text: string, isMe: boolean) => {
@@ -1348,6 +1379,37 @@ export default function TeamChatPage() {
                             <Reply className="h-3 w-3" />
                             <span>Reply</span>
                           </button>
+
+                          {/* Quick Emoji Reaction Action */}
+                          <div className="relative inline-block">
+                            <button
+                              type="button"
+                              onClick={() => setActiveReactionMsgId((prev) => (prev === msg.id ? null : msg.id))}
+                              className="opacity-40 group-hover:opacity-100 hover:text-amber-500 transition-opacity p-0.5 ml-1 inline-flex items-center gap-0.5 text-[10px] font-bold"
+                              title="React with Bizy Hub emoji"
+                            >
+                              <Smile className="h-3 w-3" />
+                              <span className="hidden sm:inline">React</span>
+                            </button>
+
+                            {/* Floating Reaction Pill Selector */}
+                            {activeReactionMsgId === msg.id && (
+                              <div className="absolute top-full right-0 mt-1 z-30 p-1.5 rounded-2xl bg-card border border-zinc-200 dark:border-zinc-700 shadow-xl flex items-center gap-1 animate-in fade-in zoom-in-95 backdrop-blur-md">
+                                {BIZY_HUB_TOP_EMOJIS.map((e) => (
+                                  <button
+                                    key={e.emoji}
+                                    type="button"
+                                    onClick={() => handleToggleReaction(msg.id, e.emoji)}
+                                    className="h-7 w-7 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm flex items-center justify-center hover:scale-125 transition-transform"
+                                    title={`${e.emoji} ${e.name}: ${e.meaning}`}
+                                  >
+                                    {e.emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
                       {/* Admin Delete Action */}
                       {(isAdmin || isMe) && (
                         <button
@@ -1442,6 +1504,31 @@ export default function TeamChatPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* Active Message Reactions Bar */}
+                    {msg.reactions && msg.reactions.length > 0 && (
+                      <div className={`flex flex-wrap items-center gap-1 pt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        {msg.reactions.map((r) => {
+                          const hasReacted = !!currentUser && r.users.includes(currentUser.name);
+                          return (
+                            <button
+                              key={r.emoji}
+                              type="button"
+                              onClick={() => handleToggleReaction(msg.id, r.emoji)}
+                              title={`${r.emoji} reacted by: ${r.users.join(', ')}`}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all border ${
+                                hasReacted
+                                  ? 'bg-brand-500/15 border-brand-500/40 text-brand-700 dark:text-brand-300 font-bold shadow-xs'
+                                  : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                              }`}
+                            >
+                              <span>{r.emoji}</span>
+                              <span className="text-[10px] font-mono">{r.count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
                 </React.Fragment>
@@ -1555,6 +1642,37 @@ export default function TeamChatPage() {
             </div>
           )}
 
+          {/* Quick Bizy Hub Emoji Bar */}
+          <div className="flex items-center justify-between gap-1 overflow-x-auto py-1 px-1 text-xs scrollbar-none border-t border-zinc-200/50 dark:border-zinc-800/50 pt-2">
+            <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto scrollbar-none">
+              <span className="text-[10px] font-extrabold text-brand-600 dark:text-brand-400 tracking-wider uppercase flex items-center gap-1 mr-0.5 shrink-0">
+                <span>🚀 Bizy Hub:</span>
+              </span>
+              <div className="flex items-center gap-0.5 shrink-0">
+                {BIZY_HUB_TOP_EMOJIS.map((e) => (
+                  <button
+                    key={e.emoji}
+                    type="button"
+                    onClick={() => handleInsertEmoji(e.emoji)}
+                    title={`${e.emoji} ${e.name} — ${e.meaning}`}
+                    className="h-7 w-7 rounded-lg hover:bg-brand-500/10 dark:hover:bg-brand-500/20 text-base flex items-center justify-center hover:scale-125 transition-transform shrink-0"
+                  >
+                    {e.emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker((prev) => !prev)}
+              className="text-[11px] font-bold text-muted-foreground hover:text-brand-500 transition-colors shrink-0 px-2 py-0.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1 ml-1"
+              title="Open full emoji list"
+            >
+              <Smile className="h-3.5 w-3.5 text-amber-500" />
+              <span className="hidden sm:inline">All Emojis</span>
+            </button>
+          </div>
+
           {/* Text Message Field & Actions */}
           <div className="flex items-end gap-2">
             <label className="cursor-pointer p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground transition-colors shrink-0 mb-0.5" title="Attach Document (< 5MB limit)">
@@ -1584,6 +1702,86 @@ export default function TeamChatPage() {
             >
               <AtSign className="h-4 w-4 text-purple-500" />
             </button>
+
+            {/* Emoji Picker Popover Toggle Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker((prev) => !prev)}
+                className={`p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0 mb-0.5 ${
+                  showEmojiPicker ? 'text-amber-500 border-amber-500/50 bg-amber-500/10' : 'text-muted-foreground hover:text-amber-500'
+                }`}
+                title="Bizy Hub & Work Emojis"
+              >
+                <Smile className="h-4 w-4 text-amber-500" />
+              </button>
+
+              {/* Full Emoji Picker Popover */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-full left-0 mb-2 w-80 max-w-[90vw] rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-card shadow-2xl p-3 z-50 space-y-2.5 animate-in fade-in zoom-in-95 backdrop-blur-md">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">🚀</span>
+                      <span className="font-extrabold text-xs text-foreground">Bizy Hub Emojis</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiPicker(false)}
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Top 10 Bizy Hub Brand Emojis */}
+                  <div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center justify-between">
+                      <span>Top 10 Brand Emojis</span>
+                      <span className="text-[9px] text-brand-600 dark:text-brand-400 font-bold">Recommended</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1">
+                      {BIZY_HUB_TOP_EMOJIS.map((e) => (
+                        <button
+                          key={e.emoji}
+                          type="button"
+                          onClick={() => {
+                            handleInsertEmoji(e.emoji);
+                          }}
+                          className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-brand-500/10 dark:hover:bg-brand-500/20 text-left transition-colors group"
+                        >
+                          <span className="text-lg group-hover:scale-125 transition-transform shrink-0">{e.emoji}</span>
+                          <div className="truncate">
+                            <p className="text-[11px] font-bold text-foreground leading-tight truncate">{e.name}</p>
+                            <p className="text-[9px] text-muted-foreground leading-tight truncate">{e.meaning}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Quick Work Reactions */}
+                  <div className="pt-1.5 border-t border-zinc-200/60 dark:border-zinc-800/60">
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground mb-1">
+                      Quick Work Reactions
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {WORK_QUICK_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => {
+                            handleInsertEmoji(emoji);
+                          }}
+                          className="h-8 w-8 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-base flex items-center justify-center hover:scale-125 transition-transform"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <textarea
               ref={inputRef}

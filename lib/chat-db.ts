@@ -910,6 +910,75 @@ export function deleteChatMessage(channelId: string, messageId: string): boolean
   }
 }
 
+// Recommended Top 10 Emojis for TaskFlow / Bizy Hub
+export const BIZY_HUB_TOP_EMOJIS = [
+  { emoji: '🚀', name: 'Rocket', meaning: 'Growth, productivity, achieving goals (Top Pick)' },
+  { emoji: '⚡', name: 'Lightning', meaning: 'Speed, energy, quick actions & getting work done' },
+  { emoji: '🎯', name: 'Target', meaning: 'Goals, focus, KPIs & completing tasks on time' },
+  { emoji: '✨', name: 'Sparkles', meaning: 'Fresh ideas, modern UI & positive experience' },
+  { emoji: '🏆', name: 'Trophy', meaning: 'Achievements, employee recognition & milestones' },
+  { emoji: '🔥', name: 'Fire', meaning: 'Motivation, momentum, streaks & daily productivity' },
+  { emoji: '✅', name: 'Check Mark', meaning: 'Completed tasks, verified work & clear progress' },
+  { emoji: '🧠', name: 'Brain', meaning: 'Smart work, problem-solving & AI-powered features' },
+  { emoji: '🤝', name: 'Handshake', meaning: 'Teamwork, collaboration & shared responsibility' },
+  { emoji: '🌟', name: 'Star', meaning: 'Excellence, recognition & outstanding performance' },
+];
+
+export const WORK_QUICK_EMOJIS = ['👍', '❤️', '👏', '🎉', '🙌', '💡', '💼', '☕', '📌', '💬', '📊', '🕒'];
+
+export function toggleChatMessageReaction(
+  channelId: string,
+  messageId: string,
+  emoji: string,
+  userName: string
+): ChatMessage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(MESSAGES_KEY);
+    if (!raw) return null;
+    const allMsgs: Record<string, ChatMessage[]> = JSON.parse(raw);
+    const list = allMsgs[channelId] || [];
+    const msg = list.find((m) => m.id === messageId);
+    if (!msg) return null;
+
+    if (!msg.reactions) msg.reactions = [];
+    const existing = msg.reactions.find((r) => r.emoji === emoji);
+
+    if (existing) {
+      if (existing.users.includes(userName)) {
+        // Remove reaction
+        existing.users = existing.users.filter((u) => u !== userName);
+        existing.count = existing.users.length;
+        if (existing.count === 0) {
+          msg.reactions = msg.reactions.filter((r) => r.emoji !== emoji);
+        }
+      } else {
+        // Add reaction
+        existing.users.push(userName);
+        existing.count = existing.users.length;
+      }
+    } else {
+      msg.reactions.push({
+        emoji,
+        count: 1,
+        users: [userName],
+      });
+    }
+
+    allMsgs[channelId] = list;
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(allMsgs));
+    window.dispatchEvent(
+      new CustomEvent('taskflow_chat_reaction_updated', {
+        detail: { channelId, messageId, emoji, userName },
+      })
+    );
+    return msg;
+  } catch (err) {
+    console.error('Failed to toggle reaction', err);
+    return null;
+  }
+}
+
 export function clearChannelMessages(channelId: string): boolean {
   if (typeof window === 'undefined') return false;
   try {

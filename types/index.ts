@@ -465,6 +465,11 @@ export interface ChatMessage {
     senderName: string;
     text: string;
   };
+  reactions?: {
+    emoji: string;
+    count: number;
+    users: string[]; // user names or IDs
+  }[];
   mentions?: string[];
   groupMeta?: {
     name: string;
