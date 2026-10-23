@@ -20,6 +20,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!currentUser && !storedEmail) {
       router.push('/login');
     }
+    // Clean up any legacy announcement storage on mount
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('ambizcon_announcements_v1');
+        localStorage.removeItem('ambizcon_announcements_v2');
+      } catch {}
+    }
   }, [currentUser, router]);
 
   if (!currentUser) {

@@ -92,7 +92,7 @@ export function CreateAnnouncementModal({
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Onboarding New Clients - June 2026"
+            placeholder="e.g. Office Relocation, Holiday Notice, Townhall Meeting..."
             className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background text-xs font-semibold focus-ring"
             required
           />

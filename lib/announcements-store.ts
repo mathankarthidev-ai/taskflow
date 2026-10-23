@@ -36,8 +36,46 @@ export interface Announcement {
   readBy?: string[];
 }
 
-const STORAGE_KEY = 'ambizcon_announcements_v2';
+const STORAGE_KEY = 'ambizcon_announcements_v3';
 const SYNC_CHANNEL_NAME = 'ambizcon_announcements_sync';
+
+// List of known demo announcement IDs and titles to completely purge
+const DEMO_ANNOUNCEMENT_IDS = new Set([
+  'ann_1792150000001',
+  'ann_1792150000002',
+  'ann_1792150000003',
+  'ann_1792150000004',
+  'ann_1792150000005',
+  'ann_1792150000006',
+]);
+
+const DEMO_TITLES = [
+  'onboarding new clients',
+  'yoga sessions update',
+  'friday 29th may to a holiday',
+  'updated setting for leave',
+  'creative design assets & ui guidelines',
+  'marketing campaign performance & q4 targets',
+];
+
+/**
+ * Recognizes and flags any demo / seed announcement
+ */
+export function isDemoAnnouncement(ann: any): boolean {
+  if (!ann || typeof ann !== 'object') return false;
+  if (ann.id && DEMO_ANNOUNCEMENT_IDS.has(String(ann.id))) return true;
+  const title = String(ann.title || '').toLowerCase().trim();
+  if (DEMO_TITLES.some((demo) => title.includes(demo) || demo.includes(title))) return true;
+  return false;
+}
+
+// Global purge runner on client evaluation
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem('ambizcon_announcements_v1');
+    localStorage.removeItem('ambizcon_announcements_v2');
+  } catch {}
+}
 
 // BroadcastChannel for cross-tab sync
 let announcementsBroadcastChannel: BroadcastChannel | null = null;
@@ -134,9 +172,8 @@ export function getStoredAnnouncements(): Announcement[] {
   if (typeof window === 'undefined') return [];
   try {
     // Purge any old legacy announcements from local storage
-    if (localStorage.getItem('ambizcon_announcements_v1')) {
-      localStorage.removeItem('ambizcon_announcements_v1');
-    }
+    localStorage.removeItem('ambizcon_announcements_v1');
+    localStorage.removeItem('ambizcon_announcements_v2');
 
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
@@ -145,7 +182,15 @@ export function getStoredAnnouncements(): Announcement[] {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed.map(sanitizeAnnouncement);
+      const filtered = parsed
+        .filter((a) => !isDemoAnnouncement(a))
+        .map(sanitizeAnnouncement);
+
+      // If any demo announcement was found in storage, clean it out immediately
+      if (filtered.length !== parsed.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      }
+      return filtered;
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     return [];
@@ -156,8 +201,22 @@ export function getStoredAnnouncements(): Announcement[] {
 
 export function clearAllAnnouncements(): Announcement[] {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
-    localStorage.removeItem('ambizcon_announcements_v1');
+    try {
+      localStorage.removeItem('ambizcon_announcements_v1');
+      localStorage.removeItem('ambizcon_announcements_v2');
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+
+      // Remove any legacy unread announcement tracking
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('ambizcon_announcements_read_') || key.includes('announcements_v'))) {
+          if (key !== STORAGE_KEY) {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    } catch {}
     emitAnnouncementsChanged();
   }
   return [];

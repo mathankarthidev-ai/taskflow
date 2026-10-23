@@ -17,6 +17,7 @@ import {
   resetAnnouncementsToDefaults,
   clearAllAnnouncements,
   sanitizeAnnouncement,
+  isDemoAnnouncement,
 } from '@/lib/announcements-store';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -67,7 +68,7 @@ export default function AnnouncementsPage() {
 
   const loadAnnouncements = () => {
     try {
-      const list = getStoredAnnouncements();
+      const list = getStoredAnnouncements().filter((a) => !isDemoAnnouncement(a));
       setAnnouncements([...list]);
 
       // Update selected announcement reference if modal is open
@@ -84,6 +85,12 @@ export default function AnnouncementsPage() {
 
   useEffect(() => {
     setIsMounted(true);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('ambizcon_announcements_v1');
+        localStorage.removeItem('ambizcon_announcements_v2');
+      } catch {}
+    }
     loadAnnouncements();
     const handleSync = () => loadAnnouncements();
     window.addEventListener('ambizcon_announcements_updated', handleSync);

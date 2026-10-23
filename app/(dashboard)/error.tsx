@@ -35,6 +35,7 @@ export default function DashboardErrorBoundary({
                 if (typeof window !== 'undefined' && window.location.pathname.includes('announcement')) {
                   localStorage.removeItem('ambizcon_announcements_v1');
                   localStorage.removeItem('ambizcon_announcements_v2');
+                  localStorage.removeItem('ambizcon_announcements_v3');
                 }
               } catch {}
               reset();
@@ -50,6 +51,7 @@ export default function DashboardErrorBoundary({
                 if (typeof window !== 'undefined' && window.location.pathname.includes('announcement')) {
                   localStorage.removeItem('ambizcon_announcements_v1');
                   localStorage.removeItem('ambizcon_announcements_v2');
+                  localStorage.removeItem('ambizcon_announcements_v3');
                 }
               } catch {}
               window.location.reload();
