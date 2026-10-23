@@ -341,6 +341,7 @@ export function DashboardOverview() {
             userEmail: currentUser.email,
             userTeam: currentUser.team,
             company: activeCompanyScope,
+            clockInTimestamp: clockInTimestampRef.current || clockInTimestamp || undefined,
           }),
         });
         const data = await res.json();

@@ -14,36 +14,91 @@ export async function POST(req: Request) {
     const nowIso = new Date().toISOString();
     const formattedIst = formatTimeIST(nowIso);
     const formattedAest = formatTimeAEST(nowIso);
+    const clockOutMs = new Date(nowIso).getTime();
 
-    // 1. In-memory update
-    let active = attendanceDb.getActiveByUser(userId, userName, userEmail);
+    // 1. Supabase Cloud lookup for active working shift (Single Source of Truth)
+    const orClauses = [`user_id.eq.${userId}`, `user_name.ilike.%${userName}%`];
+    if (userEmail) {
+      orClauses.push(`user_email.eq.${userEmail}`);
+    }
+
+    let supaActive: any = null;
+    try {
+      const { data: supaList } = await supabase
+        .from('attendance')
+        .select('*')
+        .or(orClauses.join(','))
+        .eq('status', 'working')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (supaList && supaList.length > 0) {
+        supaActive = supaList[0];
+      }
+    } catch (supaErr) {
+      console.warn('Supabase active shift lookup error:', supaErr);
+    }
+
+    // In-memory fallback
+    let memActive = attendanceDb.getActiveByUser(userId, userName, userEmail);
+
+    // Determine the true clock-in millisecond timestamp
+    let clockInMs: number = 0;
+    if (supaActive?.created_at && !isNaN(new Date(supaActive.created_at).getTime())) {
+      clockInMs = new Date(supaActive.created_at).getTime();
+    } else if (typeof body.clockInTimestamp === 'number' && body.clockInTimestamp > 0) {
+      clockInMs = body.clockInTimestamp;
+    } else if (memActive?.clockIn && !isNaN(new Date(memActive.clockIn).getTime())) {
+      clockInMs = new Date(memActive.clockIn).getTime();
+    } else if (supaActive?.clock_in) {
+      // Parse e.g. "08:35 am IST"
+      const match = supaActive.clock_in.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i);
+      if (match) {
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const ampm = match[3].toLowerCase();
+        if (ampm === 'pm' && h < 12) h += 12;
+        if (ampm === 'am' && h === 12) h = 0;
+        const inDate = new Date(supaActive.created_at || nowIso);
+        clockInMs = new Date(inDate.getFullYear(), inDate.getMonth(), inDate.getDate(), h, m, 0).getTime();
+      }
+    }
+
+    // If clock-in could not be found anywhere, fallback to 1 hour ago
+    if (!clockInMs || clockInMs > clockOutMs) {
+      clockInMs = clockOutMs - 3600 * 1000;
+    }
+
+    const totalSeconds = Math.max(60, Math.floor((clockOutMs - clockInMs) / 1000));
+    const totalHours = Math.round((totalSeconds / 3600) * 100) / 100;
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const workedHoursStr = `${hours}h ${String(mins).padStart(2, '0')}m`;
+
+    const activeInIso = new Date(clockInMs).toISOString();
+
+    // 2. In-memory update
+    let active = memActive;
     if (!active) {
-      const fallbackIn = new Date(Date.now() - 3600 * 1000).toISOString();
       active = attendanceDb.add({
-        id: `ATT-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        id: supaActive?.id || `ATT-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
         userId,
         userName,
         userTeam,
         sessionName: 'Current Shift',
-        clockIn: fallbackIn,
+        clockIn: activeInIso,
         clockOut: null,
         status: 'working',
         totalSeconds: 0,
         totalHours: 0,
-        workMode: 'Work From Office',
+        workMode: supaActive?.work_mode || 'Work From Office',
         ipAddress: '192.168.1.104',
         location: 'Anna Nagar, Chennai',
         geofenceVerified: true,
-        createdAt: fallbackIn,
-        updatedAt: fallbackIn,
+        createdAt: activeInIso,
+        updatedAt: activeInIso,
       });
     }
-
-    const clockInMs = new Date(active.clockIn).getTime();
-    const clockOutMs = new Date(nowIso).getTime();
-    const totalSeconds = Math.max(0, Math.floor((clockOutMs - clockInMs) / 1000));
-    const totalHours = Math.round((totalSeconds / 3600) * 100) / 100;
-    const workedHoursStr = `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`;
 
     const updated = attendanceDb.update(active.id, {
       clockOut: nowIso,
@@ -67,26 +122,35 @@ export async function POST(req: Request) {
     // Clear any working shift residue for this user in memory
     attendanceDb.clearUserWorking(userId, userName, userEmail);
 
-    // 2. Supabase Cloud update
+    // 3. Supabase Cloud update
     let todayTotalSeconds = totalSeconds;
     try {
-      const orClauses = [`user_id.eq.${userId}`, `user_name.ilike.%${userName}%`];
-      if (userEmail) {
-        orClauses.push(`user_email.eq.${userEmail}`);
+      if (supaActive?.id) {
+        await supabase
+          .from('attendance')
+          .update({
+            clock_out: formattedIst,
+            clock_out_aest: formattedAest,
+            status: 'completed',
+            worked_seconds: totalSeconds,
+            worked_hours: workedHoursStr,
+            updated_at: nowIso,
+          })
+          .eq('id', supaActive.id);
+      } else {
+        await supabase
+          .from('attendance')
+          .update({
+            clock_out: formattedIst,
+            clock_out_aest: formattedAest,
+            status: 'completed',
+            worked_seconds: totalSeconds,
+            worked_hours: workedHoursStr,
+            updated_at: nowIso,
+          })
+          .or(orClauses.join(','))
+          .eq('status', 'working');
       }
-
-      await supabase
-        .from('attendance')
-        .update({
-          clock_out: formattedIst,
-          clock_out_aest: formattedAest,
-          status: 'completed',
-          worked_seconds: totalSeconds,
-          worked_hours: workedHoursStr,
-          updated_at: nowIso,
-        })
-        .or(orClauses.join(','))
-        .eq('status', 'working');
 
       // Calculate total cumulative worked seconds across all shifts completed today
       const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });

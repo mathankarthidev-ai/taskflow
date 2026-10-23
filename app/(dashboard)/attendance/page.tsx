@@ -1164,6 +1164,8 @@ export default function AttendancePage() {
               userId: currentUser._id,
               userName: currentUser.name,
               userTeam: currentUser.team,
+              userEmail: currentUser.email,
+              clockInTimestamp: clockInTimestamp || undefined,
             }),
           });
         } catch (err) {
