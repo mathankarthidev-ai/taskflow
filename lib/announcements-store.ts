@@ -36,7 +36,7 @@ export interface Announcement {
   readBy?: string[];
 }
 
-const STORAGE_KEY = 'ambizcon_announcements_v1';
+const STORAGE_KEY = 'ambizcon_announcements_v2';
 const SYNC_CHANNEL_NAME = 'ambizcon_announcements_sync';
 
 // BroadcastChannel for cross-tab sync
@@ -53,226 +53,8 @@ function getBroadcastChannel(): BroadcastChannel | null {
   return announcementsBroadcastChannel;
 }
 
-// Initial announcements matching user's Zoho People screenshots
-const SEED_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'ann_1792150000001',
-    title: 'Onboarding New Clients - June 2026',
-    authorId: 'usr_1',
-    authorName: 'Anirudh Krishnakumar',
-    authorRole: 'Director',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'All',
-    createdAt: '17 June 2:52 PM',
-    pinned: true,
-    content: `Hello Team,
-
-We are pleased to announce that we are onboarding three new clients with immediate effect. Team Leads will provide further briefings over the coming days regarding project requirements, deliverables, and workflows.
-
-1. Auzskin Aesthetics – Skin Cancer Management Clinic
-For this client, we will be managing:
-• Website Management
-• SEO
-• Google Ads
-
-Our Design Team will support creative requirements as needed.
-There is also an opportunity for us to take over their social media management in the coming months, subject to our performance, efficiency, and results. Fortnightly email marketing campaigns will also be implemented.
-
-2. Dr Umed Cosmetics – Cosmetic Clinic
-For this client, we will be managing:
-• Website Management
-• Content Creation & Creatives
-• Google Ads Campaigns
-
-3. The Pain Collective (TPC) – Medical Specialist Group
-For this client, we will be managing:
-• Social Media Strategy & Organic Posts
-• SEO Optimization & Google My Business Management`,
-    likes: [
-      { userId: 'usr_1', userName: 'Anirudh Krishnakumar', type: 'heart' },
-      { userId: 'usr_3', userName: 'Aravind Kalaivanan', type: 'like' },
-      { userId: 'usr_5', userName: 'Deva Priya D A', type: 'heart' },
-      { userId: 'usr_6', userName: 'Thanikaivel Arumugam', type: 'heart' },
-      { userId: 'usr_12', userName: 'Sathish Kumar', type: 'like' },
-    ],
-    comments: [
-      {
-        id: 'comm_1',
-        authorId: 'usr_12',
-        authorName: 'Sathish Kumar',
-        authorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-        text: 'Great news! Looking forward to working on this project and delivering great results.',
-        createdAt: '17 June 2:59 PM',
-        likesCount: 1,
-      },
-      {
-        id: 'comm_2',
-        authorId: 'usr_9',
-        authorName: 'Mathi Pandian',
-        authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-        text: 'Great opportunities ahead! Looking forward to collaborating across all three clients and driving strong performance results.',
-        createdAt: '17 June 3:12 PM',
-        likesCount: 1,
-      },
-      {
-        id: 'comm_3',
-        authorId: 'usr_5',
-        authorName: 'Deva Priya D A',
-        authorAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
-        text: 'Great! Looking forward to it.',
-        createdAt: '17 June 3:15 PM',
-        likesCount: 0,
-      },
-      {
-        id: 'comm_4',
-        authorId: 'usr_3',
-        authorName: 'Aravind Kalaivanan',
-        authorAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
-        text: 'Workflows and tasks are aligned with development team.',
-        createdAt: '17 June 3:20 PM',
-        likesCount: 0,
-      },
-    ],
-  },
-  {
-    id: 'ann_1792150000002',
-    title: 'Yoga Sessions Update',
-    authorId: 'usr_1',
-    authorName: 'Anirudh Krishnakumar',
-    authorRole: 'Director',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'All',
-    createdAt: '08 June 7:26 AM',
-    content: 'Hello everyone, Starting next Monday, we will have weekly wellness & yoga sessions every Wednesday morning from 8:30 AM to 9:00 AM. Attendance is optional but strongly encouraged for team well-being!',
-    likes: [
-      { userId: 'usr_3', userName: 'Aravind Kalaivanan' },
-      { userId: 'usr_6', userName: 'Thanikaivel Arumugam' },
-      { userId: 'usr_14', userName: 'Kasthuri M' },
-    ],
-    comments: [
-      {
-        id: 'comm_y1',
-        authorId: 'usr_14',
-        authorName: 'Kasthuri M',
-        text: 'Looking forward to the Wednesday wellness session!',
-        createdAt: '08 June 8:10 AM',
-        likesCount: 1,
-      },
-      {
-        id: 'comm_y2',
-        authorId: 'usr_7',
-        authorName: 'Naraine R',
-        text: 'Awesome initiative for team wellness.',
-        createdAt: '08 June 9:00 AM',
-        likesCount: 1,
-      },
-    ],
-  },
-  {
-    id: 'ann_1792150000003',
-    title: 'Friday 29th May to a Holiday',
-    authorId: 'usr_1',
-    authorName: 'Anirudh Krishnakumar',
-    authorRole: 'Director',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'All',
-    createdAt: '28 May 5:47 AM',
-    content: 'Dear Team, Please be informed that Friday, 29th May is declared an official office holiday for all team members. Enjoy your extended weekend!',
-    likes: [
-      { userId: 'usr_7', userName: 'Naraine R' },
-      { userId: 'usr_8', userName: 'Mathanmk' },
-    ],
-    comments: [
-      {
-        id: 'comm_h1',
-        authorId: 'usr_8',
-        authorName: 'Mathanmk',
-        text: 'Thank you Sir! Have a great weekend everyone.',
-        createdAt: '28 May 6:30 AM',
-        likesCount: 2,
-      },
-    ],
-  },
-  {
-    id: 'ann_1792150000004',
-    title: 'Updated Setting for Leave and attendance Managment',
-    authorId: 'usr_1',
-    authorName: 'Anirudh Krishnakumar',
-    authorRole: 'Director',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'Development',
-    createdAt: '27 May 5:35 AM',
-    content: 'Hello Development Team, New automated clock-in/out and leave tracking workflows are now live. Please review your shift hours and ensure breaks are logged accurately in the portal.',
-    likes: [],
-    comments: [
-      {
-        id: 'comm_l1',
-        authorId: 'usr_3',
-        authorName: 'Aravind Kalaivanan',
-        text: 'Noted. Team members will log their lunch & tea breaks through the kiosk.',
-        createdAt: '27 May 6:00 AM',
-        likesCount: 1,
-      },
-    ],
-  },
-  {
-    id: 'ann_1792150000005',
-    title: 'Creative Design Assets & UI Guidelines',
-    authorId: 'usr_1',
-    authorName: 'Anirudh Krishnakumar',
-    authorRole: 'Director',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'Creative',
-    createdAt: '25 May 7:21 AM',
-    content: 'Creative Team: Please ensure all project assets and Figma design systems adhere to the updated brand palette and client design tokens.',
-    likes: [
-      { userId: 'usr_1', userName: 'Anirudh Krishnakumar', type: 'heart' },
-      { userId: 'usr_2', userName: 'Mathan P', type: 'like' },
-      { userId: 'usr_3', userName: 'Aravind Kalaivanan', type: 'like' },
-      { userId: 'usr_4', userName: 'Kennath Franklin J', type: 'heart' },
-      { userId: 'usr_5', userName: 'Deva Priya D A', type: 'heart' },
-      { userId: 'usr_6', userName: 'Thanikaivel Arumugam', type: 'like' },
-      { userId: 'usr_7', userName: 'Naraine R', type: 'like' },
-      { userId: 'usr_8', userName: 'Mathanmk', type: 'heart' },
-    ],
-    comments: [
-      {
-        id: 'comm_t1',
-        authorId: 'usr_6',
-        authorName: 'Thanikaivel Arumugam',
-        text: 'Design tokens and assets synced.',
-        createdAt: '25 May 8:00 AM',
-        likesCount: 1,
-      },
-    ],
-  },
-  {
-    id: 'ann_1792150000006',
-    title: 'Marketing Campaign Performance & Q4 Targets',
-    authorId: 'usr_1',
-    authorName: 'Anirudh Krishnakumar',
-    authorRole: 'Director',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'Marketing',
-    createdAt: '25 May 6:32 AM',
-    content: 'Marketing Team: Review weekly organic traffic, Google Ads conversions, and client social campaigns before Friday reporting sync.',
-    likes: [
-      { userId: 'usr_3', userName: 'Aravind Kalaivanan', type: 'like' },
-      { userId: 'usr_4', userName: 'Kennath Franklin J', type: 'heart' },
-      { userId: 'usr_9', userName: 'Mathi Pandian', type: 'like' },
-    ],
-    comments: [
-      {
-        id: 'comm_li1',
-        authorId: 'usr_9',
-        authorName: 'Mathi Pandian',
-        text: 'Updated performance sheets and submitted!',
-        createdAt: '25 May 7:00 AM',
-        likesCount: 1,
-      },
-    ],
-  },
-];
+// All old announcement data removed - clean starting slate
+const SEED_ANNOUNCEMENTS: Announcement[] = [];
 
 /**
  * Defensive sanitizer ensuring every announcement has required fields and valid arrays
@@ -349,39 +131,40 @@ function emitAnnouncementsChanged() {
 }
 
 export function getStoredAnnouncements(): Announcement[] {
-  if (typeof window === 'undefined') return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
+  if (typeof window === 'undefined') return [];
   try {
+    // Purge any old legacy announcements from local storage
+    if (localStorage.getItem('ambizcon_announcements_v1')) {
+      localStorage.removeItem('ambizcon_announcements_v1');
+    }
+
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ANNOUNCEMENTS));
-      return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      return [];
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      const sanitized = parsed.map(sanitizeAnnouncement);
-      // Ensure all seed announcements are guaranteed to exist even if local cache is partial
-      const existingIds = new Set(sanitized.map((p) => p.id));
-      const missingSeeds = SEED_ANNOUNCEMENTS.filter((s) => !existingIds.has(s.id)).map(sanitizeAnnouncement);
-
-      const merged = [...sanitized, ...missingSeeds];
-      if (missingSeeds.length > 0) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-      }
-      return merged;
+    if (Array.isArray(parsed)) {
+      return parsed.map(sanitizeAnnouncement);
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ANNOUNCEMENTS));
-    return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    return [];
   } catch {
-    return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
+    return [];
   }
 }
 
-export function resetAnnouncementsToDefaults(): Announcement[] {
+export function clearAllAnnouncements(): Announcement[] {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ANNOUNCEMENTS));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    localStorage.removeItem('ambizcon_announcements_v1');
     emitAnnouncementsChanged();
   }
-  return SEED_ANNOUNCEMENTS.map(sanitizeAnnouncement);
+  return [];
+}
+
+export function resetAnnouncementsToDefaults(): Announcement[] {
+  return clearAllAnnouncements();
 }
 
 /**

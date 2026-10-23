@@ -15,6 +15,7 @@ import {
   getThumbLikesCount,
   toggleLikeAnnouncement,
   resetAnnouncementsToDefaults,
+  clearAllAnnouncements,
   sanitizeAnnouncement,
 } from '@/lib/announcements-store';
 import { Card } from '@/components/ui/Card';
@@ -39,6 +40,7 @@ import {
   CheckCircle2,
   CheckCheck,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -239,17 +241,23 @@ export default function AnnouncementsPage() {
 
         {/* Admin Actions */}
         <div className="flex items-center gap-2 flex-wrap">
-          {isAdmin && (
+          {isAdmin && announcements.length > 0 && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={handleResetDefaults}
-              className="text-xs font-bold gap-1.5 border-zinc-200 dark:border-zinc-700 bg-background/80 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              title="Reset official announcements list to latest company standard"
+              onClick={() => {
+                if (confirm('Are you sure you want to remove all old announcement data?')) {
+                  const cleaned = clearAllAnnouncements();
+                  setAnnouncements([...cleaned]);
+                  toast.success('All announcement data removed');
+                }
+              }}
+              className="text-xs font-bold gap-1.5 border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20"
+              title="Remove all announcements"
             >
-              <RotateCcw className="h-3.5 w-3.5 text-brand-500" />
-              <span>Sync Standard Bulletins</span>
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Clear Announcements</span>
             </Button>
           )}
 
@@ -319,8 +327,21 @@ export default function AnnouncementsPage() {
             <Megaphone className="h-10 w-10 text-muted-foreground/40 mx-auto" />
             <h3 className="font-bold text-sm text-foreground">No announcements found</h3>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              {searchQuery ? 'Try adjusting your search keywords.' : 'No announcements published for this filter category yet.'}
+              {searchQuery
+                ? 'Try adjusting your search keywords.'
+                : 'All old announcements have been removed. Admins can create and post new official announcements here anytime.'}
             </p>
+            {isAdmin && !searchQuery && (
+              <div className="pt-2">
+                <Button
+                  onClick={() => setIsCreateOpen(true)}
+                  className="ambizcon-gradient text-white text-xs font-bold gap-1.5 shadow-glow"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Create First Announcement</span>
+                </Button>
+              </div>
+            )}
           </Card>
         ) : (
           filteredAnnouncements.map((ann) => {
