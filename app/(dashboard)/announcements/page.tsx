@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
   Announcement,
   getStoredAnnouncements,
+  getVisibleAnnouncementsForUser,
   isAnnouncementRead,
   markAnnouncementAsRead,
   markAnnouncementAsUnread,
@@ -42,13 +43,56 @@ export default function AnnouncementsPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'All' | 'Unread' | 'Pinned' | 'Development' | 'Marketing' | 'Creative'>('All');
+  const [selectedFilter, setSelectedFilter] = useState<string>('All');
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
-  const unreadCount = currentUser ? getUnreadAnnouncementsCount(currentUser._id, announcements) : 0;
+  const userTeam = currentUser?.team || 'Creative';
+
+  // Base list of announcements visible to this user
+  // Admin: can see all announcements across all teams
+  // Mem and TL: can only see 'All' and their own team, not other teams
+  const visibleAnnouncements = useMemo(() => {
+    return getVisibleAnnouncementsForUser(announcements, currentUser);
+  }, [announcements, currentUser]);
+
+  const unreadCount = currentUser ? getUnreadAnnouncementsCount(currentUser._id, currentUser, visibleAnnouncements) : 0;
+
+  // Filter tabs:
+  // Admin has all options: All, Unread, Pinned, Development, Marketing, Creative, Sales, HR
+  // Mem and TL can see All, Unread, Pinned, and ONLY their own team (not other teams)
+  const availableFilterTabs = useMemo(() => {
+    if (isAdmin) {
+      return [
+        { key: 'All', label: `All (${visibleAnnouncements.length})` },
+        { key: 'Unread', label: `⚡ Unread (${unreadCount})` },
+        { key: 'Pinned', label: '📌 Pinned' },
+        { key: 'Development', label: 'Development' },
+        { key: 'Marketing', label: 'Marketing' },
+        { key: 'Creative', label: 'Creative' },
+        { key: 'Sales', label: 'Sales' },
+        { key: 'HR', label: 'HR' },
+      ];
+    }
+
+    // Mem and TL: Only their own team tab, no other teams!
+    return [
+      { key: 'All', label: `All (${visibleAnnouncements.length})` },
+      { key: 'Unread', label: `⚡ Unread (${unreadCount})` },
+      { key: 'Pinned', label: '📌 Pinned' },
+      { key: userTeam, label: `${userTeam} Team` },
+    ];
+  }, [isAdmin, visibleAnnouncements.length, unreadCount, userTeam]);
+
+  // Fallback to 'All' if current filter key is not available to this user's role/team
+  useEffect(() => {
+    const validKeys = availableFilterTabs.map((t) => t.key);
+    if (!validKeys.includes(selectedFilter)) {
+      setSelectedFilter('All');
+    }
+  }, [availableFilterTabs, selectedFilter]);
 
   const loadAnnouncements = () => {
     const list = getStoredAnnouncements();
@@ -97,8 +141,8 @@ export default function AnnouncementsPage() {
     };
   }, []);
 
-  // Filtered list
-  const filteredAnnouncements = announcements.filter((ann) => {
+  // Filtered list derived from visibleAnnouncements
+  const filteredAnnouncements = visibleAnnouncements.filter((ann) => {
     // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -108,15 +152,15 @@ export default function AnnouncementsPage() {
       if (!matchTitle && !matchAuthor && !matchContent) return false;
     }
 
-    // Category filter
+    // Category / Team filter
     if (selectedFilter === 'Unread') {
-      return currentUser ? !isAnnouncementRead(ann.id, currentUser._id, announcements) : false;
+      return currentUser ? !isAnnouncementRead(ann.id, currentUser._id, visibleAnnouncements) : false;
     }
     if (selectedFilter === 'Pinned') {
       return Boolean(ann.pinned);
     }
     if (selectedFilter !== 'All') {
-      return ann.applicableTo === 'All' || ann.applicableTo === selectedFilter;
+      return ann.applicableTo === selectedFilter;
     }
     return true;
   });
@@ -135,11 +179,13 @@ export default function AnnouncementsPage() {
                 Organization Announcements
               </h1>
               <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs font-mono font-extrabold px-2 py-0.5">
-                {announcements.length} Official Bulletins
+                {visibleAnnouncements.length} {isAdmin ? 'Official Bulletins (All Teams)' : `${userTeam} & Company Bulletins`}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Official company updates, client onboardings, holiday schedules, and team briefings. Only Admin can post; all members can like and comment.
+              {isAdmin
+                ? 'Official company updates, client onboardings, holiday schedules, and team briefings across all departments. Only Admin can post; all members can like and comment.'
+                : `Official company updates and ${userTeam} team briefings. You can view all company broadcasts and ${userTeam} team bulletins.`}
             </p>
           </div>
         </div>
@@ -173,16 +219,7 @@ export default function AnnouncementsPage() {
         {/* Filter Pills & Mark All Read */}
         <div className="flex items-center justify-between gap-2 flex-wrap flex-1">
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0">
-            {(
-              [
-                { key: 'All', label: `All (${announcements.length})` },
-                { key: 'Unread', label: `⚡ Unread (${unreadCount})` },
-                { key: 'Pinned', label: '📌 Pinned' },
-                { key: 'Development', label: 'Development' },
-                { key: 'Marketing', label: 'Marketing' },
-                { key: 'Creative', label: 'Creative' },
-              ] as const
-            ).map((tab) => (
+            {availableFilterTabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
@@ -229,7 +266,7 @@ export default function AnnouncementsPage() {
             const isThumbLiked = myLike && myLike.type !== 'heart';
             const heartCount = getHeartLikesCount(ann);
             const thumbCount = getThumbLikesCount(ann);
-            const isRead = currentUser ? isAnnouncementRead(ann.id, currentUser._id, announcements) : true;
+            const isRead = currentUser ? isAnnouncementRead(ann.id, currentUser._id, visibleAnnouncements) : true;
 
             return (
               <div

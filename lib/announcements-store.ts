@@ -200,9 +200,9 @@ For this client, we will be managing:
     authorName: 'Anirudh Krishnakumar',
     authorRole: 'Director',
     authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'All',
+    applicableTo: 'Development',
     createdAt: '27 May 5:35 AM',
-    content: 'Hello Team, New automated clock-in/out and leave tracking workflows are now live. Please review your shift hours and ensure breaks are logged accurately in the portal.',
+    content: 'Hello Development Team, New automated clock-in/out and leave tracking workflows are now live. Please review your shift hours and ensure breaks are logged accurately in the portal.',
     likes: [],
     comments: [
       {
@@ -217,30 +217,30 @@ For this client, we will be managing:
   },
   {
     id: 'ann_1792150000005',
-    title: 'Timesheet Update',
+    title: 'Creative Design Assets & UI Guidelines',
     authorId: 'usr_1',
     authorName: 'Anirudh Krishnakumar',
     authorRole: 'Director',
     authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'All',
+    applicableTo: 'Creative',
     createdAt: '25 May 7:21 AM',
-    content: 'Reminder to all team members: please ensure all weekly timesheet logs and hourly work tracker entries are submitted before 5:00 PM every Friday.',
+    content: 'Creative Team: Please ensure all project assets and Figma design systems adhere to the updated brand palette and client design tokens.',
     likes: [
-      { userId: 'usr_1', userName: 'Anirudh Krishnakumar' },
-      { userId: 'usr_2', userName: 'Mathan P' },
-      { userId: 'usr_3', userName: 'Aravind Kalaivanan' },
-      { userId: 'usr_4', userName: 'Kennath Franklin J' },
-      { userId: 'usr_5', userName: 'Deva Priya D A' },
-      { userId: 'usr_6', userName: 'Thanikaivel Arumugam' },
-      { userId: 'usr_7', userName: 'Naraine R' },
-      { userId: 'usr_8', userName: 'Mathanmk' },
+      { userId: 'usr_1', userName: 'Anirudh Krishnakumar', type: 'heart' },
+      { userId: 'usr_2', userName: 'Mathan P', type: 'like' },
+      { userId: 'usr_3', userName: 'Aravind Kalaivanan', type: 'like' },
+      { userId: 'usr_4', userName: 'Kennath Franklin J', type: 'heart' },
+      { userId: 'usr_5', userName: 'Deva Priya D A', type: 'heart' },
+      { userId: 'usr_6', userName: 'Thanikaivel Arumugam', type: 'like' },
+      { userId: 'usr_7', userName: 'Naraine R', type: 'like' },
+      { userId: 'usr_8', userName: 'Mathanmk', type: 'heart' },
     ],
     comments: [
       {
         id: 'comm_t1',
         authorId: 'usr_6',
         authorName: 'Thanikaivel Arumugam',
-        text: 'Timesheet submitted for this week.',
+        text: 'Design tokens and assets synced.',
         createdAt: '25 May 8:00 AM',
         likesCount: 1,
       },
@@ -248,25 +248,25 @@ For this client, we will be managing:
   },
   {
     id: 'ann_1792150000006',
-    title: 'Update all your Linkedin Profiles with Immediate Effect',
+    title: 'Marketing Campaign Performance & Q4 Targets',
     authorId: 'usr_1',
     authorName: 'Anirudh Krishnakumar',
     authorRole: 'Director',
     authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    applicableTo: 'All',
+    applicableTo: 'Marketing',
     createdAt: '25 May 6:32 AM',
-    content: 'Team members are requested to update their LinkedIn employment details to reflect Ambizcon Health / Ambizcon and connect with our official company page.',
+    content: 'Marketing Team: Review weekly organic traffic, Google Ads conversions, and client social campaigns before Friday reporting sync.',
     likes: [
-      { userId: 'usr_3', userName: 'Aravind Kalaivanan' },
-      { userId: 'usr_4', userName: 'Kennath Franklin J' },
-      { userId: 'usr_9', userName: 'Mathi Pandian' },
+      { userId: 'usr_3', userName: 'Aravind Kalaivanan', type: 'like' },
+      { userId: 'usr_4', userName: 'Kennath Franklin J', type: 'heart' },
+      { userId: 'usr_9', userName: 'Mathi Pandian', type: 'like' },
     ],
     comments: [
       {
         id: 'comm_li1',
         authorId: 'usr_9',
         authorName: 'Mathi Pandian',
-        text: 'Updated profile and connected!',
+        text: 'Updated performance sheets and submitted!',
         createdAt: '25 May 7:00 AM',
         likesCount: 1,
       },
@@ -292,13 +292,46 @@ export function getStoredAnnouncements(): Announcement[] {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+      // Ensure seed team targets are synced with latest definitions
+      const synced = parsed.map((item: Announcement) => {
+        const seedMatch = SEED_ANNOUNCEMENTS.find((s) => s.id === item.id);
+        if (seedMatch && seedMatch.applicableTo !== 'All' && item.applicableTo === 'All') {
+          return { ...item, applicableTo: seedMatch.applicableTo, title: seedMatch.title, content: seedMatch.content };
+        }
+        return item;
+      });
+      return synced;
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ANNOUNCEMENTS));
     return SEED_ANNOUNCEMENTS;
   } catch {
     return SEED_ANNOUNCEMENTS;
   }
+}
+
+/**
+ * Role & Team Scoping for Announcements:
+ * - Admin (Super Admin & Admin): Can see all announcements across all teams and departments.
+ * - Team Lead (TL) & Team Member (Mem): Can see All-organization announcements and ONLY their own team (not other teams).
+ */
+export function getVisibleAnnouncementsForUser(
+  announcements: Announcement[],
+  user: User | null
+): Announcement[] {
+  if (!user) return announcements;
+  const isAdmin = user.role === 'Super Admin' || user.role === 'Admin';
+  if (isAdmin) return announcements;
+
+  const userTeam = (user.team || '').toLowerCase().trim();
+
+  return announcements.filter((ann) => {
+    // 1. All-company broadcasts are visible to all members
+    if (!ann.applicableTo || ann.applicableTo === 'All' || ann.applicableTo === 'Ambizcon' || ann.applicableTo === 'Ambizcon Health') {
+      return true;
+    }
+    // 2. Team-specific announcements are ONLY visible to members of that specific team
+    return ann.applicableTo.toLowerCase().trim() === userTeam;
+  });
 }
 
 export function getAnnouncementsCount(): number {
@@ -435,11 +468,26 @@ export function markAllAnnouncementsAsRead(userId: string): void {
   }
 }
 
-export function getUnreadAnnouncementsCount(userId: string, announcements?: Announcement[]): number {
+export function getUnreadAnnouncementsCount(
+  userId: string,
+  userOrAnnouncements?: User | Announcement[] | null,
+  maybeAnnouncements?: Announcement[]
+): number {
   if (!userId) return 0;
-  const list = announcements || getStoredAnnouncements();
+  let user: User | null = null;
+  let announcements: Announcement[] | undefined = undefined;
+
+  if (Array.isArray(userOrAnnouncements)) {
+    announcements = userOrAnnouncements;
+  } else if (userOrAnnouncements && typeof userOrAnnouncements === 'object' && '_id' in userOrAnnouncements) {
+    user = userOrAnnouncements as User;
+    announcements = maybeAnnouncements;
+  }
+
+  const rawList = announcements || getStoredAnnouncements();
+  const visible = user ? getVisibleAnnouncementsForUser(rawList, user) : rawList;
   const userReadIds = new Set(getUserReadAnnouncementIds(userId));
-  return list.filter((a) => !userReadIds.has(a.id) && !(a.readBy && a.readBy.includes(userId))).length;
+  return visible.filter((a) => !userReadIds.has(a.id) && !(a.readBy && a.readBy.includes(userId))).length;
 }
 
 export function getHeartLikesCount(ann: Announcement): number {

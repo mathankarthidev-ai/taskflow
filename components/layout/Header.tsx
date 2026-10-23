@@ -81,6 +81,7 @@ import {
   getStoredAnnouncements,
   getUnreadAnnouncementsCount,
   markAllAnnouncementsAsRead,
+  getVisibleAnnouncementsForUser,
 } from '@/lib/announcements-store';
 import { AnnouncementsQuickDropdown } from '@/components/announcements/AnnouncementsQuickDropdown';
 import { AnnouncementDetailModal } from '@/components/announcements/AnnouncementDetailModal';
@@ -1595,9 +1596,10 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
         {/* Company Announcements (Speaker Option in Navbar with Real Count Badge) */}
         {(() => {
+          const visibleAnnouncements = getVisibleAnnouncementsForUser(announcementsList, currentUser);
           const unreadAnnouncementsCount = currentUser
-            ? getUnreadAnnouncementsCount(currentUser._id, announcementsList)
-            : announcementsList.length;
+            ? getUnreadAnnouncementsCount(currentUser._id, currentUser, visibleAnnouncements)
+            : visibleAnnouncements.length;
 
           return (
             <div className="relative header-dropdown-menu">
@@ -1608,23 +1610,23 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                     ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400'
                     : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/40'
                 }`}
-                title={`📢 Company Announcements (${unreadAnnouncementsCount > 0 ? `${unreadAnnouncementsCount} Unread` : `${announcementsList.length} Announcements`})`}
+                title={`📢 Company Announcements (${unreadAnnouncementsCount > 0 ? `${unreadAnnouncementsCount} Unread` : `${visibleAnnouncements.length} Announcements`})`}
               >
                 <Megaphone className="h-4 w-4" />
                 {unreadAnnouncementsCount > 0 ? (
                   <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-rose-500 text-white font-mono text-[9px] font-extrabold flex items-center justify-center border border-background shadow-sm animate-pulse">
                     {unreadAnnouncementsCount}
                   </span>
-                ) : announcementsList.length > 0 ? (
+                ) : visibleAnnouncements.length > 0 ? (
                   <span className="absolute -top-1 -right-1 h-3.5 min-w-3.5 px-0.5 rounded-full bg-amber-500/80 text-white font-mono text-[8px] font-bold flex items-center justify-center border border-background">
-                    {announcementsList.length}
+                    {visibleAnnouncements.length}
                   </span>
                 ) : null}
               </button>
 
               {activeMenu === 'announcements' && (
                 <AnnouncementsQuickDropdown
-                  announcements={announcementsList}
+                  announcements={visibleAnnouncements}
                   onSelectAnnouncement={(ann) => {
                     setSelectedAnnouncement(ann);
                     setIsAnnouncementDetailOpen(true);

@@ -8,6 +8,7 @@ import {
   getUnreadAnnouncementsCount,
   getHeartLikesCount,
   getThumbLikesCount,
+  getVisibleAnnouncementsForUser,
 } from '@/lib/announcements-store';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Badge } from '@/components/ui/Badge';
@@ -40,7 +41,8 @@ export function AnnouncementsQuickDropdown({
   isAdmin,
 }: AnnouncementsQuickDropdownProps) {
   const currentUser = useAuthStore((s) => s.currentUser);
-  const unreadCount = currentUser ? getUnreadAnnouncementsCount(currentUser._id, announcements) : 0;
+  const visibleAnnouncements = getVisibleAnnouncementsForUser(announcements, currentUser);
+  const unreadCount = currentUser ? getUnreadAnnouncementsCount(currentUser._id, currentUser, visibleAnnouncements) : 0;
 
   const handleMarkAllRead = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -63,7 +65,7 @@ export function AnnouncementsQuickDropdown({
             </Badge>
           ) : (
             <Badge className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[10px] font-mono font-bold px-1.5 py-0.2">
-              {announcements.length} Total
+              {visibleAnnouncements.length} Total
             </Badge>
           )}
         </div>
@@ -100,13 +102,13 @@ export function AnnouncementsQuickDropdown({
 
       {/* Announcements List */}
       <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60 max-h-80 overflow-y-auto my-1 pr-1">
-        {announcements.length === 0 ? (
+        {visibleAnnouncements.length === 0 ? (
           <p className="text-xs text-muted-foreground italic py-6 text-center">
-            No announcements published yet.
+            No announcements published for your team yet.
           </p>
         ) : (
-          announcements.map((ann) => {
-            const isRead = currentUser ? isAnnouncementRead(ann.id, currentUser._id, announcements) : true;
+          visibleAnnouncements.map((ann) => {
+            const isRead = currentUser ? isAnnouncementRead(ann.id, currentUser._id, visibleAnnouncements) : true;
             const heartCount = getHeartLikesCount(ann);
             const thumbCount = getThumbLikesCount(ann);
 
