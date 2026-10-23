@@ -638,69 +638,38 @@ export function DashboardOverview() {
           <TeamPresenceOverviewPanel variant="hero-embed" />
         </div>
 
-        {/* Bottom Bar (Ambizcon Logo Signature Gradient / Theme) */}
+        {/* Bottom Bar: Dual Office Live Timings (Chennai, India • IST & Brisbane, Australia • AEST) */}
         <div className="ambizcon-gradient border-t border-brand-500/30 p-3 sm:p-4 shadow-sm text-white">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* SHIFT STATUS */}
-            <div className="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-white/80 block">
-                SHIFT STATUS
-              </span>
-              <div className="flex items-center gap-2 mt-2">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    currentShift?.isWorking
-                      ? 'bg-emerald-300 animate-pulse ring-4 ring-emerald-400/30'
-                      : currentShift?.status === 'completed'
-                      ? 'bg-zinc-300'
-                      : 'bg-zinc-400'
-                  }`}
-                />
-                <span className="text-xs font-bold text-white">
-                  {currentShift?.isWorking
-                    ? `Shift Active (${liveWorkedFormatted})`
-                    : currentShift?.status === 'completed'
-                    ? `Shift Completed (${currentShift.workedHours})`
-                    : 'Shift not started'}
-                </span>
-              </div>
-            </div>
-
-            {/* CLOCKED IN AT */}
-            <div className="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-white/80 block">
-                {isAustralia ? 'CLOCKED IN AT (AUSTRALIA TIME)' : 'CLOCKED IN AT (INDIA TIME)'}
-              </span>
-              <div className="mt-2">
-                <span className="inline-block px-2.5 py-1 rounded-lg bg-white/20 border border-white/25 text-white font-mono text-xs font-bold shadow-xs">
-                  {currentShift?.isWorking
-                    ? currentShift.clockIn
-                    : currentShift?.status === 'completed'
-                    ? `In: ${currentShift.clockIn}`
-                    : 'Not clocked in'}
-                </span>
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {/* CHENNAI, INDIA • IST */}
-            <div className="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-100 block">
-                CHENNAI, INDIA • IST
-              </span>
-              <div className="mt-2">
-                <span className="inline-block px-3 py-1 rounded-lg bg-white/20 text-white border border-white/25 shadow-sm font-mono text-xs font-extrabold">
+            <div className="bg-black/35 backdrop-blur-md border border-white/20 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+              <div className="flex flex-col">
+                <span className="text-[11px] font-extrabold tracking-wider uppercase text-emerald-200">
+                  CHENNAI, INDIA • IST
+                </span>
+                <span className="text-xs text-white/70 font-medium mt-0.5">
+                  India Headquarters
+                </span>
+              </div>
+              <div className="inline-flex items-center px-4 py-2 rounded-xl bg-white/20 border border-white/30 shadow-inner">
+                <span className="font-mono text-lg sm:text-xl font-black text-white tracking-wider drop-shadow-sm">
                   {chennaiTime || '02:58:49 pm'}
                 </span>
               </div>
             </div>
 
             {/* BRISBANE, AUSTRALIA • AEST */}
-            <div className="bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex flex-col justify-center">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-sky-100 block">
-                BRISBANE, AUSTRALIA • AEST
-              </span>
-              <div className="mt-2">
-                <span className="inline-block px-3 py-1 rounded-lg bg-white/20 text-white border border-white/25 shadow-sm font-mono text-xs font-extrabold">
+            <div className="bg-black/35 backdrop-blur-md border border-white/20 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+              <div className="flex flex-col">
+                <span className="text-[11px] font-extrabold tracking-wider uppercase text-sky-200">
+                  BRISBANE, AUSTRALIA • AEST
+                </span>
+                <span className="text-xs text-white/70 font-medium mt-0.5">
+                  Australia Branch
+                </span>
+              </div>
+              <div className="inline-flex items-center px-4 py-2 rounded-xl bg-white/20 border border-white/30 shadow-inner">
+                <span className="font-mono text-lg sm:text-xl font-black text-white tracking-wider drop-shadow-sm">
                   {brisbaneTime || '07:28:49 pm'}
                 </span>
               </div>
