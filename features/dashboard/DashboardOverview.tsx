@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCompanyStore } from '@/store/useCompanyStore';
@@ -35,6 +35,21 @@ import { isTaskInCompany } from '@/lib/company-filter';
 import { TeamPresenceOverviewPanel } from '@/components/dashboard/TeamPresenceOverviewPanel';
 import { HourlyWorkTrackerPanel } from '@/components/dashboard/HourlyWorkTrackerPanel';
 
+function parseTimeStringToTodayTimestamp(timeStr?: string): number | null {
+  if (!timeStr || timeStr === '-' || timeStr === '—') return null;
+  const match = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const seconds = match[3] ? parseInt(match[3], 10) : 0;
+  const meridian = match[4]?.toLowerCase();
+  if (meridian === 'pm' && hours < 12) hours += 12;
+  if (meridian === 'am' && hours === 12) hours = 0;
+  const d = new Date();
+  d.setHours(hours, minutes, seconds, 0);
+  return d.getTime();
+}
+
 export function DashboardOverview() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const selectedCompany = useCompanyStore((s) => s.selectedCompany);
@@ -63,6 +78,19 @@ export function DashboardOverview() {
   const [brisbaneTime, setBrisbaneTime] = useState('');
   const [clockingInProgress, setClockingInProgress] = useState(false);
 
+  // Live Daily Login & Shift Timer
+  const [liveWorkedSeconds, setLiveWorkedSeconds] = useState<number>(0);
+  const [clockInTimestamp, setClockInTimestamp] = useState<number | null>(null);
+  const clockInTimestampRef = useRef<number | null>(null);
+  const isWorkingRef = useRef<boolean>(false);
+
+  const liveWorkedFormatted = useMemo(() => {
+    const h = Math.floor(liveWorkedSeconds / 3600);
+    const m = Math.floor((liveWorkedSeconds % 3600) / 60);
+    const s = liveWorkedSeconds % 60;
+    return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+  }, [liveWorkedSeconds]);
+
   useEffect(() => {
     async function loadData(showSpinner = true) {
       if (showSpinner) setLoading(true);
@@ -84,6 +112,20 @@ export function DashboardOverview() {
   const loadCurrentShift = async () => {
     if (!currentUser) return;
     try {
+      const todayDateKey = new Date().toISOString().split('T')[0];
+      let cachedTs: number | null = null;
+      let cachedClockInTime: string | null = null;
+      try {
+        const raw = localStorage.getItem(`ambizcon_shift_${currentUser._id}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.shiftDate === todayDateKey && parsed.isClockedIn) {
+            cachedTs = parsed.clockInTimestamp || null;
+            cachedClockInTime = parsed.clockInTime || null;
+          }
+        }
+      } catch {}
+
       const res = await fetch(
         `/api/attendance/current?email=${encodeURIComponent(currentUser.email)}&name=${encodeURIComponent(
           currentUser.name
@@ -91,12 +133,54 @@ export function DashboardOverview() {
       );
       const data = await res.json();
       if (data.success && data.attendance) {
+        const isWorking = Boolean(data.isWorking);
+        const clockIn = data.clockIn || cachedClockInTime || '—';
+        const clockOut = data.clockOut || '—';
+        const status = data.status || (isWorking ? 'working' : 'completed');
+        const workedHours = data.workedHours || '0h 00m';
+
+        let effectiveTs: number | null = cachedTs;
+        if (!effectiveTs && isWorking) {
+          if (data.attendance?.created_at) {
+            effectiveTs = new Date(data.attendance.created_at).getTime();
+          } else if (data.attendance?.clock_in_timestamp) {
+            effectiveTs = data.attendance.clock_in_timestamp;
+          } else {
+            effectiveTs = parseTimeStringToTodayTimestamp(clockIn);
+          }
+        }
+
         setCurrentShift({
-          isWorking: data.isWorking,
-          clockIn: data.clockIn || '—',
-          clockOut: data.clockOut || '—',
-          status: data.status,
-          workedHours: data.workedHours || '0h 00m',
+          isWorking,
+          clockIn,
+          clockOut,
+          status,
+          workedHours,
+        });
+
+        if (isWorking && effectiveTs) {
+          setClockInTimestamp(effectiveTs);
+          clockInTimestampRef.current = effectiveTs;
+          isWorkingRef.current = true;
+          const elapsed = Math.max(0, Math.floor((Date.now() - effectiveTs) / 1000));
+          setLiveWorkedSeconds(elapsed);
+        } else {
+          setClockInTimestamp(null);
+          clockInTimestampRef.current = null;
+          isWorkingRef.current = false;
+        }
+      } else if (cachedTs) {
+        setClockInTimestamp(cachedTs);
+        clockInTimestampRef.current = cachedTs;
+        isWorkingRef.current = true;
+        const elapsed = Math.max(0, Math.floor((Date.now() - cachedTs) / 1000));
+        setLiveWorkedSeconds(elapsed);
+        setCurrentShift({
+          isWorking: true,
+          clockIn: cachedClockInTime || '—',
+          clockOut: '—',
+          status: 'working',
+          workedHours: '0h 00m',
         });
       }
     } catch (e) {
@@ -154,6 +238,12 @@ export function DashboardOverview() {
           hour12: true,
         }).toLowerCase()
       );
+
+      // Live Running Shift Timer Ticker (Real-Time Count Up Every Second)
+      if (isWorkingRef.current && clockInTimestampRef.current) {
+        const elapsed = Math.max(0, Math.floor((Date.now() - clockInTimestampRef.current) / 1000));
+        setLiveWorkedSeconds(elapsed);
+      }
     };
 
     updateAllClocks();
@@ -200,6 +290,9 @@ export function DashboardOverview() {
         const data = await res.json();
         if (data.success) {
           toast.success('Clocked Out successfully! Shift completed.');
+          setClockInTimestamp(null);
+          clockInTimestampRef.current = null;
+          isWorkingRef.current = false;
           setCurrentShift((prev) => ({
             isWorking: false,
             clockIn: prev?.clockIn || formattedNow,
@@ -239,6 +332,11 @@ export function DashboardOverview() {
         const data = await res.json();
         if (data.success) {
           toast.success(`Clocked In successfully! Shift active.`);
+          const nowTs = Date.now();
+          setClockInTimestamp(nowTs);
+          clockInTimestampRef.current = nowTs;
+          isWorkingRef.current = true;
+          setLiveWorkedSeconds(0);
           setCurrentShift({
             isWorking: true,
             clockIn: data.clockIn || formattedNow,
@@ -376,9 +474,9 @@ export function DashboardOverview() {
           </div>
 
           {/* Right: Divider + Live Time Clock & Action Buttons */}
-          <div className="w-full md:w-64 lg:w-72 shrink-0 border-t md:border-t-0 md:border-l border-brand-500/20 p-6 flex flex-col items-center justify-center text-center gap-3">
+          <div className="w-full md:w-68 lg:w-80 shrink-0 border-t md:border-t-0 md:border-l border-brand-500/20 p-5 sm:p-6 flex flex-col items-center justify-center text-center gap-2.5">
             <div>
-              <div className="text-3xl font-extrabold tracking-tight text-foreground font-sans">
+              <div className="text-3xl font-extrabold tracking-tight text-foreground font-mono">
                 {digitalClock24 || '14:58:49'}
               </div>
               <div className="text-xs text-muted-foreground font-medium mt-0.5">
@@ -386,7 +484,82 @@ export function DashboardOverview() {
               </div>
             </div>
 
-            <div className="w-full space-y-2.5 mt-1">
+            {/* Daily Clock-In Login Timings & Live Running Hours Card */}
+            <div
+              className={`w-full rounded-2xl border p-2.5 transition-all text-left ${
+                currentShift?.isWorking
+                  ? 'bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-950/20 shadow-xs'
+                  : currentShift?.status === 'completed'
+                  ? 'bg-zinc-100/80 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700'
+                  : 'bg-zinc-50/80 dark:bg-zinc-900/40 border-zinc-200/80 dark:border-zinc-800'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1 mb-1">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      currentShift?.isWorking
+                        ? 'bg-emerald-500 animate-ping'
+                        : currentShift?.status === 'completed'
+                        ? 'bg-zinc-400'
+                        : 'bg-amber-500'
+                    }`}
+                  />
+                  <span
+                    className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                      currentShift?.isWorking
+                        ? 'text-emerald-700 dark:text-emerald-300'
+                        : currentShift?.status === 'completed'
+                        ? 'text-zinc-600 dark:text-zinc-400'
+                        : 'text-amber-700 dark:text-amber-400'
+                    }`}
+                  >
+                    {currentShift?.isWorking
+                      ? 'Live Shift Active'
+                      : currentShift?.status === 'completed'
+                      ? 'Shift Completed'
+                      : 'Shift Not Started'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {currentShift?.isWorking
+                    ? `In: ${currentShift.clockIn}`
+                    : currentShift?.status === 'completed'
+                    ? `In: ${currentShift.clockIn}`
+                    : 'Daily Shift'}
+                </span>
+              </div>
+
+              {/* Live Running Timing */}
+              <div className="flex items-baseline justify-between gap-2 mt-0.5">
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                  {currentShift?.isWorking ? 'Live Worked Time:' : 'Worked Hours:'}
+                </span>
+                <span
+                  className={`font-mono font-black text-base sm:text-lg tracking-tight ${
+                    currentShift?.isWorking
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : currentShift?.status === 'completed'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground/70'
+                  }`}
+                >
+                  {currentShift?.isWorking
+                    ? liveWorkedFormatted
+                    : currentShift?.status === 'completed'
+                    ? currentShift.workedHours || '8h 30m'
+                    : '0h 00m 00s'}
+                </span>
+              </div>
+
+              {currentShift?.status === 'completed' && currentShift.clockOut && currentShift.clockOut !== '—' && currentShift.clockOut !== '-' && (
+                <div className="text-[10px] text-muted-foreground mt-0.5 text-right font-mono">
+                  Clocked out at: {currentShift.clockOut}
+                </div>
+              )}
+            </div>
+
+            <div className="w-full space-y-2 mt-0.5">
               <button
                 type="button"
                 onClick={handleClockToggle}
@@ -444,9 +617,9 @@ export function DashboardOverview() {
                 />
                 <span className="text-xs font-bold text-white">
                   {currentShift?.isWorking
-                    ? 'Shift Active'
+                    ? `Shift Active (${liveWorkedFormatted})`
                     : currentShift?.status === 'completed'
-                    ? 'Shift Completed'
+                    ? `Shift Completed (${currentShift.workedHours})`
                     : 'Shift not started'}
                 </span>
               </div>
