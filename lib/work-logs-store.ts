@@ -234,9 +234,6 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
       .eq('work_date', workDate)
       .order('start_time', { ascending: true });
 
-    const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
-    const defaultThanikaivelLogs = generateReferenceWorkLogs(workDate, seedUser as any);
-
     if (!error && data) {
       let mapped: WorkLogItem[] = data.map((row: any) => {
         const startMins = parseTimeToMinutes(row.start_time);
@@ -270,15 +267,6 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
         };
       });
 
-      // Ensure Thanikaivel's reference schedule from screenshot is present unless cleared
-      const isClearedThanikaivel =
-        typeof window !== 'undefined' &&
-        localStorage.getItem(`ambizcon_ref_schedule_cleared_thanikaivel@ambizcon.com_${workDate}`);
-      const hasThanikaivel = mapped.some((m) => m.user_email?.toLowerCase() === 'thanikaivel@ambizcon.com');
-      if (!hasThanikaivel && !isClearedThanikaivel) {
-        mapped = [...mapped, ...defaultThanikaivelLogs];
-      }
-
       if (typeof window !== 'undefined') {
         localStorage.setItem(storageKey, JSON.stringify(mapped));
       }
@@ -291,27 +279,11 @@ export async function fetchWorkLogsForDate(workDate: string): Promise<WorkLogIte
     if (cached) {
       try {
         let list: WorkLogItem[] = JSON.parse(cached);
-        const isClearedThanikaivel =
-          typeof window !== 'undefined' &&
-          localStorage.getItem(`ambizcon_ref_schedule_cleared_thanikaivel@ambizcon.com_${workDate}`);
-        const hasThanikaivel = list.some((m) => m.user_email?.toLowerCase() === 'thanikaivel@ambizcon.com');
-        if (!hasThanikaivel && !isClearedThanikaivel) {
-          const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
-          list = [...list, ...generateReferenceWorkLogs(workDate, seedUser as any)];
-          localStorage.setItem(storageKey, JSON.stringify(list));
-        }
         return list;
       } catch (e) {}
     }
   }
 
-  const isClearedThanikaivel =
-    typeof window !== 'undefined' &&
-    localStorage.getItem(`ambizcon_ref_schedule_cleared_thanikaivel@ambizcon.com_${workDate}`);
-  if (!isClearedThanikaivel) {
-    const seedUser = SEED_USERS.find((u) => u.email === 'thanikaivel@ambizcon.com') || SEED_USERS[5];
-    return generateReferenceWorkLogs(workDate, seedUser as any);
-  }
   return [];
 }
 

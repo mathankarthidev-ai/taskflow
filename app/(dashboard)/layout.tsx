@@ -20,12 +20,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!currentUser && !storedEmail) {
       router.push('/login');
     }
-    // Clean up any legacy announcement storage on mount
+    // Scratch cleanup: purge all temporary demo/test client caches for fresh start
     if (typeof window !== 'undefined') {
       try {
-        localStorage.removeItem('ambizcon_announcements_v1');
-        localStorage.removeItem('ambizcon_announcements_v2');
-      } catch {}
+        const scratchCleanKey = 'ambizcon_clean_scratch_v2';
+        if (localStorage.getItem(scratchCleanKey) !== 'true') {
+          const keysToPurge = Object.keys(localStorage).filter((k) =>
+            k.startsWith('ambizcon_work_logs_') ||
+            k.startsWith('ambizcon_shift_') ||
+            k.startsWith('ambizcon_login_history_') ||
+            k.startsWith('ambizcon_self_reminders_') ||
+            k.startsWith('ambizcon_reimbursement_') ||
+            k.startsWith('ambizcon_reimbursements_') ||
+            k.startsWith('ambizcon_claims_') ||
+            k.startsWith('ambizcon_announcements_') ||
+            k.startsWith('ambizcon_chat_') ||
+            k.startsWith('ambizcon_ref_schedule_cleared_') ||
+            k.startsWith('ambizcon_tasks_') ||
+            k.startsWith('taskflow_tasks_') ||
+            k.startsWith('taskflow_notifications') ||
+            k.startsWith('taskflow_read_notifications') ||
+            k.startsWith('taskflow_deleted_notifications') ||
+            k.startsWith('ambizcon_read_announcements_') ||
+            k.startsWith('ambizcon_attendance_') ||
+            k.startsWith('attendance_records')
+          );
+          keysToPurge.forEach((k) => localStorage.removeItem(k));
+          localStorage.setItem(scratchCleanKey, 'true');
+        }
+      } catch (err) {
+        console.error('Scratch cleanup error:', err);
+      }
     }
   }, [currentUser, router]);
 
