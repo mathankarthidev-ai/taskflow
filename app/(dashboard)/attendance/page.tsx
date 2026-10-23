@@ -2776,7 +2776,7 @@ export default function AttendancePage() {
                         ? 'Live cloud-synced punch audit of all workspace members across Development, Marketing, and Creative teams (Supabase Cloud).'
                         : isTeamLead
                         ? `Live cloud-synced punch audit of all ${currentUser?.team} squad members (Supabase Cloud).`
-                        : 'Chronological audit log of your daily clock-in, clock-out, geofence verification, IP address, and total hours worked.'}
+                        : 'Chronological audit log of your daily clock-in, clock-out, work mode, and total hours worked.'}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -3053,8 +3053,7 @@ export default function AttendancePage() {
                         <th className="px-4 py-3">
                           CLOCK OUT <span className="text-[9px] text-muted-foreground block font-mono">IST / AEST</span>
                         </th>
-                        <th className="px-4 py-3">WORK MODE & GEOFENCE</th>
-                        <th className="px-4 py-3">IP ADDRESS & LOCATION</th>
+                        <th className="px-4 py-3">WORK MODE</th>
                         <th className="px-4 py-3 text-center">WORKED HOURS</th>
                         <th className="px-4 py-3 text-right">STATUS</th>
                       </tr>
@@ -3062,7 +3061,7 @@ export default function AttendancePage() {
                     <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                       {filteredAuditHistory.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground text-xs">
+                          <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground text-xs">
                             No punch history recorded for the selected filter.
                           </td>
                         </tr>
@@ -3122,27 +3121,11 @@ export default function AttendancePage() {
                               )}
                             </td>
 
-                            {/* Work Mode & Geofence */}
+                            {/* Work Mode */}
                             <td className="px-4 py-3">
-                              <div className="space-y-1">
-                                <Badge variant="outline" className="text-[10px] font-semibold">
-                                  {item.workMode}
-                                </Badge>
-                                {item.geofenceVerified && (
-                                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block flex items-center gap-1 font-medium">
-                                    <ShieldCheck className="h-3 w-3" /> Geofence Verified (200m)
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-
-                            {/* IP Address & Physical Location */}
-                            <td className="px-4 py-3 font-mono text-xs">
-                              <span className="font-bold text-foreground block">{item.ipAddress}</span>
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block flex items-center gap-1 font-sans font-semibold mt-0.5">
-                                <MapPin className="h-3 w-3 shrink-0" />
-                                {item.location || 'Anna Nagar, Chennai'}
-                              </span>
+                              <Badge variant="outline" className="text-[10px] font-semibold">
+                                {item.workMode}
+                              </Badge>
                             </td>
 
                             {/* Worked Hours */}
