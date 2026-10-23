@@ -154,6 +154,27 @@ export const attendanceDb = {
   },
   getByUser: (userId: string) =>
     attendanceRecords.filter((r) => r.userId === userId || r.userName.toLowerCase() === userId.toLowerCase() || userId.toLowerCase().includes(r.userName.toLowerCase())),
+  getTodayCompletedSeconds: (userId: string, userName?: string, userEmail?: string): number => {
+    const normId = (userId || '').toLowerCase().trim();
+    const normName = (userName || '').toLowerCase().trim();
+    const normEmail = (userEmail || '').toLowerCase().trim();
+    const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+    return attendanceRecords
+      .filter((r) => {
+        if (r.status !== 'completed') return false;
+        const rId = (r.userId || '').toLowerCase().trim();
+        const rName = (r.userName || '').toLowerCase().trim();
+        const isMatch =
+          (normId && (rId === normId || rName === normId || rId.includes(normId))) ||
+          (normName && (rName === normName || rName.includes(normName) || normName.includes(rName))) ||
+          (normEmail && (rId === normEmail || rId.includes(normEmail)));
+        if (!isMatch) return false;
+        const recDate = new Date(r.createdAt || r.clockIn).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        return recDate === todayIST;
+      })
+      .reduce((sum, r) => sum + (r.totalSeconds || 0), 0);
+  },
   add: (record: AttendanceRecord) => {
     attendanceRecords.unshift(record);
     return record;

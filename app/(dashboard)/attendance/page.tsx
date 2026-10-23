@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LeaveRequest, LeaveType, WorkMode } from '@/types';
 import {
@@ -149,6 +149,8 @@ export default function AttendancePage() {
   const [clockOutTime, setClockOutTime] = useState<string>('—');
   const [clockInTimestamp, setClockInTimestamp] = useState<number | null>(null);
   const [workedSeconds, setWorkedSeconds] = useState<number>(0);
+  const [previousCompletedSecondsToday, setPreviousCompletedSecondsToday] = useState<number>(0);
+  const previousCompletedSecondsRef = useRef<number>(0);
   const [isClockModalOpen, setIsClockModalOpen] = useState(false);
   const [shiftDate, setShiftDate] = useState<string>(() => new Date().toLocaleDateString('en-CA'));
   const [isQrKioskOpen, setIsQrKioskOpen] = useState(false);
@@ -237,6 +239,8 @@ export default function AttendancePage() {
           setClockOutTime('—');
           setClockInTimestamp(null);
           setWorkedSeconds(0);
+          setPreviousCompletedSecondsToday(0);
+          previousCompletedSecondsRef.current = 0;
           setShiftDate(todayDateKey);
           localStorage.removeItem(`ambizcon_shift_${currentUser._id}`);
         } else {
@@ -244,11 +248,14 @@ export default function AttendancePage() {
           setClockInTime(parsed.clockInTime || '—');
           setClockOutTime(parsed.clockOutTime || '—');
           setShiftDate(parsed.shiftDate || todayDateKey);
+          const cachedPrev = Number(parsed.previousCompletedSecondsToday) || 0;
+          setPreviousCompletedSecondsToday(cachedPrev);
+          previousCompletedSecondsRef.current = cachedPrev;
           if (parsed.clockInTimestamp) {
             setClockInTimestamp(parsed.clockInTimestamp);
             if (parsed.isClockedIn) {
               const elapsed = Math.max(0, Math.floor((Date.now() - parsed.clockInTimestamp) / 1000));
-              setWorkedSeconds(elapsed);
+              setWorkedSeconds(cachedPrev + elapsed);
             } else if (parsed.workedSeconds !== undefined) {
               setWorkedSeconds(parsed.workedSeconds);
             }
@@ -264,6 +271,8 @@ export default function AttendancePage() {
       setClockOutTime('—');
       setClockInTimestamp(null);
       setWorkedSeconds(0);
+      setPreviousCompletedSecondsToday(0);
+      previousCompletedSecondsRef.current = 0;
     }
 
     const savedHistory = localStorage.getItem(`ambizcon_login_history_${currentUser._id}`);
@@ -362,39 +371,84 @@ export default function AttendancePage() {
     };
   }, []);
 
-  // Sync current user's active shift from Supabase cloud if active today
+  // Sync current user's active shift and cumulative daily hours from Supabase cloud
   useEffect(() => {
     if (!currentUser) return;
+
+    const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const todaySession = formatSessionDateIST(new Date().toISOString());
+
+    // Identify all completed shifts for this user today (to accumulate hours worked earlier today)
+    const myCompletedRecordsToday = (liveAttendanceRecords || []).filter((r) => {
+      if (r.status !== 'completed') return false;
+      const recEmail = (r.user_email || '').toLowerCase().trim();
+      const recId = String(r.user_id || '').trim();
+      const recName = (r.user_name || '').toLowerCase().trim();
+      const myEmail = (currentUser.email || '').toLowerCase().trim();
+      const myId = String(currentUser._id || '').trim();
+      const myName = (currentUser.name || '').toLowerCase().trim();
+
+      const isMe = (myEmail && recEmail === myEmail) || (myId && recId === myId) || (myName && recName.includes(myName));
+      if (!isMe) return false;
+
+      if (r.session_date && r.session_date === todaySession) return true;
+      if (r.created_at) {
+        const recDate = new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        return recDate === todayIST;
+      }
+      return false;
+    });
+
+    const prevCompletedSecs = myCompletedRecordsToday.reduce((sum, r) => sum + parseWorkedSecondsHelper(r), 0);
+    setPreviousCompletedSecondsToday(prevCompletedSecs);
+    previousCompletedSecondsRef.current = prevCompletedSecs;
+
     const myActive = (liveAttendanceRecords || []).find(
       (r) =>
         (r.user_id === currentUser._id ||
           r.user_email?.toLowerCase() === currentUser.email?.toLowerCase() ||
           (currentUser.name && r.user_name?.toLowerCase().includes(currentUser.name.toLowerCase()))) &&
         r.status === 'working' &&
-        (!r.clock_out || r.clock_out === '—')
+        (!r.clock_out || r.clock_out === '—' || r.clock_out === '-')
     );
+
     if (myActive) {
       setIsClockedIn(true);
       const activeIn = myActive.created_at
         ? (isAustralia ? formatTimeAEST(myActive.created_at) : formatTimeIST(myActive.created_at))
         : myActive.clock_in;
       setClockInTime(activeIn);
+      setClockOutTime('—');
       if (myActive.created_at) {
         const ts = new Date(myActive.created_at).getTime();
         setClockInTimestamp(ts);
-        const elapsed = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-        setWorkedSeconds(elapsed);
+        const currentElapsed = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+        setWorkedSeconds(prevCompletedSecs + currentElapsed);
       }
     } else {
-      // If user was previously marked clocked in but no active working record exists in Supabase
+      // User is not currently clocked in
       setIsClockedIn(false);
       setClockInTimestamp(null);
-      setClockInTime('—');
-      setClockOutTime('—');
-      setWorkedSeconds(0);
-      try {
-        localStorage.removeItem(`ambizcon_shift_${currentUser._id}`);
-      } catch (e) {}
+      if (myCompletedRecordsToday.length > 0) {
+        const latestCompleted = myCompletedRecordsToday[0];
+        const latestIn = latestCompleted.created_at
+          ? (isAustralia ? formatTimeAEST(latestCompleted.created_at) : formatTimeIST(latestCompleted.created_at))
+          : (latestCompleted.clock_in || '—');
+        const isLatestAuto =
+          Boolean(latestCompleted.clock_out && latestCompleted.clock_out.toLowerCase().includes('auto')) ||
+          Boolean(latestCompleted.worked_hours && latestCompleted.worked_hours.toLowerCase().includes('auto'));
+        const latestOut = sanitizeClockOutTime(latestCompleted.clock_out, isAustralia, isLatestAuto);
+        setClockInTime(latestIn);
+        setClockOutTime(latestOut);
+        setWorkedSeconds(prevCompletedSecs);
+      } else {
+        setClockInTime('—');
+        setClockOutTime('—');
+        setWorkedSeconds(0);
+        try {
+          localStorage.removeItem(`ambizcon_shift_${currentUser._id}`);
+        } catch (e) {}
+      }
     }
   }, [currentUser, liveAttendanceRecords, isAustralia]);
 
@@ -455,13 +509,13 @@ export default function AttendancePage() {
     }
   }, [isAustralia, isClockedIn]);
 
-  // Dynamic Worked Seconds Counter (Calculates exact live elapsed seconds based on clockInTimestamp)
+  // Dynamic Worked Seconds Counter (Calculates exact live elapsed seconds based on clockInTimestamp + previous completed shifts today)
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isClockedIn && clockInTimestamp && !isOnBreak) {
       interval = setInterval(() => {
         const elapsed = Math.max(0, Math.floor((Date.now() - clockInTimestamp) / 1000) - breakSeconds);
-        setWorkedSeconds(elapsed);
+        setWorkedSeconds(previousCompletedSecondsRef.current + elapsed);
       }, 1000);
     }
     return () => {
@@ -1048,13 +1102,17 @@ export default function AttendancePage() {
         // Immediately refresh live attendance records from Supabase
         await fetchLiveAttendance();
 
-        // Starting a fresh clock-in shift
+        // Starting a fresh clock-in shift (accumulates from earlier shifts worked today)
+        const prevSecs = Number(data.previousCompletedSecondsToday) || previousCompletedSecondsRef.current || 0;
+        setPreviousCompletedSecondsToday(prevSecs);
+        previousCompletedSecondsRef.current = prevSecs;
+
         setIsClockedIn(true);
         setClockInTime(formatted);
         setClockOutTime('—');
         const ts = d.getTime();
         setClockInTimestamp(ts);
-        setWorkedSeconds(0);
+        setWorkedSeconds(prevSecs);
         setIsOnBreak(false);
         setBreakSeconds(0);
 
@@ -1069,7 +1127,8 @@ export default function AttendancePage() {
             clockInTime: formatted,
             clockOutTime: '—',
             clockInTimestamp: ts,
-            workedSeconds: 0,
+            previousCompletedSecondsToday: prevSecs,
+            workedSeconds: prevSecs,
           })
         );
 
@@ -1119,6 +1178,9 @@ export default function AttendancePage() {
         setClockOutTime(formatted);
         const todayKey = d.toLocaleDateString('en-CA');
 
+        setPreviousCompletedSecondsToday(workedSeconds);
+        previousCompletedSecondsRef.current = workedSeconds;
+
         localStorage.setItem(
           `ambizcon_shift_${currentUser._id}`,
           JSON.stringify({
@@ -1127,6 +1189,7 @@ export default function AttendancePage() {
             clockInTime,
             clockOutTime: formatted,
             clockInTimestamp,
+            previousCompletedSecondsToday: workedSeconds,
             workedSeconds,
           })
         );
@@ -1541,11 +1604,15 @@ export default function AttendancePage() {
     const isSelectedToday = selectedMusterDate === todayKey;
 
     return scopedRegister.map((u) => {
-      const matchRec = (liveAttendanceRecords || []).find((rec) => {
+      const userDayRecs = (liveAttendanceRecords || []).filter((rec) => {
         const matchEmail = rec.user_email?.toLowerCase() === u.email?.toLowerCase();
-        const matchName = rec.user_name?.toLowerCase().includes(u.name?.toLowerCase()) || u.name?.toLowerCase().includes(rec.user_name?.toLowerCase());
-        const recDate = rec.session_date || (rec.created_at ? new Date(rec.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : '');
-        return (matchEmail || matchName) && (recDate === selectedMusterDate);
+        const matchName =
+          rec.user_name?.toLowerCase().includes(u.name?.toLowerCase()) ||
+          u.name?.toLowerCase().includes(rec.user_name?.toLowerCase());
+        const recDate =
+          rec.session_date ||
+          (rec.created_at ? new Date(rec.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : '');
+        return (matchEmail || matchName) && recDate === selectedMusterDate;
       });
 
       const onLeave = requests.find((req) => 
@@ -1555,8 +1622,12 @@ export default function AttendancePage() {
         (req.to || (req as any).toDate || '') >= selectedMusterDate
       );
 
-      const isCurrentUserActive = isSelectedToday && currentUser && (u.email === currentUser.email || u.name === currentUser.name) && isClockedIn;
-      const isCurrentUserClockedOut = isSelectedToday && currentUser && (u.email === currentUser.email || u.name === currentUser.name) && !isClockedIn && clockOutTime !== '—';
+      const isCurrentUser = Boolean(
+        currentUser &&
+          (u.email?.toLowerCase() === currentUser.email?.toLowerCase() || u.name === currentUser.name)
+      );
+      const isCurrentUserActive = isSelectedToday && isCurrentUser && isClockedIn;
+      const isCurrentUserClockedOut = isSelectedToday && isCurrentUser && !isClockedIn && workedSeconds > 0;
 
       let status: 'PRESENT' | 'ABSENT' | 'WFH' | 'ON LEAVE' = 'ABSENT';
       let login = '—';
@@ -1572,26 +1643,46 @@ export default function AttendancePage() {
       } else if (isCurrentUserClockedOut) {
         status = 'PRESENT';
         login = clockInTime;
-        logout = clockOutTime;
+        logout = clockOutTime !== '—' ? clockOutTime : 'Shift Completed';
         totalHours = formatWorkedTime(workedSeconds);
-      } else if (matchRec) {
+      } else if (userDayRecs.length > 0) {
         status = 'PRESENT';
-        login = matchRec.created_at
-          ? (isAustralia ? formatTimeAEST(matchRec.created_at) : formatTimeIST(matchRec.created_at))
-          : (matchRec.clock_in || '—');
+        const earliestRec = userDayRecs[userDayRecs.length - 1];
+        const latestRec = userDayRecs[0];
+        const activePunch = userDayRecs.find(
+          (r) => r.status === 'working' && (!r.clock_out || r.clock_out === '—' || r.clock_out === '-')
+        );
+
+        login = earliestRec.created_at
+          ? (isAustralia ? formatTimeAEST(earliestRec.created_at) : formatTimeIST(earliestRec.created_at))
+          : (earliestRec.clock_in || '—');
+
         const isMatchAuto =
-          Boolean(matchRec.clock_out && matchRec.clock_out.toLowerCase().includes('auto')) ||
-          Boolean(matchRec.worked_hours && matchRec.worked_hours.toLowerCase().includes('auto'));
-        logout = matchRec.status === 'working'
+          Boolean(latestRec.clock_out && latestRec.clock_out.toLowerCase().includes('auto')) ||
+          Boolean(latestRec.worked_hours && latestRec.worked_hours.toLowerCase().includes('auto'));
+
+        logout = activePunch
           ? 'Active Shift'
-          : sanitizeClockOutTime(matchRec.clock_out, isAustralia, isMatchAuto);
-        totalHours = matchRec.worked_hours || (matchRec.status === 'working' ? 'Live Shift' : '0h 00m');
-        workMode = matchRec.work_mode || workMode;
+          : sanitizeClockOutTime(latestRec.clock_out, isAustralia, isMatchAuto);
+
+        const completedSecs = userDayRecs
+          .filter((r) => r.status === 'completed' || (r.clock_out && r.clock_out !== '—' && r.clock_out !== '-'))
+          .reduce((sum, r) => sum + parseWorkedSecondsHelper(r), 0);
+
+        let totalSecs = completedSecs;
+        if (activePunch && activePunch.created_at) {
+          const activeElapsed = Math.max(0, Math.floor((Date.now() - new Date(activePunch.created_at).getTime()) / 1000));
+          totalSecs += activeElapsed;
+        }
+
+        const totH = Math.floor(totalSecs / 3600);
+        const totM = Math.floor((totalSecs % 3600) / 60);
+        totalHours = `${totH}h ${String(totM).padStart(2, '0')}m`;
+        workMode = latestRec.work_mode || workMode;
       } else if (onLeave) {
         status = 'ON LEAVE';
         workMode = 'Leave Granted';
-      }
- else if (u.workMode === 'Work From Home' && isSelectedToday) {
+      } else if (u.workMode === 'Work From Home' && isSelectedToday) {
         status = 'WFH';
         workMode = 'Work From Home';
       }
@@ -2103,6 +2194,22 @@ export default function AttendancePage() {
                     </Badge>
                   )}
                 </div>
+
+                {/* Cumulative Same-Day Clock-In Breakdown */}
+                {previousCompletedSecondsToday > 0 && isClockedIn && (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-brand-600 dark:text-brand-400 pt-0.5">
+                    <span className="inline-flex items-center gap-1.5 bg-brand-500/10 px-2.5 py-1 rounded-lg border border-brand-500/20">
+                      ⚡ Cumulative today: <strong className="font-mono">{formatWorkedTime(previousCompletedSecondsToday)}</strong> prior + <strong className="font-mono">{formatWorkedTime(Math.max(0, workedSeconds - previousCompletedSecondsToday))}</strong> current session
+                    </span>
+                  </div>
+                )}
+                {previousCompletedSecondsToday > 0 && !isClockedIn && (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 pt-0.5">
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                      ✅ Total Worked Today: <strong className="font-mono">{formatWorkedTime(previousCompletedSecondsToday)}</strong> across completed shifts
+                    </span>
+                  </div>
+                )}
 
                 {/* Geofence & IP Verification Badge */}
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] text-muted-foreground pt-1">

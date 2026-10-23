@@ -80,6 +80,8 @@ export function DashboardOverview() {
 
   // Live Daily Login & Shift Timer
   const [liveWorkedSeconds, setLiveWorkedSeconds] = useState<number>(0);
+  const [previousCompletedSecondsToday, setPreviousCompletedSecondsToday] = useState<number>(0);
+  const previousCompletedSecondsRef = useRef<number>(0);
   const [clockInTimestamp, setClockInTimestamp] = useState<number | null>(null);
   const clockInTimestampRef = useRef<number | null>(null);
   const isWorkingRef = useRef<boolean>(false);
@@ -115,13 +117,15 @@ export function DashboardOverview() {
       const todayDateKey = new Date().toISOString().split('T')[0];
       let cachedTs: number | null = null;
       let cachedClockInTime: string | null = null;
+      let cachedPrevSecs = 0;
       try {
         const raw = localStorage.getItem(`ambizcon_shift_${currentUser._id}`);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed.shiftDate === todayDateKey && parsed.isClockedIn) {
+          if (parsed.shiftDate === todayDateKey) {
             cachedTs = parsed.clockInTimestamp || null;
             cachedClockInTime = parsed.clockInTime || null;
+            cachedPrevSecs = Number(parsed.previousCompletedSecondsToday) || 0;
           }
         }
       } catch {}
@@ -138,6 +142,11 @@ export function DashboardOverview() {
         const clockOut = data.clockOut || '—';
         const status = data.status || (isWorking ? 'working' : 'completed');
         const workedHours = data.workedHours || '0h 00m';
+        const prevSecs = typeof data.previousCompletedSecondsToday === 'number'
+          ? data.previousCompletedSecondsToday
+          : cachedPrevSecs;
+        setPreviousCompletedSecondsToday(prevSecs);
+        previousCompletedSecondsRef.current = prevSecs;
 
         let effectiveTs: number | null = cachedTs;
         if (!effectiveTs && isWorking) {
@@ -162,19 +171,23 @@ export function DashboardOverview() {
           setClockInTimestamp(effectiveTs);
           clockInTimestampRef.current = effectiveTs;
           isWorkingRef.current = true;
-          const elapsed = Math.max(0, Math.floor((Date.now() - effectiveTs) / 1000));
-          setLiveWorkedSeconds(elapsed);
+          const currentElapsed = Math.max(0, Math.floor((Date.now() - effectiveTs) / 1000));
+          setLiveWorkedSeconds(prevSecs + currentElapsed);
         } else {
           setClockInTimestamp(null);
           clockInTimestampRef.current = null;
           isWorkingRef.current = false;
+          const todayTot = Number(data.todayTotalSeconds) || prevSecs;
+          setLiveWorkedSeconds(todayTot);
         }
       } else if (cachedTs) {
         setClockInTimestamp(cachedTs);
         clockInTimestampRef.current = cachedTs;
         isWorkingRef.current = true;
-        const elapsed = Math.max(0, Math.floor((Date.now() - cachedTs) / 1000));
-        setLiveWorkedSeconds(elapsed);
+        setPreviousCompletedSecondsToday(cachedPrevSecs);
+        previousCompletedSecondsRef.current = cachedPrevSecs;
+        const currentElapsed = Math.max(0, Math.floor((Date.now() - cachedTs) / 1000));
+        setLiveWorkedSeconds(cachedPrevSecs + currentElapsed);
         setCurrentShift({
           isWorking: true,
           clockIn: cachedClockInTime || '—',
@@ -241,8 +254,8 @@ export function DashboardOverview() {
 
       // Live Running Shift Timer Ticker (Real-Time Count Up Every Second)
       if (isWorkingRef.current && clockInTimestampRef.current) {
-        const elapsed = Math.max(0, Math.floor((Date.now() - clockInTimestampRef.current) / 1000));
-        setLiveWorkedSeconds(elapsed);
+        const currentElapsed = Math.max(0, Math.floor((Date.now() - clockInTimestampRef.current) / 1000));
+        setLiveWorkedSeconds(previousCompletedSecondsRef.current + currentElapsed);
       }
     };
 
@@ -293,12 +306,22 @@ export function DashboardOverview() {
           setClockInTimestamp(null);
           clockInTimestampRef.current = null;
           isWorkingRef.current = false;
+
+          const todayTot = Number(data.todayTotalSeconds) || (previousCompletedSecondsRef.current + liveWorkedSeconds);
+          setLiveWorkedSeconds(todayTot);
+          setPreviousCompletedSecondsToday(todayTot);
+          previousCompletedSecondsRef.current = todayTot;
+
+          const totH = Math.floor(todayTot / 3600);
+          const totM = Math.floor((todayTot % 3600) / 60);
+          const cumulativeWorkedHoursStr = `${totH}h ${String(totM).padStart(2, '0')}m`;
+
           setCurrentShift((prev) => ({
             isWorking: false,
             clockIn: prev?.clockIn || formattedNow,
             clockOut: data.clockOutTime || formattedNow,
             status: 'completed',
-            workedHours: prev?.workedHours || '0h 00m',
+            workedHours: data.todayTotalHours || cumulativeWorkedHoursStr,
           }));
           localStorage.setItem(
             `ambizcon_shift_${currentUser._id}`,
@@ -307,6 +330,8 @@ export function DashboardOverview() {
               isClockedIn: false,
               clockInTime: currentShift?.clockIn || formattedNow,
               clockOutTime: data.clockOutTime || formattedNow,
+              previousCompletedSecondsToday: todayTot,
+              workedSeconds: todayTot,
               status: 'completed',
             })
           );
@@ -333,16 +358,25 @@ export function DashboardOverview() {
         if (data.success) {
           toast.success(`Clocked In successfully! Shift active.`);
           const nowTs = Date.now();
+          const prevSecs = Number(data.previousCompletedSecondsToday) || previousCompletedSecondsRef.current || 0;
+          setPreviousCompletedSecondsToday(prevSecs);
+          previousCompletedSecondsRef.current = prevSecs;
+
           setClockInTimestamp(nowTs);
           clockInTimestampRef.current = nowTs;
           isWorkingRef.current = true;
-          setLiveWorkedSeconds(0);
+          setLiveWorkedSeconds(prevSecs);
+
+          const prevH = Math.floor(prevSecs / 3600);
+          const prevM = Math.floor((prevSecs % 3600) / 60);
+          const initialWorkedHoursStr = prevSecs > 0 ? `${prevH}h ${String(prevM).padStart(2, '0')}m` : '0h 00m';
+
           setCurrentShift({
             isWorking: true,
             clockIn: data.clockIn || formattedNow,
             clockOut: '—',
             status: 'working',
-            workedHours: '0h 00m',
+            workedHours: initialWorkedHoursStr,
           });
           localStorage.setItem(
             `ambizcon_shift_${currentUser._id}`,
@@ -350,7 +384,8 @@ export function DashboardOverview() {
               shiftDate: todayKey,
               isClockedIn: true,
               clockInTime: data.clockIn || formattedNow,
-              clockInTimestamp: Date.now(),
+              clockInTimestamp: nowTs,
+              previousCompletedSecondsToday: prevSecs,
               status: 'working',
             })
           );
@@ -547,10 +582,16 @@ export function DashboardOverview() {
                   {currentShift?.isWorking
                     ? liveWorkedFormatted
                     : currentShift?.status === 'completed'
-                    ? currentShift.workedHours || '8h 30m'
+                    ? currentShift.workedHours || (liveWorkedSeconds > 0 ? liveWorkedFormatted : '0h 00m')
                     : '0h 00m 00s'}
                 </span>
               </div>
+
+              {previousCompletedSecondsToday > 0 && currentShift?.isWorking && (
+                <div className="text-[10px] text-brand-600 dark:text-brand-400 font-medium text-right mt-0.5">
+                  ⚡ Includes {Math.floor(previousCompletedSecondsToday / 3600)}h {String(Math.floor((previousCompletedSecondsToday % 3600) / 60)).padStart(2, '0')}m earlier today
+                </div>
+              )}
 
               {currentShift?.status === 'completed' && currentShift.clockOut && currentShift.clockOut !== '—' && currentShift.clockOut !== '-' && (
                 <div className="text-[10px] text-muted-foreground mt-0.5 text-right font-mono">

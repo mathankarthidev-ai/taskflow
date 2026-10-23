@@ -68,11 +68,13 @@ export async function POST(req: Request) {
     attendanceDb.clearUserWorking(userId, userName, userEmail);
 
     // 2. Supabase Cloud update
+    let todayTotalSeconds = totalSeconds;
     try {
       const orClauses = [`user_id.eq.${userId}`, `user_name.ilike.%${userName}%`];
       if (userEmail) {
         orClauses.push(`user_email.eq.${userEmail}`);
       }
+
       await supabase
         .from('attendance')
         .update({
@@ -85,9 +87,34 @@ export async function POST(req: Request) {
         })
         .or(orClauses.join(','))
         .eq('status', 'working');
+
+      // Calculate total cumulative worked seconds across all shifts completed today
+      const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      const { data: allDayRecs } = await supabase
+        .from('attendance')
+        .select('*')
+        .or(orClauses.join(','))
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (allDayRecs && allDayRecs.length > 0) {
+        todayTotalSeconds = allDayRecs
+          .filter((r) => {
+            if (r.created_at) {
+              const recIST = new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+              return recIST === todayIST;
+            }
+            return false;
+          })
+          .reduce((sum, r) => sum + (r.worked_seconds || 0), 0);
+      }
     } catch (dbErr) {
       console.warn('Supabase clock-out exception:', dbErr);
     }
+
+    const todayH = Math.floor(todayTotalSeconds / 3600);
+    const todayM = Math.floor((todayTotalSeconds % 3600) / 60);
+    const todayTotalHoursStr = `${todayH}h ${String(todayM).padStart(2, '0')}m`;
 
     return NextResponse.json({
       success: true,
@@ -95,6 +122,10 @@ export async function POST(req: Request) {
       attendance: updated,
       clockOutTime: formattedIst,
       clockOutAest: formattedAest,
+      sessionSeconds: totalSeconds,
+      sessionHours: workedHoursStr,
+      todayTotalSeconds,
+      todayTotalHours: todayTotalHoursStr,
     });
   } catch (error) {
     return NextResponse.json(

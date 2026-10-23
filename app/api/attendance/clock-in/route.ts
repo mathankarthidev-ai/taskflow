@@ -62,7 +62,49 @@ export async function POST(req: Request) {
     // Supabase confirms NO active shift exists: Clear any stale in-memory working shift residue
     attendanceDb.clearUserWorking(userId, userName, userEmail);
 
-    // 2. Format Server Timestamps accurately with IST and AEST timezones
+    // 2. Compute completed shift hours/seconds already worked earlier today (Cumulative Daily Clock-In)
+    const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    let previousCompletedSecondsToday = 0;
+    try {
+      const todaySession = formatSessionDateIST(new Date().toISOString());
+      const orClauses = [`user_id.eq.${userId}`, `user_name.ilike.%${userName}%`];
+      if (userEmail) orClauses.push(`user_email.eq.${userEmail}`);
+
+      const { data: pastRecs } = await supabase
+        .from('attendance')
+        .select('*')
+        .or(orClauses.join(','))
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (pastRecs && pastRecs.length > 0) {
+        previousCompletedSecondsToday = pastRecs
+          .filter((r) => {
+            if (r.session_date && r.session_date === todaySession) return true;
+            if (r.created_at) {
+              const recIST = new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+              return recIST === todayIST;
+            }
+            return false;
+          })
+          .reduce((sum, r) => {
+            if (typeof r.worked_seconds === 'number' && r.worked_seconds > 0) return sum + r.worked_seconds;
+            if (r.worked_hours) {
+              const m = r.worked_hours.match(/(\d+)\s*h(?:ours?)?(?:\s*(\d+)\s*m)?/i);
+              if (m) return sum + parseInt(m[1] || '0', 10) * 3600 + parseInt(m[2] || '0', 10) * 60;
+            }
+            return sum;
+          }, 0);
+      }
+    } catch (calcErr) {
+      console.warn('Error calculating earlier shift duration today:', calcErr);
+    }
+
+    if (previousCompletedSecondsToday === 0) {
+      previousCompletedSecondsToday = attendanceDb.getTodayCompletedSeconds(userId, userName, userEmail);
+    }
+
+    // 3. Format Server Timestamps accurately with IST and AEST timezones
     const nowIso = new Date().toISOString();
     const formattedIst = formatTimeIST(nowIso);
     const formattedAest = formatTimeAEST(nowIso);
@@ -135,6 +177,8 @@ export async function POST(req: Request) {
       sessionDate,
       clockInTime: formattedIst,
       clockInAest: formattedAest,
+      previousCompletedSecondsToday,
+      clockInTimestamp: Date.now(),
     });
   } catch (error) {
     return NextResponse.json(

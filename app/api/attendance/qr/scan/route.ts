@@ -196,6 +196,38 @@ export async function POST(req: Request) {
       const sessionDate = formatSessionDateIST(nowIso);
       const recordId = `ATT-QR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+      // Calculate any completed shifts already worked earlier today
+      const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      let previousCompletedSecondsToday = 0;
+      try {
+        const orClauses = [`user_id.eq.${userId}`, `user_name.ilike.%${userName}%`];
+        if (body.userEmail) orClauses.push(`user_email.eq.${body.userEmail}`);
+        const { data: pastRecs } = await supabase
+          .from('attendance')
+          .select('*')
+          .or(orClauses.join(','))
+          .eq('status', 'completed');
+
+        if (pastRecs && pastRecs.length > 0) {
+          previousCompletedSecondsToday = pastRecs
+            .filter((r) => {
+              if (r.session_date && r.session_date === sessionDate) return true;
+              if (r.created_at) {
+                const recIST = new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+                return recIST === todayIST;
+              }
+              return false;
+            })
+            .reduce((sum, r) => sum + (r.worked_seconds || 0), 0);
+        }
+      } catch (calcErr) {
+        console.warn('QR scan previous check warning:', calcErr);
+      }
+
+      if (previousCompletedSecondsToday === 0) {
+        previousCompletedSecondsToday = attendanceDb.getTodayCompletedSeconds(userId, userName, body.userEmail);
+      }
+
       const newAttendance = attendanceDb.add({
         id: recordId,
         userId,
@@ -258,6 +290,7 @@ export async function POST(req: Request) {
         success: true,
         action: 'PUNCH_IN',
         message: `${userName} marked present and clocked in via QR Kiosk!`,
+        previousCompletedSecondsToday,
         punch: {
           userName,
           userTeam: userTeam || newAttendance.userTeam,
@@ -265,6 +298,7 @@ export async function POST(req: Request) {
           time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
           location,
           ip,
+          previousCompletedSecondsToday,
         },
       });
     }
