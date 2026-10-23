@@ -306,7 +306,6 @@ export function TeamPresenceOverviewPanel({ variant = 'full' }: TeamPresenceOver
             userEmail: currentUser.email,
             userName: currentUser.name,
             userTeam: currentUser.team,
-            clockInTimestamp: shiftData.clockInTimestamp || undefined,
           }),
         }).catch(() => {});
 
