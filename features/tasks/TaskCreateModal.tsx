@@ -424,7 +424,7 @@ export function TaskCreateModal() {
       onClose={() => setCreateModalOpen(false)}
       title="Create Task"
       description="Add a task to your team board or raise a cross-team request."
-      maxWidth="xl"
+      maxWidth="3xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
         {/* Task Type Template Selector */}
@@ -821,20 +821,8 @@ export function TaskCreateModal() {
           />
         </div>
 
-        {/* Cross-Team Request Option */}
-        <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-3">
-          <div>
-            <p className="text-xs font-semibold text-foreground">Cross-Team Request</p>
-            <p className="text-[11px] text-muted-foreground">Raise task to another team's Incoming Queue</p>
-          </div>
-          <input
-            type="checkbox"
-            checked={isCrossTeam}
-            onChange={(e) => setIsCrossTeam(e.target.checked)}
-            className="h-4 w-4 rounded accent-primary cursor-pointer"
-          />
-        </div>
-
+        {/* Team & Cross-Team Request — one row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Assigned Team */}
         <div>
           <label className="text-xs font-semibold text-foreground">
@@ -862,26 +850,41 @@ export function TaskCreateModal() {
           </select>
         </div>
 
+        {/* Cross-Team Request Option */}
+        <label className="flex items-center justify-between self-end rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2 cursor-pointer">
+          <div>
+            <p className="text-xs font-semibold text-foreground">Cross-Team Request</p>
+            <p className="text-[11px] text-muted-foreground">Raise to another team's Incoming Queue</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={isCrossTeam}
+            onChange={(e) => setIsCrossTeam(e.target.checked)}
+            className="h-4 w-4 rounded accent-primary cursor-pointer"
+          />
+        </label>
+        </div>
+
         {/* Color-Differentiated Task Roles: 🟣 Creator • 🔵 Working • 🟠 Review */}
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-foreground">Task Roles &amp; Allocation</span>
-            <span className="text-[10px] font-mono font-bold text-muted-foreground">
+            <span className="text-xs font-black text-foreground">Task Roles &amp; Allocation</span>
+            <span className="text-xs font-mono font-bold text-foreground">
               🟣 Creator • 🔵 Working • 🟠 Review
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* 1. CREATOR (Purple Theme) */}
-            <div className="rounded-2xl border-2 border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20 p-3 space-y-1.5 transition-all hover:border-purple-500/50">
+            <div className="rounded-2xl border-2 border-purple-400 bg-purple-100 dark:border-purple-700 dark:bg-purple-950/70 p-3 space-y-1.5 shadow-sm transition-all hover:border-purple-500">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                   <UserCheck className="h-3 w-3" />
                   Creator
                 </span>
-                <span className="text-[9px] font-mono text-purple-600/80 dark:text-purple-400/80">Originated</span>
+                <span className="text-[9px] font-mono font-bold text-purple-700 dark:text-purple-300">Originated</span>
               </div>
-              <p className="text-[10px] text-muted-foreground">Person creating &amp; authorizing this task.</p>
+              <p className="text-xs font-bold text-foreground/80">Person creating &amp; authorizing this task.</p>
               {isSuperAdmin ? (
                 <select
                   value={creatorId || currentUser._id}
@@ -901,22 +904,22 @@ export function TaskCreateModal() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold text-foreground truncate">{currentUser.name}</p>
-                    <p className="text-[9px] text-muted-foreground truncate">{currentUser.role}</p>
+                    <p className="text-[10px] font-bold text-foreground/70 truncate">{currentUser.role}</p>
                   </div>
                 </div>
               )}
             </div>
 
             {/* 2. WORKING / ASSIGNEE (Blue Theme) */}
-            <div className="rounded-2xl border-2 border-blue-500/30 bg-blue-500/5 dark:bg-blue-950/20 p-3 space-y-1.5 transition-all hover:border-blue-500/50">
+            <div className="rounded-2xl border-2 border-blue-400 bg-blue-100 dark:border-blue-700 dark:bg-blue-950/70 p-3 space-y-1.5 shadow-sm transition-all hover:border-blue-500">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
                   <Briefcase className="h-3 w-3" />
                   Working
                 </span>
-                <span className="text-[9px] font-mono text-blue-600/80 dark:text-blue-400/80">Doing Work</span>
+                <span className="text-[9px] font-mono font-bold text-blue-700 dark:text-blue-300">Doing Work</span>
               </div>
-              <p className="text-[10px] text-muted-foreground">Team member responsible for task execution.</p>
+              <p className="text-xs font-bold text-foreground/80">Team member responsible for task execution.</p>
               <select
                 value={currentUser.role === 'Team Member' && !isCrossTeam ? currentUser._id : assignedTo}
                 onChange={(e) => setAssignedTo(e.target.value)}
@@ -950,15 +953,15 @@ export function TaskCreateModal() {
             </div>
 
             {/* 3. REVIEW / REVIEWER (Amber Theme) */}
-            <div className="rounded-2xl border-2 border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 p-3 space-y-1.5 transition-all hover:border-amber-500/50">
+            <div className="rounded-2xl border-2 border-amber-400 bg-amber-100 dark:border-amber-700 dark:bg-amber-950/70 p-3 space-y-1.5 shadow-sm transition-all hover:border-amber-500">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                   <FileSearch className="h-3 w-3" />
                   Review
                 </span>
-                <span className="text-[9px] font-mono text-amber-600/80 dark:text-amber-400/80">Sign-off</span>
+                <span className="text-[9px] font-mono font-bold text-amber-700 dark:text-amber-300">Sign-off</span>
               </div>
-              <p className="text-[10px] text-muted-foreground">Team Lead / QA reviewing output &amp; approval.</p>
+              <p className="text-xs font-bold text-foreground/80">Team Lead / QA reviewing output &amp; approval.</p>
               <select
                 value={assignedReviewerId}
                 onChange={(e) => setAssignedReviewerId(e.target.value)}
@@ -1023,29 +1026,29 @@ export function TaskCreateModal() {
         {/* Document File Attachment Upload (< 5MB limit) */}
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/40 p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
               <UploadCloud className="h-4 w-4 text-emerald-500" />
               Attach Task Documents (Strictly &lt; 5MB limit)
             </label>
-            <span className="text-[10px] text-muted-foreground font-mono">Supports PDF, PNG, JPG, DOC, ZIP</span>
+            <span className="text-xs text-foreground/80 font-bold font-mono">Supports PDF, PNG, JPG, DOC, ZIP</span>
           </div>
 
           <input
             type="file"
             multiple
             onChange={handleFileUpload}
-            className="block w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-500/10 file:text-emerald-600 hover:file:bg-emerald-500/20 cursor-pointer"
+            className="block w-full text-xs font-bold text-foreground/90 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-500/15 file:text-emerald-700 dark:file:text-emerald-300 hover:file:bg-emerald-500/25 cursor-pointer"
           />
 
           {attachments.length > 0 && (
             <div className="space-y-1.5 pt-1">
               {attachments.map((att, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-background border border-zinc-200 dark:border-zinc-800">
-                  <span className="font-semibold text-foreground truncate max-w-[240px] flex items-center gap-1">
-                    <Paperclip className="h-3 w-3 text-muted-foreground" />
+                  <span className="font-bold text-foreground truncate max-w-[240px] flex items-center gap-1">
+                    <Paperclip className="h-3.5 w-3.5 text-primary" />
                     {att.name}
                   </span>
-                  <span className="text-[10px] font-mono text-emerald-600 font-bold">{att.size}</span>
+                  <span className="text-xs font-mono text-emerald-600 font-bold">{att.size}</span>
                 </div>
               ))}
             </div>
@@ -1055,7 +1058,7 @@ export function TaskCreateModal() {
         {/* Resource & Reference Links */}
         <div className="space-y-2 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
               <Link2 className="h-4 w-4 text-brand-500" />
               Resource &amp; Reference Links
             </label>
@@ -1077,14 +1080,14 @@ export function TaskCreateModal() {
                   value={newLinkTitle}
                   onChange={(e) => setNewLinkTitle(e.target.value)}
                   placeholder="Link Title (e.g. Figma, Google Doc, Staging)"
-                  className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring"
+                  className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-background px-2.5 py-1.5 text-xs font-bold text-foreground focus-ring"
                 />
                 <input
                   type="url"
                   value={newLinkUrl}
                   onChange={(e) => setNewLinkUrl(e.target.value)}
                   placeholder="https://..."
-                  className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-background px-2.5 py-1.5 text-xs focus-ring font-mono"
+                  className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-background px-2.5 py-1.5 text-xs font-bold text-foreground focus-ring font-mono"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -1099,7 +1102,7 @@ export function TaskCreateModal() {
                   size="sm"
                   variant="outline"
                   onClick={() => setShowLinkInput(false)}
-                  className="text-xs h-7"
+                  className="text-xs h-7 font-bold"
                 >
                   Cancel
                 </Button>
@@ -1107,7 +1110,7 @@ export function TaskCreateModal() {
                   type="button"
                   size="sm"
                   onClick={handleAddNewLink}
-                  className="ambizcon-gradient text-white text-xs h-7 gap-1 shadow-glow"
+                  className="ambizcon-gradient text-white text-xs h-7 gap-1 shadow-glow font-bold"
                 >
                   <Plus className="h-3 w-3" />
                   Attach Link
@@ -1121,9 +1124,9 @@ export function TaskCreateModal() {
               {taskLinks.map((linkItem, idx) => (
                 <div
                   key={idx}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-700 dark:text-brand-300 text-xs font-semibold"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-700 dark:text-brand-300 text-xs font-bold"
                 >
-                  <Globe className="h-3 w-3 text-brand-500 shrink-0" />
+                  <Globe className="h-3.5 w-3.5 text-brand-500 shrink-0" />
                   <a
                     href={linkItem.url}
                     target="_blank"
@@ -1131,12 +1134,12 @@ export function TaskCreateModal() {
                     className="hover:underline flex items-center gap-1 max-w-[200px] truncate"
                   >
                     <span>{linkItem.title}</span>
-                    <ExternalLink className="h-2.5 w-2.5 opacity-70 shrink-0" />
+                    <ExternalLink className="h-3 w-3 opacity-70 shrink-0" />
                   </a>
                   <button
                     type="button"
                     onClick={() => handleRemoveLink(idx)}
-                    className="ml-1 text-muted-foreground hover:text-rose-500 transition-colors p-0.5 rounded cursor-pointer"
+                    className="ml-1 text-foreground/60 hover:text-rose-500 transition-colors p-0.5 rounded cursor-pointer"
                     title="Remove Link"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -1146,9 +1149,10 @@ export function TaskCreateModal() {
             </div>
           ) : (
             !showLinkInput && (
-              <p className="text-[11px] text-muted-foreground">
-                No external links attached. Click "+ Add Link" to attach Figma, Docs, or Staging URLs.
-              </p>
+              <div className="p-3 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 text-xs font-bold text-foreground/80 flex items-center gap-2">
+                <Globe className="h-4 w-4 text-brand-600 dark:text-brand-400 shrink-0" />
+                <span>No external links attached. Click &quot;+ Add Link&quot; to attach Figma, Docs, or Staging URLs.</span>
+              </div>
             )
           )}
         </div>

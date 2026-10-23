@@ -5,46 +5,46 @@
 @layer base {
   :root {
     --background: 0 0% 99%;
-    --foreground: 195 40% 10%;
+    --foreground: 215 50% 8%; /* Deep, crisp charcoal black */
     --card: 0 0% 100%;
-    --card-foreground: 195 40% 10%;
+    --card-foreground: 215 50% 8%;
     --popover: 0 0% 100%;
-    --popover-foreground: 195 40% 10%;
+    --popover-foreground: 215 50% 8%;
     --primary: 192 87% 24.5%; /* #086075 AMBIZCON Teal */
     --primary-foreground: 0 0% 100%;
     --secondary: 172 30% 94%;
-    --secondary-foreground: 192 87% 20%;
-    --muted: 190 20% 95%;
-    --muted-foreground: 192 20% 45%;
+    --secondary-foreground: 192 87% 18%;
+    --muted: 210 20% 93%;
+    --muted-foreground: 215 35% 22%; /* Deep, high-contrast readable charcoal (was washed out 45%) */
     --accent: 172 30% 94%;
-    --accent-foreground: 192 87% 20%;
+    --accent-foreground: 192 87% 18%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 190 20% 90%;
-    --input: 190 20% 90%;
+    --border: 215 20% 80%; /* Crisp defined borders */
+    --input: 215 20% 80%;
     --ring: 192 87% 24.5%;
     --radius: 0.75rem;
   }
 
   .dark {
     --background: 195 50% 4%;
-    --foreground: 180 20% 98%;
+    --foreground: 210 40% 98%;
     --card: 195 45% 6.5%;
-    --card-foreground: 180 20% 98%;
+    --card-foreground: 210 40% 98%;
     --popover: 195 45% 6.5%;
-    --popover-foreground: 180 20% 98%;
+    --popover-foreground: 210 40% 98%;
     --primary: 192 85% 35%; /* Lighter Teal for Dark Mode */
     --primary-foreground: 0 0% 100%;
     --secondary: 192 30% 15%;
-    --secondary-foreground: 180 20% 98%;
+    --secondary-foreground: 210 40% 98%;
     --muted: 192 30% 15%;
-    --muted-foreground: 180 15% 65%;
+    --muted-foreground: 210 25% 82%; /* Bright, high-contrast readable text for dark mode */
     --accent: 192 30% 15%;
-    --accent-foreground: 180 20% 98%;
+    --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 180 20% 98%;
-    --border: 192 30% 14%;
-    --input: 192 30% 14%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 215 25% 22%;
+    --input: 215 25% 22%;
     --ring: 192 85% 35%;
   }
 }
@@ -54,9 +54,54 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+    @apply bg-background text-foreground antialiased font-semibold selection:bg-primary/20 selection:text-primary;
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-black text-foreground tracking-tight;
+  }
+
+  label {
+    @apply font-bold text-foreground;
+  }
+
+  p, span, label, td, th, li, a, button, input, select, textarea {
+    font-weight: 600;
+  }
+
+  .text-muted-foreground {
+    @apply font-semibold;
+  }
+}
+
+/* Light mode high-contrast overrides: make faint zinc/gray text dark and crisp */
+:root:not(.dark) .text-zinc-400,
+:root:not(.dark) .text-gray-400 {
+  color: #334155 !important;
+  font-weight: 600;
+}
+
+:root:not(.dark) .text-zinc-500,
+:root:not(.dark) .text-gray-500 {
+  color: #1e293b !important;
+  font-weight: 600;
+}
+
+/* Dark mode high-contrast overrides: make faint text bright and readable */
+.dark .text-zinc-400,
+.dark .text-gray-400 {
+  color: #cbd5e1 !important;
+  font-weight: 600;
+}
+
+.dark .text-zinc-500,
+.dark .text-gray-500 {
+  color: #e2e8f0 !important;
+  font-weight: 600;
 }
 
 /* Custom Scrollbars */

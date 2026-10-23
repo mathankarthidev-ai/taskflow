@@ -220,7 +220,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             <span className="font-extrabold text-base tracking-tight text-foreground leading-tight">
               Bizy Hub
             </span>
-            <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+            <span className="text-[10px] font-bold text-foreground/80 uppercase tracking-wider truncate">
               {isAustralia ? 'Ambizcon • Brisbane HQ' : 'Ambizcon Health • India'}
             </span>
           </div>
@@ -229,7 +229,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           {onMobileClose && (
             <button
               onClick={onMobileClose}
-              className="md:hidden p-1 text-muted-foreground hover:text-foreground rounded-lg"
+              className="md:hidden p-1 text-foreground/80 hover:text-foreground rounded-lg"
             >
               <X className="h-5 w-5" />
             </button>
@@ -256,17 +256,17 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-xs font-semibold truncate leading-none text-foreground">
+            <span className="text-xs font-bold truncate leading-none text-foreground">
               {currentUser.team} Team
             </span>
-            <span className="text-[10px] text-muted-foreground mt-1 truncate">Bizy Hub Enterprise</span>
+            <span className="text-xs font-bold text-foreground/80 mt-1 truncate">Bizy Hub Enterprise</span>
           </div>
         </div>
       </div>
 
       {/* Navigation Links */}
       <nav className="flex-1 space-y-1 px-3 py-2 overflow-y-auto">
-        <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+        <div className="px-3 pb-1 text-xs font-black uppercase tracking-wider text-foreground">
           Main Workspace
         </div>
         {navItems.map((item) => {
@@ -280,17 +280,17 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
               href={item.href}
               onClick={onMobileClose}
               className={cn(
-                'flex items-center justify-between rounded-xl px-3.5 py-2 text-xs font-semibold transition-all group',
+                'flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-bold transition-all group',
                 isActive
                   ? 'ambizcon-gradient text-white shadow-md shadow-brand-500/20'
-                  : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-foreground'
+                  : 'text-foreground/90 font-bold hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-foreground'
               )}
             >
               <div className="flex items-center gap-3">
                 <Icon
                   className={cn(
                     'h-4 w-4 transition-transform group-hover:scale-110',
-                    isActive ? 'text-white' : 'text-zinc-500 dark:text-zinc-400'
+                    isActive ? 'text-white' : 'text-foreground/80 dark:text-zinc-200'
                   )}
                 />
                 <span>{item.label}</span>

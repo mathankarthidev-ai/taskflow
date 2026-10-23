@@ -200,7 +200,7 @@ export function TaskCard({ task, users, onDelete }: TaskCardProps) {
               <UserCheck className="h-2.5 w-2.5" />
               Creator
             </span>
-            <span className="font-semibold text-muted-foreground truncate">
+            <span className="font-bold text-foreground/90 truncate">
               {creatorName}
             </span>
           </div>
@@ -211,7 +211,7 @@ export function TaskCard({ task, users, onDelete }: TaskCardProps) {
               <FileSearch className="h-2.5 w-2.5" />
               Review
             </span>
-            <span className="font-semibold text-muted-foreground truncate">
+            <span className="font-bold text-foreground/90 truncate">
               {task.assignedReviewerName || (task.status === 'Review' ? 'Team Lead' : 'None')}
             </span>
           </div>
@@ -272,7 +272,7 @@ export function TaskCard({ task, users, onDelete }: TaskCardProps) {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className={`flex items-center gap-0.5 text-[10px] ${isOverdue ? 'text-rose-500 font-bold' : 'text-muted-foreground'}`}>
+          <div className={`flex items-center gap-0.5 text-[10px] font-bold ${isOverdue ? 'text-rose-500' : 'text-foreground/80'}`}>
             {isOverdue ? <AlertCircle className="h-2.5 w-2.5" /> : <Calendar className="h-2.5 w-2.5" />}
             <span>{formatDate(task.dueDate)}</span>
           </div>
@@ -347,7 +347,7 @@ export function TaskCard({ task, users, onDelete }: TaskCardProps) {
           >
             <div className="mt-2.5 pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-800 space-y-2">
               {/* Description */}
-              <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
+              <p className="text-xs font-semibold text-foreground/85 leading-relaxed line-clamp-3">
                 {task.description || 'No description provided.'}
               </p>
 
@@ -425,7 +425,7 @@ export function TaskCard({ task, users, onDelete }: TaskCardProps) {
                     </span>
                   )}
 
-                  <div className="flex items-center gap-2 text-muted-foreground text-[10px]">
+                  <div className="flex items-center gap-2 text-foreground/80 font-bold text-xs">
                     {task.attachments && task.attachments.length > 0 && (
                       <span className="flex items-center gap-0.5">
                         <Paperclip className="h-2.5 w-2.5" />

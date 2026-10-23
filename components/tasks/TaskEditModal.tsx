@@ -344,44 +344,44 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
         {/* Color-Differentiated Task Roles: 🟣 Creator • 🔵 Working • 🟠 Review */}
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-foreground">Task Roles &amp; Allocation</span>
-            <span className="text-[10px] font-mono font-bold text-muted-foreground">
+            <span className="text-xs font-black text-foreground">Task Roles &amp; Allocation</span>
+            <span className="text-xs font-mono font-bold text-foreground">
               🟣 Creator • 🔵 Working • 🟠 Review
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* 1. CREATOR (Purple Theme) */}
-            <div className="rounded-2xl border-2 border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20 p-3 space-y-1.5">
+            <div className="rounded-2xl border-2 border-purple-500/40 bg-purple-500/10 dark:bg-purple-950/30 p-3 space-y-1.5 shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                   <UserCheck className="h-3 w-3" />
                   Creator
                 </span>
-                <span className="text-[9px] font-mono text-purple-600/80 dark:text-purple-400/80">Originated</span>
+                <span className="text-[9px] font-mono font-bold text-purple-700 dark:text-purple-300">Originated</span>
               </div>
-              <p className="text-[10px] text-muted-foreground">Task creator &amp; authorization owner.</p>
+              <p className="text-xs font-bold text-foreground/80">Task creator &amp; authorization owner.</p>
               <div className="flex items-center gap-1.5 p-2 rounded-xl bg-background/80 border border-purple-500/20">
                 <div className="h-6 w-6 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-[10px] shrink-0">
                   {creatorName.charAt(0)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-foreground truncate">{creatorName}</p>
-                  <p className="text-[9px] text-muted-foreground truncate">{task.createdByUser?.role || 'Creator'}</p>
+                  <p className="text-[10px] font-bold text-foreground/70 truncate">{task.createdByUser?.role || 'Creator'}</p>
                 </div>
               </div>
             </div>
 
             {/* 2. WORKING / ASSIGNEE (Blue Theme) */}
-            <div className="rounded-2xl border-2 border-blue-500/30 bg-blue-500/5 dark:bg-blue-950/20 p-3 space-y-1.5">
+            <div className="rounded-2xl border-2 border-blue-500/40 bg-blue-500/10 dark:bg-blue-950/30 p-3 space-y-1.5 shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
                   <Briefcase className="h-3 w-3" />
                   Working
                 </span>
-                <span className="text-[9px] font-mono text-blue-600/80 dark:text-blue-400/80">Doing Work</span>
+                <span className="text-[9px] font-mono font-bold text-blue-700 dark:text-blue-300">Doing Work</span>
               </div>
-              <p className="text-[10px] text-muted-foreground">Assignee doing the work.</p>
+              <p className="text-xs font-bold text-foreground/80">Assignee doing the work.</p>
               <select
                 value={assignedTo}
                 onChange={(e) => {
@@ -416,15 +416,15 @@ export function TaskEditModal({ task, isOpen, onClose, onUpdated }: TaskEditModa
             </div>
 
             {/* 3. REVIEW / REVIEWER (Amber Theme) */}
-            <div className="rounded-2xl border-2 border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 p-3 space-y-1.5">
+            <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/30 p-3 space-y-1.5 shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                   <FileSearch className="h-3 w-3" />
                   Review
                 </span>
-                <span className="text-[9px] font-mono text-amber-600/80 dark:text-amber-400/80">Sign-off</span>
+                <span className="text-[9px] font-mono font-bold text-amber-700 dark:text-amber-300">Sign-off</span>
               </div>
-              <p className="text-[10px] text-muted-foreground">Team Lead / QA reviewing output.</p>
+              <p className="text-xs font-bold text-foreground/80">Team Lead / QA reviewing output.</p>
               <select
                 value={assignedReviewerId}
                 onChange={(e) => setAssignedReviewerId(e.target.value)}

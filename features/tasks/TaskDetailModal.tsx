@@ -20,7 +20,7 @@ import { fetchCommentsAction, addCommentAction, deleteCommentAction } from '@/ac
 import { fetchAllUsersAction } from '@/actions/userActions';
 import { ReviewerSelectModal } from '@/components/tasks/ReviewerSelectModal';
 import { getPriorityBadgeColor, getStatusBadgeColor, formatDate, formatTimeAgo, normalizeUrl } from '@/lib/utils';
-import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3, Zap, Footprints, ArrowRight, Link2, Briefcase, FileSearch } from 'lucide-react';
+import { MessageSquare, Calendar, User as UserIcon, Tag, Trash2, Send, Paperclip, ExternalLink, CornerUpLeft, Clock, ShieldCheck, Plus, RotateCcw, AlertCircle, UserCheck, Edit3, Zap, Footprints, ArrowRight, Link2, Briefcase, FileSearch, FileText, CheckSquare } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { SEED_CLIENTS_FULL } from '@/lib/seed-data';
@@ -823,10 +823,11 @@ export function TaskDetailModal() {
           <div className="lg:col-span-7 space-y-6">
             {/* Description */}
             <div>
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+              <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5 mb-1.5">
+                <FileText className="h-3.5 w-3.5 text-primary" />
                 DESCRIPTION
               </h4>
-              <p className="text-xs text-foreground leading-relaxed">
+              <p className="text-xs font-bold text-foreground leading-relaxed bg-zinc-50 dark:bg-zinc-900/50 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800">
                 {selectedTask.description || 'Vector illustrations for upcoming healthcare campaign across Meta and LinkedIn.'}
               </p>
             </div>
@@ -834,13 +835,14 @@ export function TaskDetailModal() {
             {/* Subtasks Section */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                  <CheckSquare className="h-3.5 w-3.5 text-primary" />
                   SUBTASKS · {completedSubtasksCount}/{subtasksList.length}
                 </h4>
               </div>
 
               {/* Progress Bar */}
-              <div className="w-full bg-zinc-200 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-zinc-200 dark:bg-zinc-800 rounded-full h-2.5 overflow-hidden">
                 <div
                   className="bg-emerald-500 h-full transition-all duration-300"
                   style={{ width: `${subtaskProgressPct}%` }}
@@ -852,7 +854,7 @@ export function TaskDetailModal() {
                 {subtasksList.map((sub) => (
                   <label
                     key={sub.id}
-                    className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-accent cursor-pointer group"
+                    className="flex items-center gap-2 p-2 rounded-xl hover:bg-accent border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/40 cursor-pointer group transition-all"
                   >
                     <input
                       type="checkbox"
@@ -862,7 +864,7 @@ export function TaskDetailModal() {
                     />
                     <span
                       className={`text-xs ${
-                        sub.completed ? 'line-through text-muted-foreground' : 'text-foreground font-medium'
+                        sub.completed ? 'line-through text-foreground/50 font-semibold' : 'text-foreground font-bold'
                       }`}
                     >
                       {sub.title}
@@ -878,21 +880,22 @@ export function TaskDetailModal() {
                   value={newSubtaskTitle}
                   onChange={(e) => setNewSubtaskTitle(e.target.value)}
                   placeholder="Add a subtask..."
-                  className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+                  className="flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-background px-3 py-2 text-xs font-bold text-foreground focus-ring"
                 />
-                <Button type="submit" size="sm" variant="outline" className="px-3">
+                <Button type="submit" size="sm" variant="outline" className="px-3 font-bold">
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </form>
             </div>
 
             {/* Attachments Section */}
-            <div className="space-y-2 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-4">
+            <div className="space-y-2 border-t border-zinc-200/80 dark:border-zinc-800/80 pt-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                  <Paperclip className="h-3.5 w-3.5 text-primary" />
                   ATTACHMENTS
                 </h4>
-                <label className="cursor-pointer px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-card hover:bg-accent text-xs font-semibold flex items-center gap-1.5">
+                <label className="cursor-pointer px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-card hover:bg-accent text-xs font-extrabold text-foreground flex items-center gap-1.5 shadow-xs">
                   <Paperclip className="h-3.5 w-3.5 text-primary" />
                   Upload
                   <input
@@ -904,7 +907,7 @@ export function TaskDetailModal() {
                   />
                 </label>
               </div>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs font-bold text-foreground/80 dark:text-zinc-200">
                 PDF, PNG, JPG, DOC, ZIP, XLSX, TXT — max 5MB each
               </p>
 
@@ -929,34 +932,37 @@ export function TaskDetailModal() {
                           />
                         </div>
                         <div className="p-2 flex items-center justify-between">
-                          <span className="text-[11px] font-medium truncate" title={att.name}>{att.name}</span>
-                          <a href={att.url} target="_blank" rel="noreferrer" className="text-brand-600 dark:text-brand-400 font-bold hover:underline text-[10px]">View</a>
+                          <span className="text-xs font-bold truncate text-foreground" title={att.name}>{att.name}</span>
+                          <a href={att.url} target="_blank" rel="noreferrer" className="text-brand-600 dark:text-brand-400 font-extrabold hover:underline text-xs">View</a>
                         </div>
                       </div>
                     ) : (
-                      <a key={i} href={att.url} target="_blank" rel="noreferrer" className="flex items-center justify-between p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-card hover:bg-accent text-xs">
+                      <a key={i} href={att.url} target="_blank" rel="noreferrer" className="flex items-center justify-between p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-card hover:bg-accent text-xs font-bold text-foreground">
                         <span className="truncate">{att.name}</span>
-                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <ExternalLink className="h-3.5 w-3.5 text-foreground/70 shrink-0" />
                       </a>
                     );
                   })}
                 </div>
               ) : (
-                <p className="text-[11px] text-muted-foreground italic py-1">No files yet.</p>
+                <div className="p-3 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 text-xs font-bold text-foreground/80 flex items-center gap-2">
+                  <Paperclip className="h-4 w-4 text-primary shrink-0" />
+                  <span>No files attached yet. Click &quot;Upload&quot; to attach reference files.</span>
+                </div>
               )}
             </div>
 
             {/* Resource & Reference Links Section */}
-            <div className="space-y-2 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-4">
+            <div className="space-y-2 border-t border-zinc-200/80 dark:border-zinc-800/80 pt-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Link2 className="h-3.5 w-3.5 text-brand-500" />
+                <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                  <Link2 className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
                   LINKS &amp; RESOURCES
                 </h4>
                 <button
                   type="button"
                   onClick={() => setShowTaskLinkForm(!showTaskLinkForm)}
-                  className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-xs font-black text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   {showTaskLinkForm ? 'Cancel' : 'Add Link'}
@@ -971,14 +977,14 @@ export function TaskDetailModal() {
                       value={taskLinkTitle}
                       onChange={(e) => setTaskLinkTitle(e.target.value)}
                       placeholder="Title (e.g. Figma, Google Sheet, PR)"
-                      className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring"
+                      className="rounded-xl border border-zinc-300 dark:border-zinc-700 bg-background px-3 py-1.5 text-xs font-bold text-foreground focus-ring"
                     />
                     <input
                       type="url"
                       value={taskLinkUrl}
                       onChange={(e) => setTaskLinkUrl(e.target.value)}
                       placeholder="https://..."
-                      className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-1.5 text-xs focus-ring font-mono"
+                      className="rounded-xl border border-zinc-300 dark:border-zinc-700 bg-background px-3 py-1.5 text-xs font-bold text-foreground focus-ring font-mono"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -993,7 +999,7 @@ export function TaskDetailModal() {
                       size="sm"
                       variant="outline"
                       onClick={() => setShowTaskLinkForm(false)}
-                      className="text-xs h-7"
+                      className="text-xs h-7 font-bold"
                     >
                       Cancel
                     </Button>
@@ -1001,7 +1007,7 @@ export function TaskDetailModal() {
                       type="button"
                       size="sm"
                       onClick={handleSaveTaskDirectLink}
-                      className="ambizcon-gradient text-white text-xs h-7 shadow-glow gap-1"
+                      className="ambizcon-gradient text-white text-xs h-7 shadow-glow gap-1 font-bold"
                     >
                       <Plus className="h-3 w-3" />
                       Save Link to Task
@@ -1028,34 +1034,38 @@ export function TaskDetailModal() {
                       className="flex items-center justify-between p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 hover:bg-brand-500/10 hover:border-brand-500/30 transition-all group"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <Globe className="h-3.5 w-3.5 text-brand-500 shrink-0" />
+                        <Globe className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400 shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-foreground truncate group-hover:text-brand-600 transition-colors">
+                          <p className="text-xs font-black text-foreground truncate group-hover:text-brand-600 transition-colors">
                             {l.title || 'Resource Link'}
                           </p>
-                          <p className="text-[10px] text-muted-foreground truncate font-mono">
+                          <p className="text-xs font-semibold text-foreground/75 truncate font-mono">
                             {l.url.replace(/^https?:\/\//i, '')}
                           </p>
                         </div>
                       </div>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-brand-600 shrink-0 ml-1.5" />
+                      <ExternalLink className="h-3.5 w-3.5 text-foreground/70 group-hover:text-brand-600 shrink-0 ml-1.5" />
                     </a>
                   ))}
                 </div>
               ) : (
                 !showTaskLinkForm && (
-                  <p className="text-[11px] text-muted-foreground italic py-1">
-                    No resource links attached. Click "+ Add Link" to attach Figma, Docs, or Staging URLs.
-                  </p>
+                  <div className="p-3 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 text-xs font-bold text-foreground/80 flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-brand-600 dark:text-brand-400 shrink-0" />
+                    <span>No resource links attached. Click &quot;+ Add Link&quot; to attach Figma, Docs, or Staging URLs.</span>
+                  </div>
                 )
               )}
             </div>
 
             {/* Discussion Comments Section */}
-            <div className="space-y-3 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-4">
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                <span>DISCUSSION / REPLY CHAT</span>
-                <span className="text-[10px] lowercase font-normal text-muted-foreground">
+            <div className="space-y-3 border-t border-zinc-200/80 dark:border-zinc-800/80 pt-4">
+              <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                  DISCUSSION / REPLY CHAT
+                </span>
+                <span className="text-xs font-extrabold text-foreground bg-zinc-200/90 dark:bg-zinc-800 px-2.5 py-0.5 rounded-full border border-zinc-300 dark:border-zinc-700">
                   {comments.length} message{comments.length === 1 ? '' : 's'}
                 </span>
               </h4>
@@ -1204,8 +1214,9 @@ export function TaskDetailModal() {
             </div>
 
             {/* Audit History Timeline */}
-            <div className="space-y-2 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-4">
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="space-y-2 border-t border-zinc-200/80 dark:border-zinc-800/80 pt-4">
+              <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-primary" />
                 AUDIT HISTORY
               </h4>
               <div className="space-y-2 max-h-36 overflow-y-auto">
@@ -1214,8 +1225,8 @@ export function TaskDetailModal() {
                   <span className="font-bold text-foreground">
                     {selectedTask.createdByUser?.name || 'Deva Priya D A'}
                   </span>
-                  <span className="text-muted-foreground">Created this task</span>
-                  <span className="text-[10px] text-zinc-400 font-mono ml-auto">
+                  <span className="text-foreground/80 font-medium">Created this task</span>
+                  <span className="text-[10px] text-foreground/70 font-mono font-bold ml-auto">
                     {formatDate(selectedTask.createdAt)} · 10:00
                   </span>
                 </div>
@@ -1223,8 +1234,8 @@ export function TaskDetailModal() {
                   <div key={log.id} className="flex items-center gap-2 text-xs">
                     <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
                     <span className="font-bold text-foreground">{log.performedBy}</span>
-                    <span className="text-muted-foreground">{log.action}</span>
-                    <span className="text-[10px] text-zinc-400 font-mono ml-auto">
+                    <span className="text-foreground/80 font-medium">{log.action}</span>
+                    <span className="text-[10px] text-foreground/70 font-mono font-bold ml-auto">
                       {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -1239,18 +1250,18 @@ export function TaskDetailModal() {
             <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                  <label className="text-xs font-black uppercase tracking-wider text-foreground">
                     STATUS
                   </label>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 flex items-center gap-1">
-                    <ShieldCheck className="h-2.5 w-2.5" />
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                    <ShieldCheck className="h-3 w-3" />
                     TL / Admin Approves Done
                   </span>
                 </div>
                 <select
                   value={selectedTask.status}
                   onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-background px-3 py-2 text-xs font-semibold focus-ring"
+                  className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-background px-3 py-2 text-xs font-bold text-foreground focus-ring"
                 >
                   <option value="Todo">To Do</option>
                   <option value="In Progress">In Progress</option>
@@ -1262,42 +1273,42 @@ export function TaskDetailModal() {
               </div>
 
               {/* Color-Differentiated Task Ownership: 🟣 Creator • 🔵 Working • 🟠 Review */}
-              <div className="space-y-1.5 p-3 rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80">
-                <div className="flex items-center justify-between text-[10px] font-bold">
-                  <span className="uppercase tracking-wider text-muted-foreground">Task Roles</span>
-                  <span className="font-mono text-muted-foreground">🟣 Creator • 🔵 Working • 🟠 Review</span>
+              <div className="space-y-1.5 p-3 rounded-2xl bg-zinc-100/90 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800">
+                <div className="flex items-center justify-between text-xs font-black">
+                  <span className="uppercase tracking-wider text-foreground">Task Roles</span>
+                  <span className="font-mono text-foreground font-bold">🟣 Creator • 🔵 Working • 🟠 Review</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                   {/* Creator */}
-                  <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/25 space-y-0.5">
-                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1">
-                      <UserCheck className="h-3 w-3" /> Creator
+                  <div className="p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/35 space-y-0.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-800 dark:text-purple-300 flex items-center gap-1">
+                      <UserCheck className="h-3.5 w-3.5" /> Creator
                     </span>
-                    <p className="text-xs font-bold text-foreground truncate" title={creatorName}>{creatorName}</p>
-                    <p className="text-[9px] text-muted-foreground truncate">{selectedTask.createdByUser?.role || 'Author'}</p>
+                    <p className="text-xs font-black text-foreground truncate" title={creatorName}>{creatorName}</p>
+                    <p className="text-[10px] font-bold text-purple-900/80 dark:text-purple-200/80 truncate">{selectedTask.createdByUser?.role || 'Author'}</p>
                   </div>
 
                   {/* Working */}
-                  <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/25 space-y-0.5">
-                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                      <Briefcase className="h-3 w-3" /> Working
+                  <div className="p-2.5 rounded-xl bg-blue-500/15 border border-blue-500/35 space-y-0.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300 flex items-center gap-1">
+                      <Briefcase className="h-3.5 w-3.5" /> Working
                     </span>
-                    <p className="text-xs font-bold text-foreground truncate" title={selectedTask.assignedUser?.name || 'Unassigned'}>
+                    <p className="text-xs font-black text-foreground truncate" title={selectedTask.assignedUser?.name || 'Unassigned'}>
                       {selectedTask.assignedUser?.name || 'Unassigned'}
                     </p>
-                    <p className="text-[9px] text-muted-foreground truncate">{selectedTask.team} Team</p>
+                    <p className="text-[10px] font-bold text-blue-900/80 dark:text-blue-200/80 truncate">{selectedTask.team} Team</p>
                   </div>
 
                   {/* Review */}
-                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-0.5">
-                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                      <FileSearch className="h-3 w-3" /> Review
+                  <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/35 space-y-0.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                      <FileSearch className="h-3.5 w-3.5" /> Review
                     </span>
-                    <p className="text-xs font-bold text-foreground truncate" title={selectedTask.assignedReviewerName || 'Unassigned'}>
+                    <p className="text-xs font-black text-foreground truncate" title={selectedTask.assignedReviewerName || 'Unassigned'}>
                       {selectedTask.assignedReviewerName || 'Unassigned'}
                     </p>
-                    <p className="text-[9px] text-muted-foreground truncate">
+                    <p className="text-[10px] font-bold text-amber-900/80 dark:text-amber-200/80 truncate">
                       {selectedTask.reviewStatus === 'approved' ? 'Approved' : 'Sign-off'}
                     </p>
                   </div>
@@ -1306,7 +1317,7 @@ export function TaskDetailModal() {
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                  <label className="text-xs font-black uppercase tracking-wider text-foreground">
                     ASSIGNEE (WORKING)
                   </label>
                   {currentUser.role === 'Super Admin' || currentUser.role === 'Admin' ? (
@@ -1472,12 +1483,12 @@ export function TaskDetailModal() {
               </div>
 
               {/* Meta details */}
-              <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-1 text-[11px] text-muted-foreground">
-                <div>Team: <strong className="text-foreground">{selectedTask.team}</strong> · Due: <strong className="text-foreground">{formatDate(selectedTask.dueDate)}</strong></div>
-                <div>Project: <strong className="text-foreground">{selectedTask.projectName || 'Social Media 2026'}</strong></div>
-                {selectedTask.doctorName && <div>Doctor: <strong className="text-foreground">{selectedTask.doctorName}</strong></div>}
-                {selectedTask.specialist && <div>Specialist: <strong className="text-foreground">{selectedTask.specialist}</strong></div>}
-                <div>Created by: <strong className="text-foreground">{selectedTask.createdByUser?.name || 'Deva Priya D A'}</strong></div>
+              <div className="pt-2 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-1.5 text-xs font-bold text-foreground">
+                <div>Team: <strong className="text-primary font-black">{selectedTask.team}</strong> · Due: <strong className="text-foreground font-black">{formatDate(selectedTask.dueDate)}</strong></div>
+                <div>Project: <strong className="text-foreground font-black">{selectedTask.projectName || 'Social Media 2026'}</strong></div>
+                {selectedTask.doctorName && <div>Doctor: <strong className="text-foreground font-black">{selectedTask.doctorName}</strong></div>}
+                {selectedTask.specialist && <div>Specialist: <strong className="text-foreground font-black">{selectedTask.specialist}</strong></div>}
+                <div>Created by: <strong className="text-purple-700 dark:text-purple-300 font-black">{selectedTask.createdByUser?.name || 'Deva Priya D A'}</strong></div>
               </div>
             </div>
 
@@ -1699,7 +1710,7 @@ export function TaskDetailModal() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Timer className="h-4 w-4 text-brand-500" />
-                        <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
+                        <span className="font-black text-xs uppercase tracking-wider text-foreground">
                           TIME LOGGER
                         </span>
                       </div>
@@ -1834,7 +1845,7 @@ export function TaskDetailModal() {
             <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <Globe className="h-4 w-4 text-brand-500" />
-                <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">CLIENT SHARE LINK</span>
+                <span className="font-black text-xs uppercase tracking-wider text-foreground">CLIENT SHARE LINK</span>
               </div>
               <input
                 type="text"
