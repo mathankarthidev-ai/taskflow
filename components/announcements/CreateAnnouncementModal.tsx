@@ -28,7 +28,14 @@ export function CreateAnnouncementModal({
 
   if (!currentUser) return null;
 
-  const isAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
+  const roleLower = (currentUser.role || '').toLowerCase().trim();
+  const isAdmin =
+    roleLower === 'super admin' ||
+    roleLower === 'admin' ||
+    roleLower.includes('admin') ||
+    currentUser.email === 'anirudh@ambizcon.com' ||
+    currentUser.email === 'mathan@ambizcon.com' ||
+    roleLower === 'director';
   if (!isAdmin) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -28,12 +28,28 @@ import {
   Layers,
   Plus,
   Zap,
+  Megaphone,
+  Pin,
+  Heart,
+  ThumbsUp,
+  MessageSquare,
+  ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { isTaskInCompany } from '@/lib/company-filter';
 import { TeamPresenceOverviewPanel } from '@/components/dashboard/TeamPresenceOverviewPanel';
 import { HourlyWorkTrackerPanel } from '@/components/dashboard/HourlyWorkTrackerPanel';
+import {
+  Announcement,
+  getStoredAnnouncements,
+  getVisibleAnnouncementsForUser,
+  getHeartLikesCount,
+  getThumbLikesCount,
+  isAnnouncementRead,
+  getUnreadAnnouncementsCount,
+} from '@/lib/announcements-store';
+import { AnnouncementDetailModal } from '@/components/announcements/AnnouncementDetailModal';
 
 function parseTimeStringToTodayTimestamp(timeStr?: string): number | null {
   if (!timeStr || timeStr === '-' || timeStr === '—') return null;
@@ -85,6 +101,33 @@ export function DashboardOverview() {
   const [clockInTimestamp, setClockInTimestamp] = useState<number | null>(null);
   const clockInTimestampRef = useRef<number | null>(null);
   const isWorkingRef = useRef<boolean>(false);
+
+  // Official Announcements state & live sync
+  const [announcementsList, setAnnouncementsList] = useState<Announcement[]>(() => getStoredAnnouncements());
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [isAnnouncementDetailOpen, setIsAnnouncementDetailOpen] = useState(false);
+
+  useEffect(() => {
+    const refreshAnnouncements = () => {
+      setAnnouncementsList(getStoredAnnouncements());
+    };
+    refreshAnnouncements();
+
+    window.addEventListener('ambizcon_announcements_updated', refreshAnnouncements);
+    window.addEventListener('storage', refreshAnnouncements);
+    return () => {
+      window.removeEventListener('ambizcon_announcements_updated', refreshAnnouncements);
+      window.removeEventListener('storage', refreshAnnouncements);
+    };
+  }, []);
+
+  const visibleAnnouncements = useMemo(() => {
+    return getVisibleAnnouncementsForUser(announcementsList, currentUser);
+  }, [announcementsList, currentUser]);
+
+  const unreadAnnouncementsCount = useMemo(() => {
+    return currentUser ? getUnreadAnnouncementsCount(currentUser._id, currentUser, visibleAnnouncements) : 0;
+  }, [currentUser, visibleAnnouncements]);
 
   const liveWorkedFormatted = useMemo(() => {
     const h = Math.floor(liveWorkedSeconds / 3600);
@@ -738,6 +781,130 @@ export function DashboardOverview() {
         </Card>
       </div>
 
+      {/* Official Organization Announcements Section */}
+      <Card className="p-5 sm:p-6 border border-zinc-200/80 dark:border-zinc-800/80 bg-card shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-indigo-500/20 to-purple-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-xs">
+              <Megaphone className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-foreground">Official Announcements</h3>
+                {unreadAnnouncementsCount > 0 && (
+                  <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5">
+                    {unreadAnnouncementsCount} New Unread
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Company-wide broadcasts & team updates from leadership
+              </p>
+            </div>
+          </div>
+          <Link href="/announcements">
+            <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-brand-600 dark:text-brand-400 font-bold hover:bg-brand-500/10">
+              View All Announcements ({visibleAnnouncements.length})
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </div>
+
+        {visibleAnnouncements.length === 0 ? (
+          <div className="py-8 text-center text-xs text-muted-foreground">
+            No announcements published for your team yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visibleAnnouncements.slice(0, 3).map((ann) => {
+              const isRead = currentUser ? isAnnouncementRead(ann.id, currentUser._id, visibleAnnouncements) : true;
+              const hearts = getHeartLikesCount(ann);
+              const thumbs = getThumbLikesCount(ann);
+              return (
+                <div
+                  key={ann.id}
+                  onClick={() => {
+                    setSelectedAnnouncement(ann);
+                    setIsAnnouncementDetailOpen(true);
+                  }}
+                  className={`group relative flex flex-col justify-between p-4 rounded-2xl border transition-all cursor-pointer ${
+                    !isRead
+                      ? 'border-indigo-400/40 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-xs ring-1 ring-indigo-400/20 hover:border-indigo-500'
+                      : 'border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 hover:border-zinc-300 dark:hover:border-zinc-700'
+                  }`}
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {ann.pinned && (
+                          <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-bold px-1.5 py-0.5 gap-1">
+                            <Pin className="h-3 w-3 fill-amber-500" />
+                            Pinned
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-[10px] font-semibold">
+                          {ann.applicableTo === 'All' ? '📢 All Teams' : `👥 ${ann.applicableTo}`}
+                        </Badge>
+                        {!isRead && (
+                          <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-mono">{ann.createdAt}</span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors line-clamp-1">
+                        {ann.title}
+                      </h4>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
+                        {ann.content}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar
+                        src={ann.authorAvatar}
+                        name={ann.authorName}
+                        userId={ann.authorId}
+                        size="xs"
+                        className="h-5 w-5 ring-1 ring-border text-[9px]"
+                      />
+                      <span className="text-[11px] font-medium text-foreground truncate max-w-[100px]">
+                        {ann.authorName}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 text-muted-foreground text-[11px]">
+                      {hearts > 0 && (
+                        <span className="inline-flex items-center gap-0.5 text-rose-500 font-semibold">
+                          <Heart className="h-3 w-3 fill-rose-500" />
+                          {hearts}
+                        </span>
+                      )}
+                      {thumbs > 0 && (
+                        <span className="inline-flex items-center gap-0.5 text-blue-500 font-semibold">
+                          <ThumbsUp className="h-3 w-3 fill-blue-500" />
+                          {thumbs}
+                        </span>
+                      )}
+                      {ann.comments.length > 0 && (
+                        <span className="inline-flex items-center gap-0.5">
+                          <MessageSquare className="h-3 w-3" />
+                          {ann.comments.length}
+                        </span>
+                      )}
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-brand-500 group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
       {/* Hourly Work Slots & Task Progress Tracker (Admin view & My tab user view) */}
       <HourlyWorkTrackerPanel tasks={scopedTasks} />
 
@@ -870,6 +1037,21 @@ export function DashboardOverview() {
             </Card>
           </div>
         </div>
+
+        {/* Announcement Detail Modal */}
+        {selectedAnnouncement && (
+          <AnnouncementDetailModal
+            announcement={selectedAnnouncement}
+            isOpen={isAnnouncementDetailOpen}
+            onClose={() => {
+              setIsAnnouncementDetailOpen(false);
+              setSelectedAnnouncement(null);
+            }}
+            onUpdate={() => {
+              setAnnouncementsList(getStoredAnnouncements());
+            }}
+          />
+        )}
       </div>
     );
   }

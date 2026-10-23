@@ -292,15 +292,28 @@ export function getStoredAnnouncements(): Announcement[] {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Ensure seed team targets are synced with latest definitions
+      // Ensure all seed announcements are guaranteed to exist even if local cache is partial
+      const existingIds = new Set(parsed.map((p: any) => p.id));
+      const missingSeeds = SEED_ANNOUNCEMENTS.filter((s) => !existingIds.has(s.id));
+
       const synced = parsed.map((item: Announcement) => {
         const seedMatch = SEED_ANNOUNCEMENTS.find((s) => s.id === item.id);
-        if (seedMatch && seedMatch.applicableTo !== 'All' && item.applicableTo === 'All') {
-          return { ...item, applicableTo: seedMatch.applicableTo, title: seedMatch.title, content: seedMatch.content };
+        if (seedMatch) {
+          return {
+            ...item,
+            applicableTo: seedMatch.applicableTo,
+            title: item.title || seedMatch.title,
+            content: item.content || seedMatch.content,
+          };
         }
         return item;
       });
-      return synced;
+
+      const merged = [...synced, ...missingSeeds];
+      if (missingSeeds.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      }
+      return merged;
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ANNOUNCEMENTS));
     return SEED_ANNOUNCEMENTS;
@@ -319,18 +332,36 @@ export function getVisibleAnnouncementsForUser(
   user: User | null
 ): Announcement[] {
   if (!user) return announcements;
-  const isAdmin = user.role === 'Super Admin' || user.role === 'Admin';
+  const roleLower = (user.role || '').toLowerCase().trim();
+  const isAdmin =
+    roleLower === 'super admin' ||
+    roleLower === 'admin' ||
+    roleLower.includes('admin') ||
+    user.email === 'anirudh@ambizcon.com' ||
+    user.email === 'mathan@ambizcon.com' ||
+    roleLower === 'director';
+
   if (isAdmin) return announcements;
 
-  const userTeam = (user.team || '').toLowerCase().trim();
+  const rawUserTeam = (user.team || '').toLowerCase().trim();
+  // Normalize team: "development team" -> "development"
+  const cleanUserTeam = rawUserTeam.replace(/\s*team\s*/i, '').trim();
 
   return announcements.filter((ann) => {
     // 1. All-company broadcasts are visible to all members
-    if (!ann.applicableTo || ann.applicableTo === 'All' || ann.applicableTo === 'Ambizcon' || ann.applicableTo === 'Ambizcon Health') {
+    const target = (ann.applicableTo || 'All').toLowerCase().trim();
+    if (
+      target === 'all' ||
+      target === 'ambizcon' ||
+      target === 'ambizcon health' ||
+      target === 'all teams' ||
+      target === 'organization'
+    ) {
       return true;
     }
     // 2. Team-specific announcements are ONLY visible to members of that specific team
-    return ann.applicableTo.toLowerCase().trim() === userTeam;
+    const cleanAnnTeam = target.replace(/\s*team\s*/i, '').trim();
+    return cleanAnnTeam === cleanUserTeam || target === rawUserTeam;
   });
 }
 
@@ -347,7 +378,16 @@ export function createAnnouncement(
   },
   adminUser: User
 ): Announcement {
-  if (adminUser.role !== 'Super Admin' && adminUser.role !== 'Admin') {
+  const roleLower = (adminUser.role || '').toLowerCase().trim();
+  const isAdmin =
+    roleLower === 'super admin' ||
+    roleLower === 'admin' ||
+    roleLower.includes('admin') ||
+    adminUser.email === 'anirudh@ambizcon.com' ||
+    adminUser.email === 'mathan@ambizcon.com' ||
+    roleLower === 'director';
+
+  if (!isAdmin) {
     throw new Error('Permission denied: Only Admin can create announcements.');
   }
 
@@ -605,7 +645,16 @@ export function deleteCommentFromAnnouncement(
 }
 
 export function deleteAnnouncement(announcementId: string, adminUser: User): boolean {
-  if (adminUser.role !== 'Super Admin' && adminUser.role !== 'Admin') {
+  const roleLower = (adminUser.role || '').toLowerCase().trim();
+  const isAdmin =
+    roleLower === 'super admin' ||
+    roleLower === 'admin' ||
+    roleLower.includes('admin') ||
+    adminUser.email === 'anirudh@ambizcon.com' ||
+    adminUser.email === 'mathan@ambizcon.com' ||
+    roleLower === 'director';
+
+  if (!isAdmin) {
     return false;
   }
   const list = getStoredAnnouncements();

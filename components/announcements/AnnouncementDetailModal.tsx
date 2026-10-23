@@ -52,7 +52,14 @@ export function AnnouncementDetailModal({
 
   if (!announcement || !currentUser) return null;
 
-  const isAdmin = currentUser.role === 'Super Admin' || currentUser.role === 'Admin';
+  const roleLower = (currentUser.role || '').toLowerCase().trim();
+  const isAdmin =
+    roleLower === 'super admin' ||
+    roleLower === 'admin' ||
+    roleLower.includes('admin') ||
+    currentUser.email === 'anirudh@ambizcon.com' ||
+    currentUser.email === 'mathan@ambizcon.com' ||
+    roleLower === 'director';
   const myLike = announcement.likes.find((l) => l.userId === currentUser._id);
   const isHeartedByMe = myLike?.type === 'heart';
   const isThumbLikedByMe = myLike && myLike.type !== 'heart';

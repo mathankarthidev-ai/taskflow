@@ -1633,7 +1633,12 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                   }}
                   onOpenCreate={() => setIsCreateAnnouncementOpen(true)}
                   onClose={() => setActiveMenu(null)}
-                  isAdmin={currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin'}
+                  isAdmin={
+                    (currentUser?.role || '').toLowerCase().includes('admin') ||
+                    currentUser?.email === 'anirudh@ambizcon.com' ||
+                    currentUser?.email === 'mathan@ambizcon.com' ||
+                    (currentUser?.role || '').toLowerCase().trim() === 'director'
+                  }
                 />
               )}
             </div>

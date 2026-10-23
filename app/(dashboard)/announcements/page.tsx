@@ -41,15 +41,23 @@ import { toast } from 'sonner';
 
 export default function AnnouncementsPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(() => getStoredAnnouncements());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  const isAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin';
-  const userTeam = currentUser?.team || 'Creative';
+  const roleLower = (currentUser?.role || '').toLowerCase().trim();
+  const isAdmin =
+    roleLower === 'super admin' ||
+    roleLower === 'admin' ||
+    roleLower.includes('admin') ||
+    currentUser?.email === 'anirudh@ambizcon.com' ||
+    currentUser?.email === 'mathan@ambizcon.com' ||
+    roleLower === 'director';
+
+  const userTeam = (currentUser?.team || 'Development').replace(/\s*team\s*/i, '').trim();
 
   // Base list of announcements visible to this user
   // Admin: can see all announcements across all teams
@@ -160,7 +168,9 @@ export default function AnnouncementsPage() {
       return Boolean(ann.pinned);
     }
     if (selectedFilter !== 'All') {
-      return ann.applicableTo === selectedFilter;
+      const cleanFilter = selectedFilter.toLowerCase().replace(/\s*team\s*/i, '').trim();
+      const cleanAnn = (ann.applicableTo || '').toLowerCase().replace(/\s*team\s*/i, '').trim();
+      return cleanAnn === cleanFilter;
     }
     return true;
   });
