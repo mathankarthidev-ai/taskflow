@@ -80,6 +80,7 @@ import {
   Announcement,
   getStoredAnnouncements,
   getUnreadAnnouncementsCount,
+  markAllAnnouncementsAsRead,
 } from '@/lib/announcements-store';
 import { AnnouncementsQuickDropdown } from '@/components/announcements/AnnouncementsQuickDropdown';
 import { AnnouncementDetailModal } from '@/components/announcements/AnnouncementDetailModal';
@@ -228,6 +229,33 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   >('All');
   const [activeReminderAlert, setActiveReminderAlert] = useState<ActiveReminderPopup | null>(null);
   const [alarmRemainingSec, setAlarmRemainingSec] = useState<number>(30);
+
+  // User-persisted read tracking for total unified notifications (task reminders, self-reminders, wellness, etc.)
+  const [readUnifiedNotificationIds, setReadUnifiedNotificationIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!currentUser?._id) return;
+    try {
+      const saved = localStorage.getItem(`taskflow_read_notifications_${currentUser._id}`);
+      if (saved) {
+        setReadUnifiedNotificationIds(new Set(JSON.parse(saved)));
+      }
+    } catch {
+      // fallback
+    }
+  }, [currentUser?._id]);
+
+  const persistReadIds = (newSet: Set<string>) => {
+    setReadUnifiedNotificationIds(newSet);
+    if (typeof window !== 'undefined' && currentUser?._id) {
+      try {
+        localStorage.setItem(
+          `taskflow_read_notifications_${currentUser._id}`,
+          JSON.stringify(Array.from(newSet))
+        );
+      } catch (_) {}
+    }
+  };
 
   // Sync personal self reminders so all reminders appear in notifications dropdown
   useEffect(() => {
@@ -432,8 +460,12 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
       });
     }
 
-    return items;
-  }, [notificationsList, tasks, userSelfReminders, currentUser, currentHabit, healthIntervalMins, healthCompletedItems]);
+    // Apply readUnifiedNotificationIds check across total unified items
+    return items.map((item) => ({
+      ...item,
+      unread: readUnifiedNotificationIds.has(item.id) ? false : item.unread,
+    }));
+  }, [notificationsList, tasks, userSelfReminders, currentUser, currentHabit, healthIntervalMins, healthCompletedItems, readUnifiedNotificationIds]);
 
   // Filtered Notifications based on user-selected dropdown category
   const filteredNotifications = useMemo(() => {
@@ -974,12 +1006,32 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     stopReminderAlarmSound();
     markAllReadStore();
     markChannelMessagesAsRead();
-    toast.info('All notifications marked as read');
+    dismissAllPopupAlerts();
+    if (currentUser) {
+      markAllAnnouncementsAsRead(currentUser._id);
+    }
+
+    // Mark total unified notifications as read
+    const allIds = new Set(readUnifiedNotificationIds);
+    for (const n of allUnifiedNotifications) {
+      allIds.add(n.id);
+    }
+    persistReadIds(allIds);
+
+    toast.success('Total notifications marked as read');
   };
 
   const handleNotificationClick = (notif: any) => {
     stopReminderAlarmSound();
     markAsReadStore(notif.id);
+
+    // Persist as read in total unified tracking
+    if (!readUnifiedNotificationIds.has(notif.id)) {
+      const updated = new Set(readUnifiedNotificationIds);
+      updated.add(notif.id);
+      persistReadIds(updated);
+    }
+
     closeAllMenus();
 
     if (notif.link === '#health' || notif.category === 'Health Check') {
@@ -1604,28 +1656,33 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           {activeMenu === 'notif' && (
             <div className="absolute right-0 mt-2 w-84 sm:w-96 max-w-[calc(100vw-24px)] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-background p-4 shadow-xl glass-panel z-50 animate-fade">
               <div className="flex items-center justify-between pb-2.5 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Bell className="h-3.5 w-3.5 text-emerald-500" />
-                  Notifications &amp; Reminders
-                </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Bell className="h-3.5 w-3.5 text-emerald-500" />
+                    Notifications &amp; Reminders
+                  </span>
                   {totalUnreadCount > 0 ? (
-                    <Badge variant="default" className="text-[10px] bg-emerald-600 text-white font-mono font-bold">
+                    <Badge variant="default" className="text-[10px] bg-rose-500 text-white font-mono font-bold animate-pulse">
                       {totalUnreadCount} New
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] font-mono">All Read</Badge>
-                  )}
-                  {totalUnreadCount > 0 && (
-                    <button
-                      onClick={handleMarkAllRead}
-                      className="text-[10px] text-muted-foreground hover:text-foreground ml-1 p-0.5 rounded hover:bg-accent"
-                      title="Mark all as read"
-                    >
-                      <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
-                    </button>
+                    <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                      All Read
+                    </Badge>
                   )}
                 </div>
+
+                {totalUnreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleMarkAllRead}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all shadow-xs"
+                    title="Mark all notifications as read (Total)"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Mark all as read</span>
+                  </button>
+                )}
               </div>
 
               {/* Category Filter Dropdown - Default: All Notifications */}
@@ -1681,7 +1738,25 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-1">
                             <p className="font-bold text-foreground text-xs truncate">{notif.title}</p>
-                            <span className="text-[10px] text-zinc-400 font-mono shrink-0">{notif.time}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] text-zinc-400 font-mono">{notif.time}</span>
+                              {notif.unread && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markAsReadStore(notif.id);
+                                    const updated = new Set(readUnifiedNotificationIds);
+                                    updated.add(notif.id);
+                                    persistReadIds(updated);
+                                  }}
+                                  title="Mark as read"
+                                  className="p-1 rounded-md text-zinc-400 hover:text-emerald-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                  <Check className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div className="mt-0.5">
                             <span
