@@ -1207,7 +1207,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         {onMobileMenuToggle && (
           <button
             onClick={onMobileMenuToggle}
-            className="md:hidden flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 text-muted-foreground hover:bg-accent"
+            className="lg:hidden flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-card p-0 text-muted-foreground hover:bg-accent"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -1215,14 +1215,14 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
         <button
           onClick={toggleSearch}
-          className="flex h-10 w-9 sm:w-44 md:w-56 items-center justify-center sm:justify-between rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 px-2 sm:px-3 text-xs text-muted-foreground transition-all hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50 focus-ring shrink-0"
+          className="flex h-10 w-9 sm:w-36 md:w-40 lg:w-48 xl:w-56 items-center justify-center sm:justify-between rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 px-2 sm:px-3 text-xs text-muted-foreground transition-all hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50 focus-ring shrink-0"
           title="Search tasks (⌘K)"
         >
           <div className="flex items-center gap-2 truncate">
             <Search className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
             <span className="truncate hidden sm:inline">Search tasks...</span>
           </div>
-          <kbd className="pointer-events-none hidden md:inline-flex h-5 select-none items-center gap-0.5 rounded border border-zinc-200 dark:border-zinc-800 bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+          <kbd className="pointer-events-none hidden xl:inline-flex h-5 select-none items-center gap-0.5 rounded border border-zinc-200 dark:border-zinc-800 bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
             <span className="text-xs">⌘</span>K
           </kbd>
         </button>
@@ -1246,10 +1246,10 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               ) : (
                 <img src="/ambizcon-logo.png" alt="IND" className="h-5 w-5 rounded-md object-cover border border-emerald-500/30 shrink-0" />
               )}
-              <span className="hidden md:inline-flex items-center gap-1.5">
+              <span className="hidden xl:inline-flex items-center gap-1.5">
                 {selectedCompany === 'Ambizcon' ? '🇦🇺 Ambizcon' : '🇮🇳 Ambizcon Health - India'}
               </span>
-              <span className="md:hidden">
+              <span className="xl:hidden">
                 {selectedCompany === 'Ambizcon' ? '🇦🇺 AUS' : '🇮🇳 IND'}
               </span>
               <span className={`hidden lg:inline-flex px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${

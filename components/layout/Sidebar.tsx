@@ -199,7 +199,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
         'sticky top-0 z-40 flex h-screen w-64 flex-col border-r border-zinc-200/80 dark:border-zinc-800/80 bg-background/95 backdrop-blur-xl transition-all shrink-0',
         isMobileOpen
           ? 'fixed inset-y-0 left-0 z-50 flex w-72 shadow-2xl animate-fade'
-          : 'hidden md:flex'
+          : 'hidden lg:flex'
       )}
     >
       {/* AMBIZCON Brand Header (Branch aware: Australia vs Health India) */}
@@ -229,7 +229,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           {onMobileClose && (
             <button
               onClick={onMobileClose}
-              className="md:hidden p-1 text-foreground/80 hover:text-foreground rounded-lg"
+              className="lg:hidden p-1 text-foreground/80 hover:text-foreground rounded-lg"
             >
               <X className="h-5 w-5" />
             </button>
@@ -320,11 +320,11 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
 
   return (
     <>
-      {/* Backdrop for mobile */}
+      {/* Backdrop for mobile & tablet drawer */}
       {isMobileOpen && (
         <div
           onClick={onMobileClose}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
         />
       )}
       {sidebarContent}
