@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { attendanceDb } from '../lib/attendance-db';
 import { mockStore } from '../lib/mock-store';
 
-async function clearAllTemporaryData() {
+async function clearAllTemporaryData(clearAttendanceAll: boolean = false) {
   console.log('🚀 Starting deep clean of all temporary data...');
 
   // 1. Clear Supabase work_logs
@@ -50,20 +50,52 @@ async function clearAllTemporaryData() {
     console.error('Exception clearing chat_messages:', e.message);
   }
 
-  // 6. Reset in-memory stores
+  // 6. Clear Supabase leave_requests (Demo leave requests)
+  try {
+    const { error } = await supabase.from('leave_requests').delete().neq('id', '__KEEP_NOTHING__');
+    if (error) console.error('Error clearing leave_requests:', error.message);
+    else console.log('✅ Cleared all rows from "leave_requests" table.');
+  } catch (e: any) {
+    console.error('Exception clearing leave_requests:', e.message);
+  }
+
+  // 7. Clear Supabase comments
+  try {
+    const { error } = await supabase.from('comments').delete().neq('id', '__KEEP_NOTHING__');
+    if (error) console.error('Error clearing comments:', error.message);
+    else console.log('✅ Cleared all rows from "comments" table.');
+  } catch (e: any) {
+    console.error('Exception clearing comments:', e.message);
+  }
+
+  // 8. Handle attendance table
+  if (clearAttendanceAll) {
+    try {
+      const { error } = await supabase.from('attendance').delete().neq('id', '__KEEP_NOTHING__');
+      if (error) console.error('Error clearing attendance:', error.message);
+      else console.log('✅ Cleared all rows from "attendance" table (Full Clean Slate).');
+    } catch (e: any) {
+      console.error('Exception clearing attendance:', e.message);
+    }
+  }
+
+  // 9. Reset in-memory stores
   attendanceDb.resetAll();
   mockStore.reset();
   console.log('✅ Reset in-memory attendanceDb and mockStore.');
 
-  // 7. Verify all Supabase tables are now 0 rows
-  const verifyTables = ['work_logs', 'tasks', 'reimbursements', 'self_reminders', 'chat_messages'];
+  // 10. Verify all Supabase tables are now 0 rows
+  const verifyTables = ['work_logs', 'tasks', 'reimbursements', 'self_reminders', 'chat_messages', 'leave_requests', 'comments'];
+  if (clearAttendanceAll) verifyTables.push('attendance');
+
   for (const table of verifyTables) {
     const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true });
     if (error) console.log(`Verify "${table}": error -> ${error.message}`);
     else console.log(`Verify "${table}": ${count} rows (CLEAN)`);
   }
 
-  console.log('🎉 All temporary database records have been successfully wiped to clean scratch state.');
+  console.log('🎉 Selected demo records have been successfully wiped to clean scratch state.');
 }
 
-clearAllTemporaryData().catch(console.error);
+const wipeAttendanceFlag = process.argv.includes('--all-attendance');
+clearAllTemporaryData(wipeAttendanceFlag).catch(console.error);
