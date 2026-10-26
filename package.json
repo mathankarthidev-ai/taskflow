@@ -8,6 +8,8 @@
     "start": "node dev-runner.js start",
     "lint": "next lint",
     "seed": "node -e \"console.log('Use /api/seed route or run seed action')\"",
+    "clean:scratch": "npx tsx scripts/clear-all-temporary-data.ts",
+    "test:functional": "npx tsx scripts/test-all-functional-live.ts",
     "test:security": "npx tsx scripts/verify-all-securities.ts",
     "test:all": "npx tsx scripts/test-all-options.ts",
     "test:attendance": "npx tsx scripts/test-attendance-e2e.ts",
