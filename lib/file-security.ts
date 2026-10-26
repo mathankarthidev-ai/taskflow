@@ -68,10 +68,12 @@ export function validateReceiptAttachment(
     }
   }
 
-  // 2. Check payload size if base64 Data URL
-  if (fileUrlOrData && fileUrlOrData.startsWith('data:')) {
+  // 2. Check payload size if base64 Data URL or oversized string payload
+  if (fileUrlOrData && (fileUrlOrData.startsWith('data:') || fileUrlOrData.length > MAX_FILE_SIZE_BYTES)) {
     // Base64 encoding expands size by ~33%. 5MB raw is ~6.9MB in base64
-    const approxBytes = Math.round((fileUrlOrData.length * 3) / 4);
+    const approxBytes = fileUrlOrData.startsWith('data:')
+      ? Math.round((fileUrlOrData.length * 3) / 4)
+      : fileUrlOrData.length;
     if (approxBytes > MAX_FILE_SIZE_BYTES) {
       const mbSize = (approxBytes / (1024 * 1024)).toFixed(1);
       return {
